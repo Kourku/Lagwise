@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -20,14 +19,27 @@ public class BufferbloatProgress
     public string StatusText { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Measures latency (ICMP) before and during saturating HTTP load.
+/// External service: load traffic is generated against the configured <see cref="ITransferProvider"/> (Cloudflare by default).
+/// Cancelling via <see cref="CancellationToken"/> throws <see cref="OperationCanceledException"/>.
+/// A run that cannot produce trustworthy numbers returns a result with IsValid = false instead of a grade.
+/// </summary>
 public class BufferbloatService
 {
-    private readonly PingService _pingService;
-    private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+    private const long MinLoadBytes = 200_000;
+    private const int PhaseMs = 5000;
 
-    public BufferbloatService(PingService pingService)
+    private readonly PingService _pingService;
+    private static readonly HttpClient SharedHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly ITransferProvider _provider;
+    private readonly HttpClient _http;
+
+    public BufferbloatService(PingService pingService, ITransferProvider? provider = null, HttpClient? http = null)
     {
         _pingService = pingService;
+        _provider = provider ?? new CloudflareTransferProvider();
+        _http = http ?? SharedHttp;
     }
 
     public async Task<BufferbloatResult> RunTestAsync(
@@ -35,7 +47,7 @@ public class BufferbloatService
         IProgress<BufferbloatProgress>? progress = null,
         CancellationToken ct = default)
     {
-        var result = new BufferbloatResult { Timestamp = DateTime.UtcNow };
+        var result = new BufferbloatResult { Timestamp = DateTime.UtcNow, Provider = _provider.DisplayName, ReferenceTarget = testHost };
         var pingTarget = new TargetConfig
         {
             Id = "bufferbloat-target",
@@ -44,20 +56,19 @@ public class BufferbloatService
             Protocol = NetworkProtocol.Icmp
         };
 
-        // ----------------------------------------------------
-        // Phase 1: Measure Unloaded Baseline Latency
-        // ----------------------------------------------------
-        progress?.Report(new BufferbloatProgress
+        var providerError = await _provider.ValidateAsync(_http, ct);
+        if (providerError != null)
         {
-            Phase = "Baseline",
-            Percent = 10,
-            StatusText = "Measuring unloaded baseline latency..."
-        });
+            return Invalid(result, providerError, "Retry later, or check whether a firewall or proxy blocks the test provider.");
+        }
+
+        // Phase 1: unloaded baseline
+        progress?.Report(new BufferbloatProgress { Phase = "Baseline", Percent = 10, StatusText = "Measuring unloaded baseline latency..." });
 
         var baselineSamples = new List<double>();
         for (int i = 0; i < 8; i++)
         {
-            if (ct.IsCancellationRequested) break;
+            ct.ThrowIfCancellationRequested();
             var m = await _pingService.ProbeAsync(pingTarget, 1000, ct);
             if (m.Success) baselineSamples.Add(m.RttMs);
             progress?.Report(new BufferbloatProgress
@@ -65,121 +76,51 @@ public class BufferbloatService
                 Phase = "Baseline",
                 Percent = 10 + (i * 2),
                 CurrentLatencyMs = m.Success ? m.RttMs : 0,
-                StatusText = $"Baseline probe {i + 1}/8: {(m.Success ? $"{m.RttMs:F1} ms" : "Failed")}"
+                StatusText = $"Baseline probe {i + 1}/8: {(m.Success ? $"{m.RttMs:F1} ms" : "no reply")}"
             });
             await Task.Delay(100, ct);
         }
 
-        result.BaselineLatencyMs = baselineSamples.Count > 0
-            ? StatisticalCalculator.CalculateMedian(baselineSamples)
-            : 20.0;
-
-        // ----------------------------------------------------
-        // Phase 2: Measure Download Loaded Latency
-        // ----------------------------------------------------
-        progress?.Report(new BufferbloatProgress
+        result.BaselineSampleCount = baselineSamples.Count;
+        if (baselineSamples.Count < 3)
         {
-            Phase = "Download",
-            Percent = 30,
-            StatusText = "Saturating download queue while measuring latency..."
-        });
-
-        var downloadLoadedSamples = new List<double>();
-        using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        downloadCts.CancelAfter(TimeSpan.FromSeconds(5));
-
-        // Start background download tasks
-        var downloadTask = RunDownloadLoadAsync(downloadCts.Token);
-
-        // Ping while download is running
-        var dlSw = Stopwatch.StartNew();
-        int dlProbes = 0;
-        while (!downloadCts.IsCancellationRequested && dlSw.ElapsedMilliseconds < 5000)
-        {
-            try
-            {
-                var m = await _pingService.ProbeAsync(pingTarget, 1000, downloadCts.Token);
-                if (m.Success)
-                {
-                    downloadLoadedSamples.Add(m.RttMs);
-                    progress?.Report(new BufferbloatProgress
-                    {
-                        Phase = "Download",
-                        Percent = 30 + Math.Min(35, (int)(dlSw.ElapsedMilliseconds / 140)),
-                        CurrentLatencyMs = m.RttMs,
-                        StatusText = $"Under Download Load: {m.RttMs:F1} ms (Baseline: {result.BaselineLatencyMs:F1} ms)"
-                    });
-                }
-                dlProbes++;
-                await Task.Delay(150, downloadCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            return Invalid(result,
+                $"Only {baselineSamples.Count}/8 baseline pings to {testHost} were answered, so latency under load cannot be compared. Check your connection (or whether ICMP is blocked) and retry.",
+                "Retry once the connection is stable.");
         }
+        result.BaselineLatencyMs = StatisticalCalculator.CalculateMedian(baselineSamples);
 
-        try { await downloadTask; } catch { }
-
-        result.DownloadLoadedLatencyMs = downloadLoadedSamples.Count > 0
-            ? StatisticalCalculator.CalculateMedian(downloadLoadedSamples)
-            : result.BaselineLatencyMs;
+        // Phase 2: download load
+        progress?.Report(new BufferbloatProgress { Phase = "Download", Percent = 30, StatusText = "Saturating download queue while measuring latency..." });
+        var (dlSamples, dlLoad) = await MeasureUnderLoadAsync(pingTarget, RunDownloadLoadAsync, "Download", 30, 35, result.BaselineLatencyMs, progress, ct);
+        result.BytesDownloadedDuringLoad = dlLoad.Bytes;
+        result.DownloadSampleCount = dlSamples.Count;
+        if (dlLoad.Bytes < MinLoadBytes || dlSamples.Count < 3)
+        {
+            return Invalid(result,
+                $"The download load did not run properly ({dlLoad.Bytes / 1_000_000.0:F1} MB transferred, {dlSamples.Count} pings answered under load). {dlLoad.LastError ?? $"Check connectivity to {_provider.DisplayName}."}",
+                $"Retry. If it keeps failing, a firewall or proxy may be blocking {_provider.DisplayName}.");
+        }
+        result.DownloadLoadedLatencyMs = StatisticalCalculator.CalculateMedian(dlSamples);
         result.DownloadDeltaMs = Math.Max(0, result.DownloadLoadedLatencyMs - result.BaselineLatencyMs);
 
-        // ----------------------------------------------------
-        // Phase 3: Measure Upload Loaded Latency
-        // ----------------------------------------------------
-        progress?.Report(new BufferbloatProgress
+        // Phase 3: upload load
+        progress?.Report(new BufferbloatProgress { Phase = "Upload", Percent = 65, StatusText = "Saturating upload queue while measuring latency..." });
+        var (ulSamples, ulLoad) = await MeasureUnderLoadAsync(pingTarget, RunUploadLoadAsync, "Upload", 65, 30, result.BaselineLatencyMs, progress, ct);
+        result.BytesUploadedDuringLoad = ulLoad.Bytes;
+        result.UploadSampleCount = ulSamples.Count;
+        if (ulLoad.Bytes < MinLoadBytes || ulSamples.Count < 3)
         {
-            Phase = "Upload",
-            Percent = 65,
-            StatusText = "Saturating upload queue while measuring latency..."
-        });
-
-        var uploadLoadedSamples = new List<double>();
-        using var uploadCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        uploadCts.CancelAfter(TimeSpan.FromSeconds(5));
-
-        var uploadTask = RunUploadLoadAsync(uploadCts.Token);
-
-        var ulSw = Stopwatch.StartNew();
-        while (!uploadCts.IsCancellationRequested && ulSw.ElapsedMilliseconds < 5000)
-        {
-            try
-            {
-                var m = await _pingService.ProbeAsync(pingTarget, 1000, uploadCts.Token);
-                if (m.Success)
-                {
-                    uploadLoadedSamples.Add(m.RttMs);
-                    progress?.Report(new BufferbloatProgress
-                    {
-                        Phase = "Upload",
-                        Percent = 65 + Math.Min(30, (int)(ulSw.ElapsedMilliseconds / 170)),
-                        CurrentLatencyMs = m.RttMs,
-                        StatusText = $"Under Upload Load: {m.RttMs:F1} ms (Baseline: {result.BaselineLatencyMs:F1} ms)"
-                    });
-                }
-                await Task.Delay(150, uploadCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            return Invalid(result,
+                $"The upload load did not run properly ({ulLoad.Bytes / 1_000_000.0:F1} MB sent, {ulSamples.Count} pings answered under load). {ulLoad.LastError ?? $"Check connectivity to {_provider.DisplayName}."}",
+                $"Retry. If it keeps failing, a firewall or proxy may be blocking {_provider.DisplayName}.");
         }
-
-        try { await uploadTask; } catch { }
-
-        result.UploadLoadedLatencyMs = uploadLoadedSamples.Count > 0
-            ? StatisticalCalculator.CalculateMedian(uploadLoadedSamples)
-            : result.BaselineLatencyMs;
+        result.UploadLoadedLatencyMs = StatisticalCalculator.CalculateMedian(ulSamples);
         result.UploadDeltaMs = Math.Max(0, result.UploadLoadedLatencyMs - result.BaselineLatencyMs);
 
-        // ----------------------------------------------------
-        // Phase 4: Grade and Interpret
-        // ----------------------------------------------------
+        // Phase 4: grade
         double maxDelta = Math.Max(result.DownloadDeltaMs, result.UploadDeltaMs);
         result.Grade = BufferbloatResult.CalculateGrade(maxDelta);
-
         FormatBufferbloatExplanation(result);
 
         progress?.Report(new BufferbloatProgress
@@ -187,10 +128,67 @@ public class BufferbloatService
             Phase = "Completed",
             Percent = 100,
             CurrentLatencyMs = result.BaselineLatencyMs,
-            StatusText = $"Test Complete: Grade {result.Grade} (+{maxDelta:F1} ms latency increase under load)"
+            StatusText = $"Test complete: Grade {result.Grade} (+{maxDelta:F1} ms latency increase under load)"
         });
 
         return result;
+    }
+
+    private async Task<(List<double> Samples, LoadCounter Load)> MeasureUnderLoadAsync(
+        TargetConfig pingTarget,
+        Func<LoadCounter, CancellationToken, Task> loadRunner,
+        string phase,
+        int percentStart,
+        int percentSpan,
+        double baselineMs,
+        IProgress<BufferbloatProgress>? progress,
+        CancellationToken userCt)
+    {
+        var samples = new List<double>();
+        var load = new LoadCounter();
+        using var phaseCts = CancellationTokenSource.CreateLinkedTokenSource(userCt);
+        phaseCts.CancelAfter(PhaseMs);
+
+        var loadTask = loadRunner(load, phaseCts.Token);
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            while (!phaseCts.IsCancellationRequested)
+            {
+                var m = await _pingService.ProbeAsync(pingTarget, 1000, phaseCts.Token);
+                if (m.Success)
+                {
+                    samples.Add(m.RttMs);
+                    progress?.Report(new BufferbloatProgress
+                    {
+                        Phase = phase,
+                        Percent = percentStart + Math.Min(percentSpan, (int)(sw.ElapsedMilliseconds * percentSpan / PhaseMs)),
+                        CurrentLatencyMs = m.RttMs,
+                        StatusText = $"Under {phase.ToLowerInvariant()} load: {m.RttMs:F1} ms (baseline {baselineMs:F1} ms)"
+                    });
+                }
+                await Task.Delay(150, phaseCts.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!userCt.IsCancellationRequested)
+        {
+            // phase time limit reached
+        }
+
+        await loadTask; // load workers swallow their own cancellation
+        userCt.ThrowIfCancellationRequested();
+        return (samples, load);
+    }
+
+    private static BufferbloatResult Invalid(BufferbloatResult r, string reason, string recommendation)
+    {
+        r.IsValid = false;
+        r.Grade = "N/A";
+        r.ErrorMessage = reason;
+        r.Summary = "Test could not complete.";
+        r.Explanation = reason;
+        r.Recommendation = recommendation;
+        return r;
     }
 
     private static void FormatBufferbloatExplanation(BufferbloatResult r)
@@ -204,19 +202,19 @@ public class BufferbloatService
         }
         else if (maxDelta <= 15)
         {
-            r.Summary = "Great performance. Minimal latency increase under load (+{maxDelta:F0} ms).";
+            r.Summary = $"Great performance. Minimal latency increase under load (+{maxDelta:F0} ms).";
             r.Explanation = "Slight buffering occurs during peak saturation, but it is well within acceptable real-time limits.";
             r.Recommendation = "No configuration changes needed.";
         }
         else if (maxDelta <= 30)
         {
-            r.Summary = "Moderate queue build-up (+{maxDelta:F0} ms increase under load).";
+            r.Summary = $"Moderate queue build-up (+{maxDelta:F0} ms increase under load).";
             r.Explanation = "You may notice brief audio stuttering or slight gaming lag spikes if someone on your network initiates a large download/upload.";
             r.Recommendation = "If anyone frequently downloads games or backs up files while you game/stream, enabling SQM (Smart Queue Management) on your router is beneficial.";
         }
         else if (maxDelta <= 60)
         {
-            r.Summary = "Noticeable bufferbloat (+{maxDelta:F0} ms increase under load).";
+            r.Summary = $"Noticeable bufferbloat (+{maxDelta:F0} ms increase under load).";
             r.Explanation = "Router buffers are holding packets too long during bandwidth saturation, introducing noticeable latency.";
             r.Recommendation = "Enable Smart Queue Management (CAKE or fq_codel) on your router to prioritize interactive traffic over bulk transfers.";
         }
@@ -228,39 +226,42 @@ public class BufferbloatService
         }
     }
 
-    private static async Task RunDownloadLoadAsync(CancellationToken ct)
+    private sealed class LoadCounter
     {
-        var urls = new[]
-        {
-            "https://speed.cloudflare.com/__down?bytes=15000000",
-            "https://speed.cloudflare.com/__down?bytes=15000000",
-            "https://speed.cloudflare.com/__down?bytes=15000000"
-        };
+        private long _bytes;
+        private string? _lastError;
+        public long Bytes => Interlocked.Read(ref _bytes);
+        public string? LastError => Volatile.Read(ref _lastError);
+        public void Add(long n) => Interlocked.Add(ref _bytes, n);
+        public void Fail(Exception ex) => Volatile.Write(ref _lastError, ex.GetBaseException().Message);
+    }
 
-        var tasks = urls.Select(async url =>
+    private async Task RunDownloadLoadAsync(LoadCounter counter, CancellationToken ct)
+    {
+        var tasks = Enumerable.Range(0, 3).Select(async _ =>
         {
+            var buffer = new byte[81920];
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    using var resp = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                    using var resp = await _http.GetAsync(_provider.DownloadUri, HttpCompletionOption.ResponseHeadersRead, ct);
+                    resp.EnsureSuccessStatusCode();
                     using var stream = await resp.Content.ReadAsStreamAsync(ct);
-                    byte[] buffer = new byte[81920];
-                    while (await stream.ReadAsync(buffer, 0, buffer.Length, ct) > 0)
-                    {
-                        if (ct.IsCancellationRequested) break;
-                    }
+                    int read;
+                    while ((read = await stream.ReadAsync(buffer, ct)) > 0) counter.Add(read);
                 }
             }
-            catch { }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { counter.Fail(ex); }
         });
 
         await Task.WhenAll(tasks);
     }
 
-    private static async Task RunUploadLoadAsync(CancellationToken ct)
+    private async Task RunUploadLoadAsync(LoadCounter counter, CancellationToken ct)
     {
-        byte[] payload = new byte[256 * 1024]; // 256 KB chunks
+        byte[] payload = new byte[256 * 1024];
         Random.Shared.NextBytes(payload);
 
         var tasks = Enumerable.Range(0, 2).Select(async _ =>
@@ -270,10 +271,13 @@ public class BufferbloatService
                 while (!ct.IsCancellationRequested)
                 {
                     using var content = new ByteArrayContent(payload);
-                    using var resp = await HttpClient.PostAsync("https://speed.cloudflare.com/__up", content, ct);
+                    using var resp = await _http.PostAsync(_provider.UploadUri, content, ct);
+                    resp.EnsureSuccessStatusCode();
+                    counter.Add(payload.Length);
                 }
             }
-            catch { }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { counter.Fail(ex); }
         });
 
         await Task.WhenAll(tasks);

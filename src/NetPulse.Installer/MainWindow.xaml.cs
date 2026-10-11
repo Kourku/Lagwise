@@ -25,6 +25,8 @@ public partial class MainWindow : Window
             "NetPulse");
 
         TxtInstallDir.Text = _defaultInstallDir;
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        if (version != null) SubtitleBlock.Text = $"Version {version.ToString(3)} • {SubtitleBlock.Text}";
 
         var args = Environment.GetCommandLineArgs();
         _isUninstallMode = args.Any(a => a.Equals("--uninstall", StringComparison.OrdinalIgnoreCase) ||
@@ -137,15 +139,19 @@ public partial class MainWindow : Window
         ProgressBar.Value = 75;
         TxtStatus.Text = "Creating desktop and start menu shortcuts...";
 
+        // read UI state on the UI thread; touching WPF controls from the worker thread crashed the installer
+        bool desktopShortcut = ChkDesktopShortcut.IsChecked == true;
+        bool startMenuShortcut = ChkStartMenuShortcut.IsChecked == true;
+
         await Task.Run(() =>
         {
-            if (ChkDesktopShortcut.IsChecked == true)
+            if (desktopShortcut)
             {
                 string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
                 CreateShortcut(Path.Combine(desktopPath, "NetPulse.lnk"), targetExe, installDir, "NetPulse - Real-time Network Diagnostics");
             }
 
-            if (ChkStartMenuShortcut.IsChecked == true)
+            if (startMenuShortcut)
             {
                 string programsPath = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
                 CreateShortcut(Path.Combine(programsPath, "NetPulse.lnk"), targetExe, installDir, "NetPulse - Real-time Network Diagnostics");
@@ -185,7 +191,17 @@ public partial class MainWindow : Window
         ProgressBar.Value = 30;
         TxtStatus.Text = "Removing shortcuts and registry entries...";
 
-        string installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+        // Only ever remove the registered NetPulse installation, never "whatever folder this setup happens to run from".
+        string? registered = null;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulse");
+            registered = key?.GetValue("InstallLocation") as string;
+        }
+        catch { }
+
+        string installDir = (!string.IsNullOrWhiteSpace(registered) ? registered : AppDomain.CurrentDomain.BaseDirectory).TrimEnd('\\', '/');
+        bool looksLikeInstall = File.Exists(Path.Combine(installDir, "NetPulse.exe")) && File.Exists(Path.Combine(installDir, "NetPulse-Setup.exe"));
 
         await Task.Run(() =>
         {
@@ -203,15 +219,19 @@ public partial class MainWindow : Window
         ProgressBar.Value = 80;
         TxtStatus.Text = "Cleaning up installation files...";
 
-        // Self-deletion cmd script
-        string cmdScript = $"/c timeout /t 2 /nobreak > NUL & rmdir /s /q \"{installDir}\"";
-        Process.Start(new ProcessStartInfo
+        // Self-deletion cmd script: removes only the application files this installer created, and the folder if that leaves it empty.
+        // User data (settings, recordings) lives in %LOCALAPPDATA%\NetPulse and is intentionally left alone.
+        if (looksLikeInstall)
         {
-            FileName = "cmd.exe",
-            Arguments = cmdScript,
-            CreateNoWindow = true,
-            UseShellExecute = false
-        });
+            string cmdScript = $"/c timeout /t 2 /nobreak > NUL & del /f /q \"{installDir}\\NetPulse.exe\" \"{installDir}\\app.ico\" \"{installDir}\\NetPulse-Setup.exe\" & rmdir \"{installDir}\"";
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = cmdScript,
+                CreateNoWindow = true,
+                UseShellExecute = false
+            });
+        }
 
         ProgressBar.Value = 100;
         TxtStatus.Text = "NetPulse has been uninstalled.";
@@ -229,8 +249,7 @@ public partial class MainWindow : Window
             Path.Combine(baseDir, "payload", "NetPulse.exe"),
             Path.Combine(baseDir, "portable", "NetPulse.exe"),
             Path.Combine(baseDir, "..", "dist", "portable", "NetPulse.exe"),
-            Path.Combine(baseDir, "..", "..", "..", "..", "dist", "portable", "NetPulse.exe"),
-            @"E:\LAGG\dist\portable\NetPulse.exe"
+            Path.Combine(baseDir, "..", "..", "..", "..", "dist", "portable", "NetPulse.exe")
         };
 
         foreach (var c in candidates)
@@ -270,7 +289,7 @@ public partial class MainWindow : Window
             if (key != null)
             {
                 key.SetValue("DisplayName", "NetPulse Real-Time Network Quality & Path Diagnostics");
-                key.SetValue("DisplayVersion", "1.0.0");
+                key.SetValue("DisplayVersion", FileVersionInfo.GetVersionInfo(appExe).ProductVersion?.Split('+')[0] ?? "");
                 key.SetValue("Publisher", "NetPulse Diagnostics");
                 key.SetValue("DisplayIcon", $"{appExe},0");
                 key.SetValue("InstallLocation", installDir);

@@ -1,67 +1,230 @@
 <#
 .SYNOPSIS
-    Automated build, test, and release packaging script for NetPulse
+    Builds, verifies and packages NetPulse. Only a build that passes every check is promoted to dist/.
+.DESCRIPTION
+    1. Release build of the whole solution with warnings treated as errors.
+    2. Full automated test suite.
+    3. Publishes a self-contained win-x64 single-file portable build into a scratch folder (dist/_build/...).
+    4. Smoke-tests the PUBLISHED exe: headless self-test, then (unless -SkipGuiCheck) the Game Monitor workflow through UI Automation.
+       Both run against an isolated data folder, never the user's real %LOCALAPPDATA%\NetPulse.
+    5. Only then: writes dist/releases/<version>/ (zip, release notes, build-info.json, installer) and swaps dist/portable.
+    If anything fails, dist/portable and dist/releases are left exactly as they were (the last known-good build).
+
+    User data (settings, recordings) always lives in %LOCALAPPDATA%\NetPulse, never in dist/ or beside the exe.
+.PARAMETER SkipGuiCheck
+    Skip the UI Automation check (needed on machines without an interactive desktop). The headless self-test still runs.
+.PARAMETER SkipInstaller
+    Do not build the NetPulse-Setup.exe installer.
+.PARAMETER VerifyInstaller
+    Additionally install and uninstall the built installer into a temporary folder (UI Automation; no shortcuts are created).
 #>
+[CmdletBinding()]
+param(
+    [switch]$SkipGuiCheck,
+    [switch]$SkipInstaller,
+    [switch]$VerifyInstaller
+)
 
-$ErrorActionPreference = "Stop"
-Write-Host "=====================================================" -ForegroundColor Cyan
-Write-Host " NetPulse - Master Build, Test, and Packaging Script " -ForegroundColor Cyan
-Write-Host "=====================================================" -ForegroundColor Cyan
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$Root = $PSScriptRoot
+Set-Location $Root
 
-$RootDir = $PSScriptRoot
-Set-Location $RootDir
-
-# Step 1: Run Tests
-Write-Host "`n[1/5] Running automated test suite..." -ForegroundColor Yellow
-dotnet test tests/NetPulse.Tests/NetPulse.Tests.csproj -c Release
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Tests failed! Aborting build."
+function Step($text)  { Write-Host "`n== $text" -ForegroundColor Cyan }
+function Ok($text)    { Write-Host "   $text" -ForegroundColor Green }
+function Fail($text)  {
+    Write-Host "`nBUILD FAILED: $text" -ForegroundColor Red
+    Write-Host "dist/portable and dist/releases were not modified. Scratch output: $Work" -ForegroundColor Yellow
     exit 1
 }
-Write-Host "All tests passed successfully!" -ForegroundColor Green
+function Get-Sha256($path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($path)
+    try { ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '') } finally { $stream.Dispose(); $sha.Dispose() }
+}
+function New-Zip($sourceDir, $zipPath) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($sourceDir, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+}
+function Run-Native($what, [scriptblock]$cmd) {
+    & $cmd
+    if ($LASTEXITCODE -ne 0) { Fail "$what (exit code $LASTEXITCODE)" }
+}
 
-# Step 2: Publish App (Self-contained win-x64 single file)
-Write-Host "`n[2/5] Publishing NetPulse.App (win-x64 self-contained single file)..." -ForegroundColor Yellow
-$PortableDir = "$RootDir\dist\portable"
-New-Item -ItemType Directory -Path $PortableDir -Force | Out-Null
+# ---- version & paths -------------------------------------------------------------------------------------------
+$props = [xml](Get-Content "$Root\Directory.Build.props" -Raw)
+$Version = ($props.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+if (-not $Version) { Write-Error 'No <Version> in Directory.Build.props'; exit 1 }
 
-dotnet publish src/NetPulse.App/NetPulse.App.csproj -c Release -r win-x64 --self-contained `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $PortableDir
+$Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$Dist = Join-Path $Root 'dist'
+$Work = Join-Path $Dist "_build\$Version-$Stamp"
+$Portable = Join-Path $Work 'portable'
+$Installer = Join-Path $Work 'installer'
+# scratch output of earlier failed builds is disposable; releases and dist/portable are never touched here
+if (Test-Path (Join-Path $Dist '_build')) { Remove-Item (Join-Path $Dist '_build') -Recurse -Force -ErrorAction SilentlyContinue }
+New-Item -ItemType Directory -Force -Path $Work, $Portable | Out-Null
 
-Copy-Item "$RootDir\src\NetPulse.App\app.ico" "$PortableDir\app.ico" -Force
-Write-Host "Application binary published to $PortableDir\NetPulse.exe" -ForegroundColor Green
+$commit = (git rev-parse --short HEAD 2>$null); if (-not $commit) { $commit = 'unknown' }
+$dirty = [bool](git status --porcelain 2>$null | Select-Object -First 1)
 
-# Step 3: Package Portable ZIP
-Write-Host "`n[3/5] Packaging Portable ZIP archive..." -ForegroundColor Yellow
-$ZipPath = "$RootDir\dist\NetPulse-1.0.0-Portable-win-x64.zip"
-if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
-Compress-Archive -Path "$PortableDir\*" -DestinationPath $ZipPath -Force
-$zipSize = (Get-Item $ZipPath).Length / 1MB
-Write-Host "Portable archive created: $ZipPath ($([math]::Round($zipSize, 1)) MB)" -ForegroundColor Green
+Write-Host "NetPulse build  version $Version  commit $commit$(if ($dirty) { ' (+uncommitted changes)' })" -ForegroundColor Cyan
 
-# Step 4: Publish Installer (Standalone Setup.exe)
-Write-Host "`n[4/5] Publishing Standalone Windows Installer (NetPulse-Setup.exe)..." -ForegroundColor Yellow
-$InstallerDir = "$RootDir\dist\installer"
-New-Item -ItemType Directory -Path $InstallerDir -Force | Out-Null
-New-Item -ItemType Directory -Path "$InstallerDir\payload" -Force | Out-Null
+# ---- 1. build --------------------------------------------------------------------------------------------------
+Step '1/6 Release build (warnings are errors)'
+Run-Native 'dotnet build' { dotnet build "$Root\NetPulse.slnx" -c Release -nologo -p:TreatWarningsAsErrors=true -v:q }
+Ok 'Build succeeded with 0 warnings'
 
-dotnet publish src/NetPulse.Installer/NetPulse.Installer.csproj -c Release -r win-x64 --self-contained `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $InstallerDir
+# ---- 2. tests --------------------------------------------------------------------------------------------------
+Step '2/6 Automated tests'
+$trxDir = Join-Path $Work 'tests'
+Run-Native 'dotnet test' { dotnet test "$Root\NetPulse.slnx" -c Release --no-build -nologo --logger "trx;LogFileName=results.trx" --results-directory $trxDir -v:q }
+$trx = [xml](Get-Content (Join-Path $trxDir 'results.trx') -Raw)
+$c = $trx.TestRun.ResultSummary.Counters
+if ([int]$c.failed -ne 0 -or [int]$c.total -eq 0) { Fail "tests: $($c.failed) failed of $($c.total)" }
+$Tests = @{ total = [int]$c.total; passed = [int]$c.passed; failed = [int]$c.failed }
+Ok "$($Tests.passed)/$($Tests.total) tests passed"
 
-Copy-Item "$PortableDir\NetPulse.exe" "$InstallerDir\payload\NetPulse.exe" -Force
-Copy-Item "$RootDir\src\NetPulse.App\app.ico" "$InstallerDir\payload\app.ico" -Force
-Copy-Item "$RootDir\installer\Setup-NetPulse.ps1" "$InstallerDir\Setup-NetPulse.ps1" -Force
+# ---- 3. publish portable ---------------------------------------------------------------------------------------
+Step '3/6 Publish portable build (win-x64, self-contained, single file)'
+Run-Native 'dotnet publish (app)' {
+    dotnet publish "$Root\src\NetPulse.App\NetPulse.App.csproj" -c Release -r win-x64 --self-contained `
+        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -nologo -v:q -o $Portable
+}
+Copy-Item "$Root\src\NetPulse.App\app.ico" "$Portable\app.ico" -Force
+$exe = Join-Path $Portable 'NetPulse.exe'
+if (-not (Test-Path $exe)) { Fail 'NetPulse.exe was not produced' }
+$exeVersion = (Get-Item $exe).VersionInfo.ProductVersion
+if (-not $exeVersion -or -not $exeVersion.StartsWith($Version)) { Fail "exe version '$exeVersion' does not match $Version" }
+Ok ("{0}  ({1:N1} MB, product version {2})" -f $exe, ((Get-Item $exe).Length / 1MB), $exeVersion)
 
-Write-Host "Standalone installer built at $InstallerDir\NetPulse-Setup.exe" -ForegroundColor Green
+# ---- 4. verify the PUBLISHED exe -------------------------------------------------------------------------------
+Step '4/6 Verify the published build'
+$before = Get-ChildItem $Portable -Recurse | ForEach-Object { "$($_.FullName)|$($_.Length)" } | Sort-Object
 
-# Step 5: Summary
+$selfJson = Join-Path $Work 'selftest.json'
+$selfData = Join-Path $Work 'selftest-data'
+$p = Start-Process -FilePath $exe -ArgumentList '--selftest', '--selftest-out', "`"$selfJson`"", '--selftest-data', "`"$selfData`"" -PassThru
+if (-not $p.WaitForExit(120000)) { $p.Kill(); Fail 'self-test timed out' }
+if (-not (Test-Path $selfJson)) { Fail 'self-test produced no report' }
+$self = Get-Content $selfJson -Raw | ConvertFrom-Json
+foreach ($chk in $self.Checks) { Write-Host ("   [{0}] {1}" -f $(if ($chk.Passed) { 'PASS' } else { 'FAIL' }), $chk.Name) -ForegroundColor $(if ($chk.Passed) { 'Green' } else { 'Red' }) }
+if ($p.ExitCode -ne 0 -or -not $self.Ok) { Fail 'published self-test failed' }
+Ok "self-test passed ($($self.Checks.Count) checks)"
+
+$GuiResult = 'skipped'
+if (-not $SkipGuiCheck) {
+    $guiData = Join-Path $Work 'gui-data'
+    $guiJson = Join-Path $Work 'gui.json'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Gui.ps1" -Exe $exe -DataDir $guiData -Out $guiJson
+    if ($LASTEXITCODE -ne 0) { Fail 'GUI verification of the published build failed' }
+    $GuiResult = 'passed'
+    Ok 'Game Monitor workflow verified in the published exe'
+}
+else {
+    Write-Host '   GUI check skipped (-SkipGuiCheck)' -ForegroundColor Yellow
+}
+
+$after = Get-ChildItem $Portable -Recurse | ForEach-Object { "$($_.FullName)|$($_.Length)" } | Sort-Object
+if (Compare-Object $before $after) { Fail 'running the published exe wrote files next to it (user data must live in %LOCALAPPDATA%\NetPulse)' }
+Ok 'Nothing was written next to the executable'
+
+# ---- 5. installer ----------------------------------------------------------------------------------------------
+$InstallerResult = 'not built'
+if (-not $SkipInstaller) {
+    Step '5/6 Installer (NetPulse-Setup.exe)'
+    New-Item -ItemType Directory -Force -Path "$Installer\payload" | Out-Null
+    Run-Native 'dotnet publish (installer)' {
+        dotnet publish "$Root\src\NetPulse.Installer\NetPulse.Installer.csproj" -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -nologo -v:q -o $Installer
+    }
+    Copy-Item $exe "$Installer\payload\NetPulse.exe" -Force
+    Copy-Item "$Portable\app.ico" "$Installer\payload\app.ico" -Force
+    Copy-Item "$Root\installer\Setup-NetPulse.ps1" "$Installer\Setup-NetPulse.ps1" -Force
+    if (-not (Test-Path "$Installer\NetPulse-Setup.exe")) { Fail 'NetPulse-Setup.exe was not produced' }
+    $InstallerResult = 'built (not install-tested)'
+    Ok 'NetPulse-Setup.exe built'
+
+    if ($VerifyInstaller) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Installer.ps1" -Setup "$Installer\NetPulse-Setup.exe" -WorkDir (Join-Path $Work 'installer-test')
+        if ($LASTEXITCODE -ne 0) { Fail 'installer verification failed' }
+        $InstallerResult = 'built; install and uninstall verified'
+        Ok 'Installer install/uninstall verified'
+    }
+}
+else {
+    Step '5/6 Installer skipped (-SkipInstaller)'
+}
+
+# ---- 6. promote ------------------------------------------------------------------------------------------------
+Step '6/6 Promote verified build'
+$notesText = Get-Content "$Root\RELEASE_NOTES.md" -Raw
+$section = [regex]::Match($notesText, "(?ms)^## $([regex]::Escape($Version))\s*\r?\n(.*?)(?=^## |\z)")
+if (-not $section.Success) { Fail "RELEASE_NOTES.md has no '## $Version' section; add concise release notes first" }
+
+$Releases = Join-Path $Dist 'releases'
+New-Item -ItemType Directory -Force -Path $Releases | Out-Null
+$releaseName = $Version
+$n = 2
+while (Test-Path (Join-Path $Releases $releaseName)) { $releaseName = "$Version-build$n"; $n++ }   # never overwrite an earlier release
+$Release = Join-Path $Releases $releaseName
+$Pending = Join-Path $Releases "_pending-$Stamp"   # assembled here and renamed only when complete, so a failure never leaves a half-written release
+$zipName = "NetPulse-$releaseName-Portable-win-x64.zip"
+
+try {
+    New-Item -ItemType Directory -Force -Path $Pending | Out-Null
+    New-Zip $Portable (Join-Path $Pending $zipName)
+    if (Test-Path "$Installer\NetPulse-Setup.exe") { Copy-Item $Installer (Join-Path $Pending 'installer') -Recurse -Force }
+
+    "# NetPulse $Version`n`nBuilt $((Get-Date).ToString('u')) from commit $commit$(if ($dirty) { ' (with uncommitted changes)' }).`n`n$($section.Groups[1].Value.Trim())`n" |
+        Set-Content (Join-Path $Pending 'RELEASE_NOTES.md') -Encoding UTF8
+
+    [pscustomobject]@{
+        version        = $Version
+        release        = $releaseName
+        builtUtc       = (Get-Date).ToUniversalTime().ToString('o')
+        commit         = $commit
+        uncommittedChanges = $dirty
+        tests          = $Tests
+        publishedSelfTest = "passed ($($self.Checks.Count) checks)"
+        publishedGuiCheck = $GuiResult
+        installer      = $InstallerResult
+        exeSha256      = Get-Sha256 $exe
+        zipSha256      = Get-Sha256 (Join-Path $Pending $zipName)
+        dataLocation   = '%LOCALAPPDATA%\NetPulse (settings, sessions); nothing is stored beside the executable'
+    } | ConvertTo-Json | Set-Content (Join-Path $Pending 'build-info.json') -Encoding UTF8
+    Rename-Item $Pending $releaseName   # the release becomes visible only now
+
+    # swap dist/portable only now; keep the previous one until the new one is in place
+    $PortableDir = Join-Path $Dist 'portable'
+    $PortableNew = Join-Path $Dist 'portable.new'
+    $PortablePrev = Join-Path $Dist 'portable.prev'
+    foreach ($d in $PortableNew, $PortablePrev) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } }
+    Copy-Item $Portable $PortableNew -Recurse
+    if (Test-Path $PortableDir) { Rename-Item $PortableDir 'portable.prev' }
+    try { Rename-Item $PortableNew 'portable' }
+    catch { if (Test-Path $PortablePrev) { Rename-Item $PortablePrev 'portable' }; throw }
+    if (Test-Path $PortablePrev) { Remove-Item $PortablePrev -Recurse -Force }
+
+    Copy-Item (Join-Path $Release $zipName) (Join-Path $Dist "NetPulse-$Version-Portable-win-x64.zip") -Force
+    "$releaseName`n$Release" | Set-Content (Join-Path $Dist 'LATEST.txt')
+}
+catch {
+    if (Test-Path $Pending) { Remove-Item $Pending -Recurse -Force -ErrorAction SilentlyContinue }
+    Fail "promotion failed: $($_.Exception.Message)"
+}
+
+Remove-Item $Work -Recurse -Force -ErrorAction SilentlyContinue
+$buildDir = Join-Path $Dist '_build'
+if ((Test-Path $buildDir) -and -not (Get-ChildItem $buildDir)) { Remove-Item $buildDir -Force }
+
 Write-Host "`n=====================================================" -ForegroundColor Green
-Write-Host " NetPulse Build & Release Packaging Complete!        " -ForegroundColor Green
+Write-Host " NetPulse $Version verified and packaged" -ForegroundColor Green
 Write-Host "=====================================================" -ForegroundColor Green
-Write-Host "Deliverables:"
-Write-Host " 1. Portable Executable:   $PortableDir\NetPulse.exe"
-Write-Host " 2. Portable ZIP Archive:  $ZipPath"
-Write-Host " 3. Windows Setup (.exe):  $InstallerDir\NetPulse-Setup.exe"
-Write-Host " 4. PowerShell Setup:      $InstallerDir\Setup-NetPulse.ps1"
-Write-Host " 5. Inno Setup Script:     $RootDir\installer\NetPulse.iss"
-Write-Host "=====================================================" -ForegroundColor Green
+Write-Host " Portable exe : $(Join-Path $Dist 'portable\NetPulse.exe')"
+Write-Host " Portable zip : $(Join-Path $Dist "NetPulse-$Version-Portable-win-x64.zip")"
+Write-Host " Release      : $Release"
+Write-Host " Installer    : $InstallerResult"
+Write-Host " Tests        : $($Tests.passed)/$($Tests.total)   Published self-test: passed   GUI check: $GuiResult"
+exit 0

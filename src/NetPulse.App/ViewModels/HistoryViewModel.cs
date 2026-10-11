@@ -1,0 +1,419 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using NetPulse.App.Controls;
+using NetPulse.Core;
+using NetPulse.Core.Models;
+using NetPulse.Core.Services;
+using NetPulse.Core.Sessions;
+
+namespace NetPulse.App.ViewModels;
+
+public sealed class SessionRow
+{
+    public SessionRow(SessionSummary s)
+    {
+        Id = s.Id;
+        Name = s.Name;
+        Game = string.IsNullOrEmpty(s.GameId) ? "Network only" : (Core.Games.GameProfiles.Find(s.GameId)?.DisplayName ?? s.GameId);
+        StartedText = s.StartedUtc.ToLocalTime().ToString("ddd d MMM, HH:mm");
+        var end = s.EndedUtc;
+        DurationText = end.HasValue ? FormatDuration(end.Value - s.StartedUtc) : "-";
+        SamplesText = $"{s.SampleCount:N0} probes";
+        EventsText = $"{s.EventCount} events";
+        IsComplete = s.IsComplete;
+        Status = s.IsComplete ? "Saved" : "Interrupted";
+    }
+
+    public string Id { get; }
+    public string Name { get; }
+    public string Game { get; }
+    public string StartedText { get; }
+    public string DurationText { get; }
+    public string SamplesText { get; }
+    public string EventsText { get; }
+    public bool IsComplete { get; }
+    public string Status { get; }
+
+    public static string FormatDuration(TimeSpan d) =>
+        d.TotalHours >= 1 ? $"{(int)d.TotalHours} h {d.Minutes:00} min" : d.TotalMinutes >= 1 ? $"{(int)d.TotalMinutes} min {d.Seconds:00} s" : $"{Math.Max(0, d.Seconds)} s";
+}
+
+public sealed class TargetStatRow
+{
+    public TargetStatRow(TargetStats t)
+    {
+        Name = t.Name;
+        Kind = t.KindLabel;
+        Method = t.Method;
+        Probes = t.Probes.ToString("N0");
+        Loss = $"{t.LossPercent:F1}%";
+        Median = Ms(t.MedianMs);
+        P95 = Ms(t.P95Ms);
+        Max = Ms(t.MaxMs);
+        Variation = Ms(t.VariationMs);
+    }
+
+    public string Name { get; }
+    public string Kind { get; }
+    public string Method { get; }
+    public string Probes { get; }
+    public string Loss { get; }
+    public string Median { get; }
+    public string P95 { get; }
+    public string Max { get; }
+    public string Variation { get; }
+    private static string Ms(double? v) => v.HasValue ? $"{v.Value:F1} ms" : "-";
+}
+
+public sealed class LagRow
+{
+    public LagRow(LagCorrelation c)
+    {
+        TimeText = c.MarkerUtc.ToLocalTime().ToString("HH:mm:ss");
+        Note = string.IsNullOrEmpty(c.Note) ? "Lag marked" : c.Note;
+        var sb = new StringBuilder();
+        var affected = c.Affected.ToList();
+        if (affected.Count == 0 && c.NearbyEvents.Count == 0)
+            sb.Append($"Nothing unusual was measured within {SessionAnalysis.LagWindowSeconds} s. The lag may have been on the game's side or on a path these targets do not share.");
+        foreach (var a in affected)
+            sb.AppendLine($"• {a.Name}: {(a.WindowMedianMs.HasValue ? $"{a.WindowMedianMs:F0} ms" : "no replies")} around this moment, normally {a.SessionMedianMs:F0} ms; {a.WindowFailures} of {a.WindowProbes} probes unanswered.");
+        foreach (var e in c.NearbyEvents.Take(4))
+            sb.AppendLine($"• {e.Timestamp.ToLocalTime():HH:mm:ss} {Lexicon.EventLabel(e.EventType)}: {e.Description}");
+        Detail = sb.ToString().TrimEnd();
+    }
+
+    public string TimeText { get; }
+    public string Note { get; }
+    public string Detail { get; }
+}
+
+public sealed class LegendItem : ViewModelBase
+{
+    private bool _isOn = true;
+    public LegendItem(string id, string name, Color color, Action changed, bool isOn = true)
+    {
+        _isOn = isOn;
+        TargetId = id;
+        Name = name;
+        Brush = new SolidColorBrush(color);
+        Brush.Freeze();
+        _changed = changed;
+    }
+
+    private readonly Action _changed;
+    public string TargetId { get; }
+    public string Name { get; }
+    public Brush Brush { get; }
+    public bool IsOn { get => _isOn; set { if (SetProperty(ref _isOn, value)) _changed(); } }
+}
+
+/// <summary>History &amp; reports: browse saved recordings, see their graphs, statistics and lag-marker analysis, export a report.</summary>
+public sealed class HistoryViewModel : ViewModelBase
+{
+    private readonly NetPulseHost _host;
+    private readonly Dispatcher _dispatcher;
+    private CancellationTokenSource? _loadCts;
+    private MonitoringSession? _session;
+    private SessionStats? _stats;
+
+    private SessionRow? _selected;
+    private bool _isLoading;
+    private string _message = "";
+    private string _detailTitle = "";
+    private string _detailSubtitle = "";
+    private string _limitationsText = "";
+    private string _connectionsText = "";
+    private ChartData? _chart;
+    private int _modeIndex;
+    private string _sessionsFolderText = "";
+
+    public HistoryViewModel(NetPulseHost host, Dispatcher dispatcher)
+    {
+        _host = host;
+        _dispatcher = dispatcher;
+        _sessionsFolderText = host.Sessions.Directory;
+
+        RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
+        ExportReportCommand = new RelayCommand(ExportReport, () => _session != null);
+        ExportSamplesCommand = new RelayCommand(ExportSamples, () => _session != null);
+        OpenFolderCommand = new RelayCommand(OpenFolder);
+        DeleteCommand = new RelayCommand(Delete, () => _session != null);
+    }
+
+    public ObservableCollection<SessionRow> Sessions { get; } = new();
+    public ObservableCollection<TargetStatRow> TargetStats { get; } = new();
+    public ObservableCollection<LagRow> LagMarkers { get; } = new();
+    public ObservableCollection<FindingItem> Findings { get; } = new();
+    public ObservableCollection<ConnectionEvent> Events { get; } = new();
+    public ObservableCollection<LegendItem> Legend { get; } = new();
+    public ObservableCollection<SummaryCard> Cards { get; } = new();
+
+    public RelayCommand RefreshCommand { get; }
+    public RelayCommand ExportReportCommand { get; }
+    public RelayCommand ExportSamplesCommand { get; }
+    public RelayCommand OpenFolderCommand { get; }
+    public RelayCommand DeleteCommand { get; }
+
+    public IReadOnlyList<string> ModeLabels { get; } = new[] { "Latency", "Variation", "Probe loss" };
+    public string SessionsFolder => _sessionsFolderText;
+
+    public SessionRow? SelectedSession
+    {
+        get => _selected;
+        set
+        {
+            if (!SetProperty(ref _selected, value)) return;
+            _ = LoadDetailAsync(value?.Id);
+        }
+    }
+
+    public bool HasSessions => Sessions.Count > 0;
+    public bool HasNoSessions => Sessions.Count == 0;
+    public bool HasDetail => _session != null;
+    public bool IsLoading { get => _isLoading; private set => SetProperty(ref _isLoading, value); }
+    public string Message { get => _message; private set => SetProperty(ref _message, value); }
+    public string DetailTitle { get => _detailTitle; private set => SetProperty(ref _detailTitle, value); }
+    public string DetailSubtitle { get => _detailSubtitle; private set => SetProperty(ref _detailSubtitle, value); }
+    public string LimitationsText { get => _limitationsText; private set => SetProperty(ref _limitationsText, value); }
+    public string ConnectionsText { get => _connectionsText; private set => SetProperty(ref _connectionsText, value); }
+    public ChartData? Chart { get => _chart; private set => SetProperty(ref _chart, value); }
+    public IReadOnlyList<string> ChartTargetOrder => _session?.Targets.Select(t => t.Id).ToList() ?? new List<string>();
+    public bool HasNoLagMarkers => LagMarkers.Count == 0;
+    public bool HasNoFindings => Findings.Count == 0;
+
+    public string ChartCaption => ModeIndex switch
+    {
+        0 => "Slowest reply in each time slice, so short spikes stay visible. Amber dashes mark where you pressed Mark lag; grey bands are times NetPulse was not measuring; red bands are connection losses.",
+        1 => "How much consecutive replies differed in each time slice. Steady lines are good: big swings feel like stutter even when the average ping is fine.",
+        _ => "Share of test messages with no reply in each time slice. Short bursts on one target can just be that server ignoring pings."
+    };
+
+    public int ModeIndex
+    {
+        get => _modeIndex;
+        set { if (SetProperty(ref _modeIndex, value)) { OnPropertyChanged(nameof(ChartCaption)); RebuildChart(); } }
+    }
+
+    // ------------------------------------------------------------------ loading
+
+    public async Task RefreshAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            var list = await Task.Run(() => _host.Sessions.List());
+            string? keep = SelectedSession?.Id;
+            Sessions.Clear();
+            foreach (var s in list) Sessions.Add(new SessionRow(s));
+            OnPropertyChanged(nameof(HasSessions));
+            OnPropertyChanged(nameof(HasNoSessions));
+
+            var again = Sessions.FirstOrDefault(r => r.Id == keep);
+            if (again != null) { _selected = again; OnPropertyChanged(nameof(SelectedSession)); }
+            else if (keep != null) { _selected = null; OnPropertyChanged(nameof(SelectedSession)); ClearDetail(); }
+        }
+        catch (Exception ex)
+        {
+            Message = $"Could not read the recordings folder: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task LoadDetailAsync(string? id)
+    {
+        _loadCts?.Cancel();
+        var cts = _loadCts = new CancellationTokenSource();
+
+        if (id == null) { ClearDetail(); return; }
+
+        IsLoading = true;
+        Message = "";
+        try
+        {
+            var (session, stats) = await Task.Run(() =>
+            {
+                var s = _host.Sessions.Load(id);
+                return (s, s == null ? null : SessionAnalysis.Compute(s));
+            });
+
+            if (cts.IsCancellationRequested) return;
+            if (session == null || stats == null) { ClearDetail(); Message = "That recording could not be found. It may have been moved or deleted."; return; }
+
+            _session = session;
+            _stats = stats;
+            RenderDetail(session, stats);
+        }
+        catch (Exception ex)
+        {
+            ClearDetail();
+            Message = $"That recording could not be opened: {ex.Message}";
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested) IsLoading = false;
+        }
+    }
+
+    private void ClearDetail()
+    {
+        _session = null;
+        _stats = null;
+        TargetStats.Clear(); LagMarkers.Clear(); Findings.Clear(); Events.Clear(); Legend.Clear(); Cards.Clear();
+        Chart = null;
+        DetailTitle = DetailSubtitle = LimitationsText = ConnectionsText = "";
+        NotifyDetail();
+    }
+
+    private void NotifyDetail()
+    {
+        OnPropertyChanged(nameof(HasDetail));
+        OnPropertyChanged(nameof(HasNoLagMarkers));
+        OnPropertyChanged(nameof(HasNoFindings));
+        OnPropertyChanged(nameof(ChartTargetOrder));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void RenderDetail(MonitoringSession s, SessionStats stats)
+    {
+        DetailTitle = s.Name;
+        string game = string.IsNullOrEmpty(s.GameDisplayName) ? "Network recording" : s.GameDisplayName;
+        DetailSubtitle = $"{game} • {s.StartedUtc.ToLocalTime():ddd d MMM yyyy, HH:mm} • {SessionRow.FormatDuration(stats.Duration)}"
+            + (s.IsComplete ? "" : " • recording was interrupted, showing data up to the last checkpoint");
+
+        Cards.Clear();
+        Cards.Add(new SummaryCard("Length", SessionRow.FormatDuration(stats.Duration), s.IsComplete ? "Saved normally" : "Interrupted"));
+        Cards.Add(new SummaryCard("Probes", stats.ProbeCount.ToString("N0"), $"{s.Targets.Count} targets"));
+        Cards.Add(new SummaryCard("Events", s.Events.Count.ToString(), "see the list below"));
+        Cards.Add(new SummaryCard("Lag marked", s.LagMarkers.Count.ToString(), s.LagMarkers.Count == 0 ? "none pressed" : "moments you flagged"));
+        Cards.Add(new SummaryCard("Paused", stats.GapSeconds > 0 ? $"{stats.GapSeconds:F0} s" : "none", "NetPulse not measuring"));
+        Cards.Add(new SummaryCard("Connection lost", stats.DisconnectSeconds > 0 ? $"{stats.DisconnectSeconds:F0} s" : "none", "no probe answered"));
+
+        TargetStats.Clear();
+        foreach (var t in stats.Targets) TargetStats.Add(new TargetStatRow(t));
+
+        LagMarkers.Clear();
+        foreach (var c in stats.LagCorrelations) LagMarkers.Add(new LagRow(c));
+
+        Findings.Clear();
+        foreach (var f in s.Findings) Findings.Add(new FindingItem(f));
+
+        Events.Clear();
+        foreach (var e in s.Events.OrderByDescending(e => e.Timestamp).Take(200)) Events.Add(e);
+
+        LimitationsText = s.Limitations.Count == 0 ? "" : string.Join("\n", s.Limitations.Select(l => "• " + l));
+        ConnectionsText = string.IsNullOrEmpty(s.GameDisplayName) ? "" :
+            $"{s.GameProcesses.Count} game process(es) and {s.Connections.Count} sockets were recorded. Their role is unknown; none is assumed to be the match server.";
+
+        Legend.Clear();
+        var order = s.Targets.Select(t => t.Id).ToList();
+        foreach (var t in s.Targets)
+            // Plain pings are comparable with each other; an HTTPS handshake or DNS lookup includes extra work, so they start switched off
+            Legend.Add(new LegendItem(t.Id, t.Name, SessionChart.ColorFor(t.Id, order), RebuildChart, isOn: t.Protocol == NetworkProtocol.Icmp));
+
+        NotifyDetail();
+        RebuildChart();
+    }
+
+    private void RebuildChart()
+    {
+        if (_session == null) { Chart = null; return; }
+        var on = Legend.Where(l => l.IsOn).Select(l => l.TargetId).ToHashSet();
+        Chart = SessionChartBuilder.Build(_session, (ChartMode)Math.Clamp(ModeIndex, 0, 2), on);
+    }
+
+    // ------------------------------------------------------------------ actions
+
+    private void ExportReport()
+    {
+        if (_session == null || _stats == null) return;
+        var dlg = new SaveFileDialog
+        {
+            Filter = "Markdown report (*.md)|*.md",
+            FileName = $"NetPulse_Report_{_session.StartedUtc.ToLocalTime():yyyyMMdd_HHmm}.md"
+        };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            File.WriteAllText(dlg.FileName, SessionReportBuilder.BuildMarkdown(_session, _stats), Encoding.UTF8);
+            Message = $"Report saved: {dlg.FileName}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Message = $"The report could not be saved: {ex.Message}";
+        }
+    }
+
+    private void ExportSamples()
+    {
+        if (_session == null) return;
+        var dlg = new SaveFileDialog
+        {
+            Filter = "CSV file (*.csv)|*.csv",
+            FileName = $"NetPulse_Probes_{_session.StartedUtc.ToLocalTime():yyyyMMdd_HHmm}.csv"
+        };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            File.WriteAllText(dlg.FileName, SessionReportBuilder.BuildSamplesCsv(_session), Encoding.UTF8);
+            Message = $"Probe data saved: {dlg.FileName}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Message = $"The data could not be saved: {ex.Message}";
+        }
+    }
+
+    private void OpenFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(_host.Sessions.Directory);
+            Process.Start(new ProcessStartInfo(_host.Sessions.Directory) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Message = $"Could not open the folder: {ex.Message}";
+        }
+    }
+
+    private void Delete()
+    {
+        if (_session == null) return;
+        var answer = MessageBox.Show(
+            $"Delete the recording \"{_session.Name}\"?\n\nThis removes the file from this PC and cannot be undone.",
+            "Delete recording", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            string id = _session.Id;
+            _host.Sessions.Delete(id);
+            Message = "Recording deleted.";
+            _selected = null;
+            OnPropertyChanged(nameof(SelectedSession));
+            ClearDetail();
+            _ = RefreshAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Message = $"The recording could not be deleted: {ex.Message}";
+        }
+    }
+}
+
+public sealed record SummaryCard(string Label, string Value, string Caption);

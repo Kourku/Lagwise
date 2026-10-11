@@ -9,8 +9,6 @@
     <AssemblyName>NetPulse-Setup</AssemblyName>
     <RootNamespace>NetPulse.Installer</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.0.0</Version>
-    <Authors>NetPulse Diagnostics Team</Authors>
     <Product>NetPulse Installer</Product>
   </PropertyGroup>
 

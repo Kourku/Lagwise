@@ -1,5 +1,7 @@
 # 🧪 NetPulse Automated Test & Verification Report
 
+> **Historical (v0.1.0, then numbered 1.0.0; 21 tests).** Current counts for each build are recorded in `dist/releases/<version>/build-info.json`; as of 0.3.0 the suite has 220 tests. See `docs/GAME_MONITOR.md` for what the newer tests cover.
+
 ## Test Execution Summary
 - **Timestamp:** 2026-09-27 02:01:10 UTC
 - **Test Framework:** xUnit 2.9.3 (.NET 10.0-windows x64)

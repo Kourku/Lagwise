@@ -13,7 +13,7 @@ param(
 )
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "   NetPulse Diagnostics Installer v1.0.0" -ForegroundColor Cyan
+Write-Host "   NetPulse Diagnostics Installer" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -71,7 +71,7 @@ Write-Host "[4/4] Registering with Windows Add/Remove Programs..." -ForegroundCo
 $UninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulse"
 New-Item -Path $UninstallKey -Force | Out-Null
 Set-ItemProperty -Path $UninstallKey -Name "DisplayName" -Value "NetPulse Real-Time Network Quality & Path Diagnostics"
-Set-ItemProperty -Path $UninstallKey -Name "DisplayVersion" -Value "1.0.0"
+Set-ItemProperty -Path $UninstallKey -Name "DisplayVersion" -Value (("$((Get-Item "$InstallPath\NetPulse.exe").VersionInfo.ProductVersion)").Split('+')[0])
 Set-ItemProperty -Path $UninstallKey -Name "Publisher" -Value "NetPulse Diagnostics"
 Set-ItemProperty -Path $UninstallKey -Name "DisplayIcon" -Value "$InstallPath\NetPulse.exe,0"
 Set-ItemProperty -Path $UninstallKey -Name "InstallLocation" -Value $InstallPath
@@ -83,7 +83,9 @@ Write-Host "Uninstalling NetPulse..." -ForegroundColor Yellow
 Remove-Item "$DesktopPath\NetPulse.lnk" -ErrorAction SilentlyContinue
 Remove-Item "$ProgramsPath\NetPulse.lnk" -ErrorAction SilentlyContinue
 Remove-Item -Path "$UninstallKey" -Recurse -ErrorAction SilentlyContinue
-Start-Process cmd.exe -ArgumentList '/c timeout /t 2 /nobreak > NUL & rmdir /s /q "$InstallPath"' -WindowStyle Hidden
+# remove only the files this installer created (user data in %LOCALAPPDATA%\NetPulse is left alone), then the folder if empty
+Remove-Item "$InstallPath\NetPulse.exe","$InstallPath\app.ico","$InstallPath\Uninstall.ps1" -ErrorAction SilentlyContinue
+Start-Process cmd.exe -ArgumentList '/c timeout /t 2 /nobreak > NUL & rmdir "$InstallPath"' -WindowStyle Hidden
 Write-Host "NetPulse uninstalled successfully." -ForegroundColor Green
 "@
 Set-Content -Path "$InstallPath\Uninstall.ps1" -Value $UninstallScript

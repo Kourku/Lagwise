@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -18,151 +17,69 @@ public class SpeedTestProgress
     public string StatusText { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Multi-stream throughput test against speed.cloudflare.com (external service: Cloudflare).
+/// Cancelling via the token throws <see cref="OperationCanceledException"/>; any other failure is reported
+/// through <see cref="SpeedTestResult.ErrorMessage"/> rather than as a 0 Mbps "success".
+/// </summary>
 public class SpeedTestService
 {
-    private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+    private const int PhaseMs = 5000;
+
+
+    private readonly HttpClient _http;
+    private readonly ITransferProvider _provider;
+
+    public SpeedTestService(ITransferProvider? provider = null, HttpClient? http = null)
+    {
+        _provider = provider ?? new CloudflareTransferProvider();
+        _http = http ?? SharedHttp;
+    }
+
+    private static readonly HttpClient SharedHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+    public ITransferProvider Provider => _provider;
+
+    private sealed class Counter
+    {
+        public long Bytes;
+        public string? LastError;
+    }
 
     public async Task<SpeedTestResult> RunSpeedTestAsync(
         IProgress<SpeedTestProgress>? progress = null,
         CancellationToken ct = default)
     {
-        var result = new SpeedTestResult
-        {
-            Timestamp = DateTime.UtcNow
-        };
-
+        var result = new SpeedTestResult { Timestamp = DateTime.UtcNow, Provider = _provider.DisplayName };
         var totalSw = Stopwatch.StartNew();
 
         try
         {
-            // ----------------------------------------------------
-            // Phase 1: Download Test (5 seconds)
-            // ----------------------------------------------------
-            progress?.Report(new SpeedTestProgress
+            progress?.Report(new SpeedTestProgress { Phase = "Download", Percent = 10, StatusText = $"Checking {_provider.DisplayName}..." });
+            var providerError = await _provider.ValidateAsync(_http, ct);
+            if (providerError != null)
             {
-                Phase = "Download",
-                Percent = 10,
-                StatusText = "Connecting to high-speed CDN chunk servers..."
-            });
-
-            long totalDownloadBytes = 0;
-            var dlSw = Stopwatch.StartNew();
-
-            using (var dlCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
-            {
-                dlCts.CancelAfter(TimeSpan.FromSeconds(5));
-
-                var dlUrls = new[]
-                {
-                    "https://speed.cloudflare.com/__down?bytes=25000000",
-                    "https://speed.cloudflare.com/__down?bytes=25000000",
-                    "https://speed.cloudflare.com/__down?bytes=25000000",
-                    "https://speed.cloudflare.com/__down?bytes=25000000"
-                };
-
-                var dlTasks = dlUrls.Select(async url =>
-                {
-                    byte[] buffer = new byte[65536];
-                    try
-                    {
-                        using var resp = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, dlCts.Token);
-                        using var stream = await resp.Content.ReadAsStreamAsync(dlCts.Token);
-                        int read;
-                        while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, dlCts.Token)) > 0)
-                        {
-                            Interlocked.Add(ref totalDownloadBytes, read);
-                        }
-                    }
-                    catch { }
-                }).ToList();
-
-                // Live progress ticker
-                while (!dlCts.IsCancellationRequested && dlSw.ElapsedMilliseconds < 5000)
-                {
-                    await Task.Delay(200, ct);
-                    double elapsedSec = Math.Max(0.1, dlSw.Elapsed.TotalSeconds);
-                    double currentMbps = (Interlocked.Read(ref totalDownloadBytes) * 8.0) / (elapsedSec * 1_000_000.0);
-                    int percent = Math.Min(50, 10 + (int)((dlSw.ElapsedMilliseconds / 5000.0) * 40));
-
-                    progress?.Report(new SpeedTestProgress
-                    {
-                        Phase = "Download",
-                        Percent = percent,
-                        CurrentSpeedMbps = currentMbps,
-                        BytesTransferred = Interlocked.Read(ref totalDownloadBytes),
-                        StatusText = $"Testing Download: {currentMbps:F1} Mbps ({(Interlocked.Read(ref totalDownloadBytes) / 1_000_000.0):F1} MB transferred)"
-                    });
-                }
-
-                try { await Task.WhenAll(dlTasks); } catch { }
+                result.ErrorMessage = providerError;
+                return result;
             }
-
-            dlSw.Stop();
-            double dlSec = Math.Max(0.1, dlSw.Elapsed.TotalSeconds);
-            result.BytesDownloaded = totalDownloadBytes;
-            result.DownloadSpeedMbps = (totalDownloadBytes * 8.0) / (dlSec * 1_000_000.0);
-
-            // ----------------------------------------------------
-            // Phase 2: Upload Test (5 seconds)
-            // ----------------------------------------------------
-            progress?.Report(new SpeedTestProgress
+            var (dlBytes, dlSec, dlErr) = await RunPhaseAsync("Download", 10, 40, 4, DownloadWorkerAsync, progress, ct);
+            if (dlBytes == 0)
             {
-                Phase = "Upload",
-                Percent = 55,
-                StatusText = "Preparing upload test..."
-            });
-
-            long totalUploadBytes = 0;
-            var ulSw = Stopwatch.StartNew();
-
-            using (var ulCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
-            {
-                ulCts.CancelAfter(TimeSpan.FromSeconds(5));
-
-                byte[] uploadBuffer = new byte[256 * 1024]; // 256 KB
-                Random.Shared.NextBytes(uploadBuffer);
-
-                var ulTasks = Enumerable.Range(0, 3).Select(async _ =>
-                {
-                    try
-                    {
-                        while (!ulCts.IsCancellationRequested)
-                        {
-                            using var content = new ByteArrayContent(uploadBuffer);
-                            using var resp = await HttpClient.PostAsync("https://speed.cloudflare.com/__up", content, ulCts.Token);
-                            Interlocked.Add(ref totalUploadBytes, uploadBuffer.Length);
-                        }
-                    }
-                    catch { }
-                }).ToList();
-
-                // Live progress ticker
-                while (!ulCts.IsCancellationRequested && ulSw.ElapsedMilliseconds < 5000)
-                {
-                    await Task.Delay(200, ct);
-                    double elapsedSec = Math.Max(0.1, ulSw.Elapsed.TotalSeconds);
-                    double currentMbps = (Interlocked.Read(ref totalUploadBytes) * 8.0) / (elapsedSec * 1_000_000.0);
-                    int percent = Math.Min(95, 55 + (int)((ulSw.ElapsedMilliseconds / 5000.0) * 40));
-
-                    progress?.Report(new SpeedTestProgress
-                    {
-                        Phase = "Upload",
-                        Percent = percent,
-                        CurrentSpeedMbps = currentMbps,
-                        BytesTransferred = Interlocked.Read(ref totalUploadBytes),
-                        StatusText = $"Testing Upload: {currentMbps:F1} Mbps ({(Interlocked.Read(ref totalUploadBytes) / 1_000_000.0):F1} MB sent)"
-                    });
-                }
-
-                try { await Task.WhenAll(ulTasks); } catch { }
+                result.ErrorMessage = $"No download data was received. {dlErr ?? "Check connectivity to speed.cloudflare.com."}";
+                return result;
             }
+            result.BytesDownloaded = dlBytes;
+            result.DownloadSpeedMbps = dlBytes * 8.0 / (dlSec * 1_000_000.0);
 
-            ulSw.Stop();
-            double ulSec = Math.Max(0.1, ulSw.Elapsed.TotalSeconds);
-            result.BytesUploaded = totalUploadBytes;
-            result.UploadSpeedMbps = (totalUploadBytes * 8.0) / (ulSec * 1_000_000.0);
+            progress?.Report(new SpeedTestProgress { Phase = "Upload", Percent = 55, StatusText = "Preparing upload test..." });
+            var (ulBytes, ulSec, ulErr) = await RunPhaseAsync("Upload", 55, 40, 3, UploadWorkerAsync, progress, ct);
+            if (ulBytes == 0)
+            {
+                result.ErrorMessage = $"Download completed ({result.DownloadSpeedMbps:F1} Mbps) but no upload data was accepted. {ulErr ?? string.Empty}".Trim();
+                return result;
+            }
+            result.BytesUploaded = ulBytes;
+            result.UploadSpeedMbps = ulBytes * 8.0 / (ulSec * 1_000_000.0);
 
-            totalSw.Stop();
             result.DurationSeconds = totalSw.Elapsed.TotalSeconds;
             result.CompletedSuccessfully = true;
 
@@ -171,20 +88,97 @@ public class SpeedTestService
                 Phase = "Completed",
                 Percent = 100,
                 CurrentSpeedMbps = result.DownloadSpeedMbps,
-                StatusText = $"Speed Test Finished: {result.DownloadSpeedMbps:F1} Mbps Download | {result.UploadSpeedMbps:F1} Mbps Upload"
+                StatusText = $"Speed test finished: {result.DownloadSpeedMbps:F1} Mbps down | {result.UploadSpeedMbps:F1} Mbps up"
             });
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            result.ErrorMessage = "The test timed out.";
         }
         catch (OperationCanceledException)
         {
-            result.CompletedSuccessfully = false;
-            result.ErrorMessage = "Test was cancelled by user.";
+            throw; // user cancellation propagates to the caller
         }
         catch (Exception ex)
         {
-            result.CompletedSuccessfully = false;
             result.ErrorMessage = ex.GetBaseException().Message;
         }
 
         return result;
+    }
+
+    private async Task<(long Bytes, double Seconds, string? Error)> RunPhaseAsync(
+        string phase, int percentStart, int percentSpan, int streams,
+        Func<Counter, CancellationToken, Task> worker,
+        IProgress<SpeedTestProgress>? progress,
+        CancellationToken userCt)
+    {
+        var counter = new Counter();
+        using var phaseCts = CancellationTokenSource.CreateLinkedTokenSource(userCt);
+        phaseCts.CancelAfter(PhaseMs);
+
+        var sw = Stopwatch.StartNew();
+        var tasks = Enumerable.Range(0, streams).Select(_ => worker(counter, phaseCts.Token)).ToList();
+        var all = Task.WhenAll(tasks);
+
+        while (!all.IsCompleted)
+        {
+            await Task.WhenAny(all, Task.Delay(200, CancellationToken.None));
+            userCt.ThrowIfCancellationRequested();
+            long bytes = Interlocked.Read(ref counter.Bytes);
+            double mbps = bytes * 8.0 / (Math.Max(0.1, sw.Elapsed.TotalSeconds) * 1_000_000.0);
+            progress?.Report(new SpeedTestProgress
+            {
+                Phase = phase,
+                Percent = percentStart + Math.Min(percentSpan, (int)(sw.ElapsedMilliseconds * percentSpan / PhaseMs)),
+                CurrentSpeedMbps = mbps,
+                BytesTransferred = bytes,
+                StatusText = $"Testing {phase.ToLowerInvariant()}: {mbps:F1} Mbps ({bytes / 1_000_000.0:F1} MB)"
+            });
+        }
+
+        await all; // workers handle their own errors
+        sw.Stop();
+        userCt.ThrowIfCancellationRequested();
+        return (Interlocked.Read(ref counter.Bytes), Math.Max(0.1, sw.Elapsed.TotalSeconds), counter.LastError);
+    }
+
+    private async Task DownloadWorkerAsync(Counter counter, CancellationToken ct)
+    {
+        var buffer = new byte[65536];
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                using var resp = await _http.GetAsync(_provider.DownloadUri, HttpCompletionOption.ResponseHeadersRead, ct);
+                resp.EnsureSuccessStatusCode();
+                using var stream = await resp.Content.ReadAsStreamAsync(ct);
+                int read;
+                while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+                {
+                    Interlocked.Add(ref counter.Bytes, read);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { counter.LastError = ex.GetBaseException().Message; }
+    }
+
+    private async Task UploadWorkerAsync(Counter counter, CancellationToken ct)
+    {
+        var payload = new byte[256 * 1024];
+        Random.Shared.NextBytes(payload);
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                using var content = new ByteArrayContent(payload);
+                using var resp = await _http.PostAsync(_provider.UploadUri, content, ct);
+                resp.EnsureSuccessStatusCode();
+                Interlocked.Add(ref counter.Bytes, payload.Length);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { counter.LastError = ex.GetBaseException().Message; }
     }
 }

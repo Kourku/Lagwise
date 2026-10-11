@@ -6,9 +6,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using NetPulse.Core;
 using NetPulse.Core.Models;
+using NetPulse.Core.Sessions;
 using NetPulse.Core.Services;
 
 namespace NetPulse.App.ViewModels;
@@ -23,7 +26,7 @@ public class MainViewModel : ViewModelBase
     private readonly DiagnosticEngine _diagnosticEngine;
     private readonly EventLogService _eventLogService;
     private readonly StorageService _storageService;
-    private readonly WindowsIntegrationService _winIntegrationService;
+    private readonly WindowsIntegrationService? _winIntegrationService;
     private readonly TracerouteService _tracerouteService;
     private readonly MtrService _mtrService;
     private readonly RouteAnalysisService _routeAnalysisService;
@@ -34,6 +37,10 @@ public class MainViewModel : ViewModelBase
     // View Navigation
     private string _currentTab = "Dashboard";
     private bool _isBeginnerMode = true;
+    private CancellationTokenSource? _bufferbloatCts;
+    private CancellationTokenSource? _speedTestCts;
+    private CancellationTokenSource? _compareCts;
+    private bool _isComparingPaths;
 
     // Diagnostic state
     private string _statusHeadline = "Initializing connection diagnostics...";
@@ -81,7 +88,9 @@ public class MainViewModel : ViewModelBase
 
     // Commands
     public RelayCommand SwitchTabCommand { get; }
-    public RelayCommand ToggleModeCommand { get; }
+    public RelayCommand SetModeCommand { get; }
+    public RelayCommand CancelBufferbloatCommand { get; }
+    public RelayCommand CancelSpeedTestCommand { get; }
     public RelayCommand StartMtrCommand { get; }
     public RelayCommand StopMtrCommand { get; }
     public RelayCommand ComparePathsCommand { get; }
@@ -92,56 +101,58 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ExportReportCommand { get; }
     public RelayCommand ClearEventsCommand { get; }
 
-    public MainViewModel()
-    {
-        _discoveryService = new NetworkDiscoveryService();
-        _pingService = new PingService();
-        _tcpService = new TcpProbeService();
-        _httpService = new HttpProbeService();
-        _dnsService = new DnsProbeService();
-        _diagnosticEngine = new DiagnosticEngine();
-        _eventLogService = new EventLogService();
-        _storageService = new StorageService();
-        _winIntegrationService = new WindowsIntegrationService();
-        _tracerouteService = new TracerouteService();
-        _mtrService = new MtrService(_tracerouteService);
-        _routeAnalysisService = new RouteAnalysisService();
-        _bufferbloatService = new BufferbloatService(_pingService);
-        _speedTestService = new SpeedTestService();
+    private readonly NetPulseHost _host;
+    public GameMonitorViewModel GameMonitor { get; }
+    public SettingsViewModel Settings { get; }
+    public HistoryViewModel History { get; }
 
-        _engine = new MeasurementEngine(
-            _discoveryService,
-            _pingService,
-            _tcpService,
-            _httpService,
-            _dnsService,
-            _diagnosticEngine,
-            _eventLogService);
+    public MainViewModel(NetPulseHost host)
+    {
+        _host = host;
+        _discoveryService = host.Discovery;
+        _pingService = host.Ping;
+        _tcpService = host.Tcp;
+        _httpService = host.Http;
+        _dnsService = host.Dns;
+        _diagnosticEngine = host.Diagnostics;
+        _eventLogService = host.Events;
+        _storageService = host.Storage;
+        _winIntegrationService = host.WindowsIntegration;
+        _tracerouteService = host.Traceroute;
+        _mtrService = host.Mtr;
+        _routeAnalysisService = host.RouteAnalysis;
+        _bufferbloatService = host.Bufferbloat;
+        _speedTestService = host.SpeedTest;
+        _engine = host.Engine;
+        _isBeginnerMode = host.Settings.IsBeginnerMode;
 
         // Bind engine events
-        _engine.MetricsUpdated += (s, metrics) => Application.Current.Dispatcher.Invoke(() => UpdateMetrics(metrics));
-        _engine.DiagnosisUpdated += (s, diag) => Application.Current.Dispatcher.Invoke(() => UpdateDiagnosis(diag));
-        _engine.NetworkInterfaceUpdated += (s, nic) => Application.Current.Dispatcher.Invoke(() => ActiveNic = nic);
-        _eventLogService.EventLogged += (s, evt) => Application.Current.Dispatcher.Invoke(() =>
+        _engine.MetricsUpdated += (s, metrics) => Application.Current.Dispatcher.InvokeAsync(() => UpdateMetrics(metrics));
+        _engine.DiagnosisUpdated += (s, diag) => Application.Current.Dispatcher.InvokeAsync(() => UpdateDiagnosis(diag));
+        _engine.NetworkInterfaceUpdated += (s, nic) => Application.Current.Dispatcher.InvokeAsync(() => ActiveNic = nic);
+        _eventLogService.EventLogged += (s, evt) => Application.Current.Dispatcher.InvokeAsync(() =>
         {
             Events.Insert(0, evt);
             if (Events.Count > 300) Events.RemoveAt(Events.Count - 1);
+            UpdateLatestEvent();
         });
 
-        _mtrService.HopsUpdated += (s, hops) => Application.Current.Dispatcher.Invoke(() => UpdateMtrHops(hops));
-        _mtrService.RouteChanged += (s, chg) => Application.Current.Dispatcher.Invoke(() =>
+        _mtrService.HopsUpdated += (s, hops) => Application.Current.Dispatcher.InvokeAsync(() => UpdateMtrHops(hops));
+        _mtrService.RouteChanged += (s, chg) => Application.Current.Dispatcher.InvokeAsync(() =>
         {
             _eventLogService.LogEvent("RouteChange", "Warning", chg.ChangeDescription, chg.Destination, chg.CurrentLatencyMs);
         });
 
         // Initialize Commands
         SwitchTabCommand = new RelayCommand(p => CurrentTab = p?.ToString() ?? "Dashboard");
-        ToggleModeCommand = new RelayCommand(() => IsBeginnerMode = !IsBeginnerMode);
-        StartMtrCommand = new RelayCommand(async () => await StartMtrAsync());
-        StopMtrCommand = new RelayCommand(() => StopMtr());
-        ComparePathsCommand = new RelayCommand(async () => await ComparePathsAsync());
-        RunBufferbloatCommand = new RelayCommand(async () => await RunBufferbloatAsync());
-        RunSpeedTestCommand = new RelayCommand(async () => await RunSpeedTestAsync());
+        SetModeCommand = new RelayCommand(p => IsBeginnerMode = !string.Equals(p?.ToString(), "Advanced", StringComparison.OrdinalIgnoreCase));
+        StartMtrCommand = new RelayCommand(async () => await StartMtrAsync(), () => !IsMtrRunning);
+        StopMtrCommand = new RelayCommand(() => StopMtr(), () => IsMtrRunning);
+        ComparePathsCommand = new RelayCommand(async () => await ComparePathsAsync(), () => !IsComparingPaths);
+        RunBufferbloatCommand = new RelayCommand(async () => await RunBufferbloatAsync(), () => !IsBufferbloatRunning);
+        RunSpeedTestCommand = new RelayCommand(async () => await RunSpeedTestAsync(), () => !IsSpeedTestRunning);
+        CancelBufferbloatCommand = new RelayCommand(() => _bufferbloatCts?.Cancel(), () => IsBufferbloatRunning);
+        CancelSpeedTestCommand = new RelayCommand(() => _speedTestCts?.Cancel(), () => IsSpeedTestRunning);
         ExportCsvCommand = new RelayCommand(async () => await ExportCsvAsync());
         ExportJsonCommand = new RelayCommand(async () => await ExportJsonAsync());
         ExportReportCommand = new RelayCommand(async () => await ExportReportAsync());
@@ -152,7 +163,24 @@ public class MainViewModel : ViewModelBase
         });
 
         // Start measurement engine
-        _engine.Start();
+        InitializeSessionCommands();
+        GameMonitor = new GameMonitorViewModel(host, Application.Current.Dispatcher);
+        History = new HistoryViewModel(host, Application.Current.Dispatcher);
+        Settings = new SettingsViewModel(host);
+        Settings.Applied += (_, _) =>
+        {
+            OnPropertyChanged(nameof(ProbeIntervalText));
+            PruneRemovedTargets();
+        };
+        GameMonitor.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(GameMonitorViewModel.ProcessStatus) or nameof(GameMonitorViewModel.IsMonitoring) or nameof(GameMonitorViewModel.SelectedProfile)) UpdateGameCard();
+        };
+        MtrHops.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoHops));
+        UpdateGameCard();
+
+        // Start the shared engine (idempotent: tray and window share one host)
+        _host.Start();
     }
 
     #region Properties
@@ -160,13 +188,37 @@ public class MainViewModel : ViewModelBase
     public string CurrentTab
     {
         get => _currentTab;
-        set => SetProperty(ref _currentTab, value);
+        set
+        {
+            if (!SetProperty(ref _currentTab, value)) return;
+            if (value == "History") _ = History.RefreshAsync();   // pick up recordings saved since the tab was last open
+        }
     }
 
     public bool IsBeginnerMode
     {
         get => _isBeginnerMode;
-        set => SetProperty(ref _isBeginnerMode, value);
+        set
+        {
+            if (SetProperty(ref _isBeginnerMode, value))
+            {
+                OnPropertyChanged(nameof(IsAdvancedMode));
+                OnPropertyChanged(nameof(TipLatency));
+                OnPropertyChanged(nameof(TipVariation));
+                OnPropertyChanged(nameof(TipLoss));
+                OnPropertyChanged(nameof(TipRouter));
+                _host.Settings.IsBeginnerMode = value;
+                _host.SaveSettings(out _);
+            }
+        }
+    }
+
+    public bool IsAdvancedMode => !_isBeginnerMode;
+
+    public bool IsComparingPaths
+    {
+        get => _isComparingPaths;
+        set => SetProperty(ref _isComparingPaths, value);
     }
 
     public string StatusHeadline
@@ -238,7 +290,68 @@ public class MainViewModel : ViewModelBase
     public NetworkInterfaceInfo ActiveNic
     {
         get => _activeNic;
-        set => SetProperty(ref _activeNic, value);
+        set
+        {
+            if (!SetProperty(ref _activeNic, value)) return;
+            OnPropertyChanged(nameof(AdapterStatusText));
+            OnPropertyChanged(nameof(ShowWifiDetails));
+            OnPropertyChanged(nameof(ShowEthernetNote));
+            OnPropertyChanged(nameof(NonWifiNote));
+        }
+    }
+
+    public string AdapterStatusText => string.IsNullOrEmpty(ActiveNic.OperationalStatus) ? "Adapter: checking..." : $"Adapter: {ActiveNic.OperationalStatus.ToLowerInvariant()}";
+    public bool ShowWifiDetails => ActiveNic.IsWifi;
+    public bool ShowEthernetNote => !ActiveNic.IsWifi;
+    public string NonWifiNote => $"This PC is connected through {(string.IsNullOrEmpty(ActiveNic.InterfaceType) ? "a wired adapter" : ActiveNic.InterfaceType)}, so Wi-Fi signal details do not apply.";
+
+    // Definitions come from the lexicon; in Advanced mode they also explain how the value is measured.
+    public string TipLatency => Lexicon.Tip("latency", IsAdvancedMode);
+    public string TipVariation => Lexicon.Tip("variation", IsAdvancedMode);
+    public string TipLoss => Lexicon.Tip("loss", IsAdvancedMode);
+    public string TipRouter => Lexicon.Tip("router", IsAdvancedMode);
+    public System.Collections.Generic.IReadOnlyList<GlossaryEntry> Glossary => Lexicon.Glossary;
+    public string HelpMeasuresText =>
+        "NetPulse measures how your connection behaves: how fast and how steadily your router and several independent public servers answer, and whether answers go missing. "
+        + "When a game is selected it also lists the network connections that game has open.\n\n"
+        + "It does not measure the ping you see inside a game, and it does not know which server your match is on. Public reference servers are not game servers. "
+        + "A result is a clue backed by measurements, never a verdict, and NetPulse says how confident it is.\n\n"
+        + "Everything stays on this PC. The only outside services contacted are the public reference servers it pings, and the speed-test provider when you run Speed Test or Bufferbloat.";
+    public string ProbeIntervalText => $" • Probing every {_host.Settings.MonitoringIntervalMs / 1000.0:0.##} s";
+    public bool HasNoHops => MtrHops.Count == 0;
+
+    private string _latestEventText = "No problems recorded since NetPulse started.";
+    public string LatestEventText { get => _latestEventText; private set => SetProperty(ref _latestEventText, value); }
+    private string _gameCardTitle = "No game selected";
+    public string GameCardTitle { get => _gameCardTitle; private set => SetProperty(ref _gameCardTitle, value); }
+    private string _gameCardDetail = "Choose a game to watch your connection while you play.";
+    public string GameCardDetail { get => _gameCardDetail; private set => SetProperty(ref _gameCardDetail, value); }
+
+    private void UpdateLatestEvent()
+    {
+        var e = Events.FirstOrDefault(x => x.Severity != "Info");
+        LatestEventText = e == null
+            ? "No problems recorded since NetPulse started."
+            : $"{e.Timestamp.ToLocalTime():HH:mm:ss} - {Lexicon.EventLabel(e.EventType)}: {(e.Description.Length > 150 ? e.Description[..150] + "..." : e.Description)}";
+    }
+
+    private void PruneRemovedTargets()
+    {
+        var keep = _engine.GetCurrentMetrics().Select(m => m.TargetId).ToHashSet();
+        foreach (var stale in Targets.Where(t => !keep.Contains(t.TargetId)).ToList()) Targets.Remove(stale);
+    }
+
+    private void UpdateGameCard()
+    {
+        var gm = GameMonitor;
+        if (gm.SelectedProfile == null)
+        {
+            GameCardTitle = "No game selected";
+            GameCardDetail = "Choose a game to watch your connection while you play.";
+            return;
+        }
+        GameCardTitle = gm.SelectedProfile.Profile.DisplayName;
+        GameCardDetail = (gm.IsMonitoring ? "Recording - " : "Not recording - ") + gm.ProcessStatus;
     }
 
     public string MtrDestination
@@ -335,7 +448,8 @@ public class MainViewModel : ViewModelBase
 
     private void UpdateMetrics(IReadOnlyList<TargetMetrics> metrics)
     {
-        foreach (var m in metrics)
+        if (IsRecording) RefreshSessionStatus();
+        foreach (var m in metrics.Where(x => !x.IsGameEndpoint))
         {
             var existing = Targets.FirstOrDefault(t => t.TargetId == m.TargetId);
             if (existing != null)
@@ -354,11 +468,15 @@ public class MainViewModel : ViewModelBase
         var dns = metrics.FirstOrDefault(m => m.IsDnsResolver);
         if (dns != null) QuickDnsLatency = dns.CurrentLatency;
 
-        var internet = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && m.TotalProbes > 0).ToList();
+        // Reference targets are different kinds of probe (a plain ping vs. an HTTPS handshake), so their latencies are not averaged
+        // together. The headline numbers use the typical (median) of the plain pings; loss is the mean over all reference targets.
+        var internet = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.TotalProbes > 0).ToList();
         if (internet.Count > 0)
         {
-            QuickInternetLatency = internet.Average(i => i.CurrentLatency);
-            QuickJitter = internet.Average(i => i.Jitter);
+            var pings = internet.Where(i => i.Protocol == NetworkProtocol.Icmp && i.ReplyCount > 0).ToList();
+            var basis = pings.Count > 0 ? pings : internet;
+            QuickInternetLatency = NetPulse.Core.Statistics.StatisticalCalculator.CalculateMedian(basis.Select(i => i.CurrentLatency).ToList());
+            QuickJitter = NetPulse.Core.Statistics.StatisticalCalculator.CalculateMedian(basis.Select(i => i.Jitter).ToList());
             QuickPacketLoss = internet.Average(i => i.PacketLossPercent);
         }
     }
@@ -366,7 +484,7 @@ public class MainViewModel : ViewModelBase
     private void UpdateDiagnosis(DiagnosticResult diag)
     {
         StatusHeadline = diag.Headline;
-        StatusCategory = diag.Category.ToString();
+        StatusCategory = Lexicon.CategoryLabel(diag.Category);
         LikelyCause = diag.LikelyCause;
         RecommendedAction = diag.RecommendedAction;
         EvidenceSummary = diag.DetailSummary;
@@ -399,6 +517,7 @@ public class MainViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(MtrDestination)) return;
         IsMtrRunning = true;
+        CommandManager.InvalidateRequerySuggested();
         MtrStatusText = $"Tracing route path to {MtrDestination}...";
         MtrHops.Clear();
         RouteAnomalies.Clear();
@@ -411,23 +530,45 @@ public class MainViewModel : ViewModelBase
     {
         _mtrService.Stop();
         IsMtrRunning = false;
-        MtrStatusText = "MTR paused.";
+        MtrStatusText = "MTR stopped.";
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private async Task ComparePathsAsync()
     {
+        if (string.IsNullOrWhiteSpace(PathCompareDestA) || string.IsNullOrWhiteSpace(PathCompareDestB))
+        {
+            PathCompareSummary = "Enter two destinations to compare.";
+            return;
+        }
+
         PathCompareSummary = "Tracing both paths for comparison...";
+        IsComparingPaths = true;
+        CommandManager.InvalidateRequerySuggested();
+        _compareCts = new CancellationTokenSource();
         try
         {
-            var traceA = await _tracerouteService.TraceRouteAsync(PathCompareDestA.Trim(), 20, 1500);
-            var traceB = await _tracerouteService.TraceRouteAsync(PathCompareDestB.Trim(), 20, 1500);
+            var ct = _compareCts.Token;
+            var traceA = await _tracerouteService.TraceRouteAsync(PathCompareDestA.Trim(), 20, 1500, null, ct);
+            var traceB = await _tracerouteService.TraceRouteAsync(PathCompareDestB.Trim(), 20, 1500, null, ct);
 
             var comparison = _routeAnalysisService.ComparePaths(traceA, traceB);
             PathCompareSummary = comparison.Summary;
         }
+        catch (OperationCanceledException)
+        {
+            PathCompareSummary = "Path comparison cancelled.";
+        }
         catch (Exception ex)
         {
             PathCompareSummary = $"Path comparison error: {ex.Message}";
+        }
+        finally
+        {
+            IsComparingPaths = false;
+            _compareCts?.Dispose();
+            _compareCts = null;
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -435,6 +576,8 @@ public class MainViewModel : ViewModelBase
     {
         if (IsBufferbloatRunning) return;
         IsBufferbloatRunning = true;
+        _bufferbloatCts = new CancellationTokenSource();
+        CommandManager.InvalidateRequerySuggested();
         BufferbloatProgress = 5;
         BufferbloatStatus = "Initiating bufferbloat test...";
 
@@ -446,8 +589,14 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var res = await _bufferbloatService.RunTestAsync("1.1.1.1", progress);
+            var res = await _bufferbloatService.RunTestAsync("1.1.1.1", progress, _bufferbloatCts.Token);
             LatestBufferbloatResult = res;
+            if (!res.IsValid)
+            {
+                BufferbloatProgress = 0;
+                BufferbloatStatus = $"Test could not complete: {res.ErrorMessage}";
+                return;
+            }
             BufferbloatStatus = $"Completed with Grade {res.Grade}!";
             _eventLogService.LogEvent(
                 "BufferbloatTest",
@@ -455,13 +604,22 @@ public class MainViewModel : ViewModelBase
                 $"Bufferbloat test finished: Grade {res.Grade} (+{Math.Max(res.DownloadDeltaMs, res.UploadDeltaMs):F0} ms delta)",
                 "Bufferbloat");
         }
+        catch (OperationCanceledException)
+        {
+            BufferbloatProgress = 0;
+            BufferbloatStatus = "Bufferbloat test cancelled.";
+        }
         catch (Exception ex)
         {
+            BufferbloatProgress = 0;
             BufferbloatStatus = $"Test error: {ex.Message}";
         }
         finally
         {
             IsBufferbloatRunning = false;
+            _bufferbloatCts?.Dispose();
+            _bufferbloatCts = null;
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -478,6 +636,8 @@ public class MainViewModel : ViewModelBase
         if (confirm != MessageBoxResult.Yes) return;
 
         IsSpeedTestRunning = true;
+        _speedTestCts = new CancellationTokenSource();
+        CommandManager.InvalidateRequerySuggested();
         SpeedTestProgress = 5;
         SpeedTestStatus = "Starting multi-stream bandwidth test...";
 
@@ -490,7 +650,7 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var res = await _speedTestService.RunSpeedTestAsync(progress);
+            var res = await _speedTestService.RunSpeedTestAsync(progress, _speedTestCts.Token);
             LatestSpeedTestResult = res;
             if (res.CompletedSuccessfully)
             {
@@ -503,16 +663,26 @@ public class MainViewModel : ViewModelBase
             }
             else
             {
-                SpeedTestStatus = $"Test stopped: {res.ErrorMessage}";
+                SpeedTestProgress = 0;
+                SpeedTestStatus = $"Speed test failed: {res.ErrorMessage}";
             }
+        }
+        catch (OperationCanceledException)
+        {
+            SpeedTestProgress = 0;
+            SpeedTestStatus = "Speed test cancelled.";
         }
         catch (Exception ex)
         {
+            SpeedTestProgress = 0;
             SpeedTestStatus = $"Speed test error: {ex.Message}";
         }
         finally
         {
             IsSpeedTestRunning = false;
+            _speedTestCts?.Dispose();
+            _speedTestCts = null;
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -585,9 +755,90 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    // ---- Session recording ----
+
+    private bool _isRecording;
+    private string _sessionStatus = "Not recording. Recording stores latency samples, events, gaps and disconnects locally on this PC.";
+
+    public RelayCommand StartSessionCommand { get; private set; } = null!;
+    public RelayCommand StopSessionCommand { get; private set; } = null!;
+    public RelayCommand MarkLagCommand { get; private set; } = null!;
+    public RelayCommand OpenSessionsFolderCommand { get; private set; } = null!;
+
+    public bool IsRecording
+    {
+        get => _isRecording;
+        private set => SetProperty(ref _isRecording, value);
+    }
+
+    public string SessionStatus
+    {
+        get => _sessionStatus;
+        private set => SetProperty(ref _sessionStatus, value);
+    }
+
+    /// <summary>Plain-language disclosure of the external service used by Speed Test and Bufferbloat.</summary>
+    public string TransferDisclosure => _host.TransferProvider.Disclosure;
+
+    public string PrivacyFooter =>
+        "Local-first: no analytics or telemetry. Continuous probes go to your router and public DNS/CDN endpoints; Speed Test and Bufferbloat contact "
+        + _host.TransferProvider.DisplayName + " only when you run them.";
+
+    private void InitializeSessionCommands()
+    {
+        StartSessionCommand = new RelayCommand(() =>
+        {
+            _host.StartSession();
+            IsRecording = true;
+            RefreshSessionStatus();
+            CommandManager.InvalidateRequerySuggested();
+        }, () => !IsRecording);
+
+        StopSessionCommand = new RelayCommand(() =>
+        {
+            var session = _host.StopSession(out var error);
+            IsRecording = false;
+            SessionStatus = session == null
+                ? "No session was being recorded."
+                : error == null
+                    ? $"Session saved ({session.Samples.Count:N0} samples, {session.Events.Count} events, {session.Gaps.Count} monitoring gaps, {session.Disconnects.Count} disconnects) in {_host.Sessions.Directory}"
+                    : $"Session recorded but could not be saved: {error}";
+            CommandManager.InvalidateRequerySuggested();
+        }, () => IsRecording);
+
+        MarkLagCommand = new RelayCommand(() =>
+        {
+            _host.Recorder.MarkLag();
+            RefreshSessionStatus("Lag marker added.");
+        }, () => IsRecording);
+
+        OpenSessionsFolderCommand = new RelayCommand(() =>
+        {
+            try
+            {
+                Directory.CreateDirectory(_host.Sessions.Directory);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_host.Sessions.Directory) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                SessionStatus = $"Could not open the sessions folder: {ex.Message}";
+            }
+        });
+    }
+
+    private void RefreshSessionStatus(string? prefix = null)
+    {
+        if (!_host.Recorder.IsRecording) return;
+        var elapsed = DateTime.UtcNow - (_host.Recorder.StartedUtc ?? DateTime.UtcNow);
+        SessionStatus = $"{(prefix == null ? "" : prefix + " ")}Recording for {elapsed:hh\\:mm\\:ss} - {_host.Recorder.SampleCount:N0} samples. Press 'Mark lag' whenever you notice lag in-game.";
+    }
+
     public void OnAppExiting()
     {
+        _bufferbloatCts?.Cancel();
+        _speedTestCts?.Cancel();
+        _compareCts?.Cancel();
         _mtrService.Stop();
-        _engine.Stop();
+        // The shared engine, settings and any recording session are stopped and saved by NetPulseHost.Dispose.
     }
 }

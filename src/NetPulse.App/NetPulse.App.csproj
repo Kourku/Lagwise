@@ -14,9 +14,6 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyName>NetPulse</AssemblyName>
     <RootNamespace>NetPulse.App</RootNamespace>
-    <Version>1.0.0</Version>
-    <Authors>NetPulse Diagnostics Team</Authors>
-    <Company>NetPulse Diagnostics</Company>
     <Product>NetPulse Real-Time Network Quality &amp; Path Diagnostics</Product>
     <Description>Continuous real-time Internet connection health, latency, jitter, packet loss, bufferbloat, and hop-by-hop path diagnostic tool.</Description>
   </PropertyGroup>

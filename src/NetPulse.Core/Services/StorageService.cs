@@ -63,7 +63,7 @@ public class StorageService
         var sb = new StringBuilder();
         sb.AppendLine("# NetPulse Network Quality & Diagnostic Report");
         sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-        sb.AppendLine($"Application Version: NetPulse 1.0.0");
+        sb.AppendLine($"Application Version: NetPulse {typeof(StorageService).Assembly.GetName().Version?.ToString(3)}");
         sb.AppendLine();
 
         sb.AppendLine("## 1. Executive Summary");

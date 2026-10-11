@@ -73,7 +73,8 @@ public class SystemTrayManager : IDisposable
         contextMenu.Items.Add("Exit NetPulse", null, (s, e) =>
         {
             _notifyIcon.Visible = false;
-            _mainWindow.Close();
+            if (_mainWindow is NetPulse.App.MainWindow main) main.ExitApplication();
+            else _mainWindow.Close();
             System.Windows.Application.Current.Shutdown();
         });
 

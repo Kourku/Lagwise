@@ -1,6 +1,8 @@
 ; Inno Setup Script for NetPulse
 #define MyAppName "NetPulse"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.3.0"  ; build.ps1 passes /DMyAppVersion=<version from Directory.Build.props>
+#endif
 #define MyAppPublisher "NetPulse Diagnostics"
 #define MyAppExeName "NetPulse.exe"
 
@@ -13,7 +15,7 @@ DefaultDirName={localappdata}\Programs\{#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=NetPulse-1.0.0-InnoSetup
+OutputBaseFilename=NetPulse-{#MyAppVersion}-InnoSetup
 SetupIconFile=..\src\NetPulse.App\app.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

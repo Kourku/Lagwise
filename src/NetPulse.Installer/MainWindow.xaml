@@ -28,7 +28,7 @@
 
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <TextBlock x:Name="TitleBlock" Text="NetPulse Diagnostics Setup" FontSize="18" FontWeight="Bold" Foreground="#F9FAFB" />
-                <TextBlock x:Name="SubtitleBlock" Text="Version 1.0.0 • Real-Time Network Quality &amp; Path Diagnostics" FontSize="12" Foreground="#9CA3AF" Margin="0,2,0,0" />
+                <TextBlock x:Name="SubtitleBlock" Text="Real-Time Network Quality &amp; Path Diagnostics" FontSize="12" Foreground="#9CA3AF" Margin="0,2,0,0" />
             </StackPanel>
         </Grid>
 

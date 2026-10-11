@@ -150,7 +150,7 @@ public class DiagnosticEngine
         if (gwReachable && gwLoss <= 1.0 && gwLatency < 10.0)
         {
             // Router is pristine, but multiple Internet endpoints degrade
-            int degradedCount = validInternet.Count(t => t.PacketLossPercent > 5.0 || t.CurrentLatency > 100.0);
+            int degradedCount = validInternet.Count(t => t.PacketLossPercent > 5.0 || t.IsLatencyElevated);
             if (degradedCount >= 2 || (validInternet.Count > 0 && degradedCount == validInternet.Count))
             {
                 result.Category = DiagnosticCategory.IspInternetIssue;
@@ -201,7 +201,7 @@ public class DiagnosticEngine
         // ====================================================
         // Rule 7: Optimal Connection
         // ====================================================
-        if (gwReachable && gwLatency <= 10.0 && gwLoss == 0 && inetAvgLoss == 0 && inetAvgLatency < 80.0 && avgJitter < 8.0)
+        if (gwReachable && gwLatency <= 10.0 && gwLoss == 0 && inetAvgLoss == 0 && !validInternet.Any(t => t.IsLatencyElevated) && avgJitter < 8.0)
         {
             result.Category = DiagnosticCategory.Optimal;
             result.Status = DiagnosticStatus.Healthy;

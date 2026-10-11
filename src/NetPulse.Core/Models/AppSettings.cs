@@ -4,8 +4,16 @@ namespace NetPulse.Core.Models;
 
 public class AppSettings
 {
+    public int SchemaVersion { get; set; } = 1;
+
     public int MonitoringIntervalMs { get; set; } = 1000;
     public int HistoryWindowMinutes { get; set; } = 15;
+    /// <summary>Length of the "recent conditions" window used for loss and latency variation.</summary>
+    public int RecentWindowSeconds { get; set; } = 60;
+    /// <summary>Identical recurring events (same type and target) within this period are collapsed.</summary>
+    public int EventDedupSeconds { get; set; } = 30;
+    /// <summary>Id of the Speed Test / Bufferbloat provider (see TransferProviders).</summary>
+    public string TransferProviderId { get; set; } = "cloudflare";
     public bool StartWithWindows { get; set; } = false;
     public bool MinimizeToTray { get; set; } = true;
     public bool CloseToTray { get; set; } = false;
@@ -21,9 +29,29 @@ public class AppSettings
 
     // UI state
     public bool IsBeginnerMode { get; set; } = true;
+    /// <summary>Last game profile chosen in the Game Monitor.</summary>
+    public string? LastGameId { get; set; }
 
     // Configured targets
     public List<TargetConfig> Targets { get; set; } = new();
+
+    /// <summary>Clamps persisted values to safe ranges and restores defaults for anything unusable.</summary>
+    public void Normalize()
+    {
+        MonitoringIntervalMs = System.Math.Clamp(MonitoringIntervalMs, 250, 60_000);
+        HistoryWindowMinutes = System.Math.Clamp(HistoryWindowMinutes, 1, 240);
+        RecentWindowSeconds = System.Math.Clamp(RecentWindowSeconds, 10, 600);
+        EventDedupSeconds = System.Math.Clamp(EventDedupSeconds, 0, 600);
+        PacketLossNotifyThreshold = System.Math.Clamp(PacketLossNotifyThreshold, 0.1, 100);
+        LatencySpikeNotifyThreshold = System.Math.Clamp(LatencySpikeNotifyThreshold, 5, 10_000);
+        if (string.IsNullOrWhiteSpace(TransferProviderId)) TransferProviderId = "cloudflare";
+        Targets ??= new List<TargetConfig>();
+        if (Targets.Count == 0) Targets = CreateDefault().Targets;
+        foreach (var t in Targets)
+        {
+            if (string.IsNullOrWhiteSpace(t.Id)) t.Id = System.Guid.NewGuid().ToString("N");
+        }
+    }
 
     public static AppSettings CreateDefault()
     {

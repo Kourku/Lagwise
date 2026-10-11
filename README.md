@@ -145,12 +145,12 @@ Bufferbloat is high latency caused by excessive buffering in consumer home route
 The application is completely self-contained. **No .NET SDK or runtime installation is required.**
 
 ### 1. Portable Version (Zero Install)
-1. Download `NetPulse-1.0.0-Portable-win-x64.zip` from `dist/`.
+1. Run `build.ps1`, then use `dist/NetPulse-<version>-Portable-win-x64.zip` (the verified portable build is also unpacked in `dist/portable/`; every verified build is kept under `dist/releases/<version>/` with its release notes and `build-info.json`).
 2. Extract the archive anywhere on your machine.
 3. Launch `NetPulse.exe`.
 
 ### 2. Standalone Windows Installer (`NetPulse-Setup.exe`)
-1. Run `dist/installer/NetPulse-Setup.exe`.
+1. Run `dist/releases/<version>/installer/NetPulse-Setup.exe`.
 2. Click **Install**.
 3. NetPulse installs to `%LocalAppData%\Programs\NetPulse` without requiring administrator privileges, creates Desktop and Start Menu shortcuts, and registers with Windows Add/Remove Programs.
 4. To uninstall, run `NetPulse-Setup.exe --uninstall` or use Windows **Installed Apps**.
@@ -194,3 +194,8 @@ dotnet test tests/NetPulse.Tests/NetPulse.Tests.csproj
 ---
 
 *NetPulse Diagnostics • Built for precision, clarity, and reliability.*
+
+
+## Game Monitor
+
+See [docs/GAME_MONITOR.md](docs/GAME_MONITOR.md) for exactly what the Game Monitor does, its limitations, and what has and has not been verified. User data (settings, recordings) is stored in `%LOCALAPPDATA%\NetPulse`, never beside the executable.
