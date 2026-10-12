@@ -2,8 +2,9 @@
 .SYNOPSIS
     Launches a published NetPulse.exe against an isolated data folder and drives the Game Monitor workflow through UI Automation.
 .DESCRIPTION
-    Requires an interactive desktop. Verifies: the window opens and stays responsive, the Game Monitor tab works,
-    a game can be selected, monitoring can be started, a lag marker added, and the session saved to the data folder.
+    Requires an interactive desktop. Verifies: the window opens and stays responsive, the live graph is shown, the Game Monitor
+    tab works, a game can be selected, monitoring can be started, lag can be marked with the button and with the system-wide
+    shortcut, the session is saved and opens in History, and a changed setting is applied and written.
     The process is started with NETPULSE_DATA_DIR pointing at -DataDir so the user's real settings and recordings are untouched.
     Exit code 0 = all checks passed.
 #>
@@ -21,6 +22,7 @@ public class NpMouse {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(int f, int x, int y, int d, int e);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, int flags, int extra);
 }
 '@
 
@@ -66,6 +68,7 @@ try {
     Start-Sleep -Seconds 4
     Check 'Application stays responsive' ((Get-Process -Id $proc.Id).Responding) ''
     Check 'Game Monitor navigation entry exists' ($null -ne (Find-Like 'Game Monitor')) ''
+    Check 'Overview shows the live ping graph' ($null -ne (Wait-For { Find-Like '^Live ping graph$' } 5)) ''
 
     Click-Element (Find-Like 'Game Monitor')
     Check 'Game Monitor tab shows its heading' ($null -ne (Wait-For { Find-Named 'Game Monitor' 'ControlType.Text' } 5)) ''
@@ -90,29 +93,41 @@ try {
     Start-Sleep -Seconds 6
     Click-Element (Find-Named 'Mark lag' 'ControlType.Button')
     Check 'Lag marker accepted' ($null -ne (Wait-For { Find-Like 'Lag marked' } 5)) ''
+
+    # the default system-wide shortcut (Ctrl+Shift+F9) must mark lag too
+    [NpMouse]::keybd_event(0x11, 0, 0, 0); [NpMouse]::keybd_event(0x10, 0, 0, 0); [NpMouse]::keybd_event(0x78, 0, 0, 0)
+    Start-Sleep -Milliseconds 80
+    [NpMouse]::keybd_event(0x78, 0, 2, 0); [NpMouse]::keybd_event(0x10, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
+    Check 'The Mark lag shortcut adds a marker' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
+    Check 'The footer shows what is being recorded' ($null -ne (Find-Like '^Recording League of Legends')) ''
     Check 'Reference measurements are labelled as not game-server ping' ($null -ne (Find-Like 'REFERENCE MEASUREMENTS \(NOT GAME-SERVER PING\)')) ''
 
     Click-Element (Find-Named 'Stop & save' 'ControlType.Button')
-    $saved = Wait-For { Find-Like '^Session saved:' } 10
+    $saved = Wait-For { Find-Like '^Recording saved:' } 10
     Check 'Session saved message shows the file location' ($null -ne $saved) $(if ($saved) { ($saved.Current.Name -split "`n")[0] })
 
     $file = Get-ChildItem (Join-Path $DataDir 'sessions') -Filter '*.session.json' -ErrorAction SilentlyContinue | Select-Object -First 1
     Check 'Session file exists under the data folder' ($null -ne $file) $(if ($file) { $file.FullName })
     if ($file) {
         $j = Get-Content $file.FullName -Raw | ConvertFrom-Json
-        Check 'Session is complete with samples and one lag marker' ($j.isComplete -and $j.samples.Count -gt 0 -and $j.lagMarkers.Count -eq 1) "samples=$($j.samples.Count)"
+        Check 'Session is complete with samples and both lag markers' ($j.isComplete -and $j.samples.Count -gt 0 -and $j.lagMarkers.Count -eq 2) "samples=$($j.samples.Count), markers=$($j.lagMarkers.Count)"
         Check 'Session records game, support status and limitations' ($j.gameDisplayName -eq 'League of Legends' -and $j.gameSupportStatus -eq 'ReferenceOnly' -and $j.limitations.Count -gt 0) "$($j.gameDisplayName) / $($j.gameSupportStatus)"
     }
 
-    # ---- History & reports: the recording just saved must be listed and open ----
-    Click-Element (Find-Like '^History & reports$')
+    # ---- History & reports: the recording just saved opens straight from the Game Monitor ----
+    $open = Find-Named 'Open this recording' 'ControlType.Button'
+    Check 'Open this recording is offered after saving' ($null -ne $open -and $open.Current.IsEnabled) ''
+    if ($open) { ($open.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke() }
     $row = Wait-For { All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.DataItem' } | Select-Object -First 1 } 10
     Check 'History lists the saved recording' ($null -ne $row) ''
-    if ($row) {
-        Click-Element $row
-        Check 'Selecting a recording shows its report actions' ($null -ne (Wait-For { Find-Named 'Export report' 'ControlType.Button' | Where-Object { $_.Current.IsEnabled } } 10)) ''
-        Check 'Selecting a recording shows its summary and graph sections' (($null -ne (Find-Named 'Graph' 'ControlType.Text')) -and ($null -ne (Find-Like '^Moments you marked as laggy$'))) ''
-    }
+    # wait for the recording itself (the top bar also has an "Export report" button, so wait for detail-only elements)
+    Check 'The recording opens with its summary and graph sections' (($null -ne (Wait-For { Find-Named 'Graph' 'ControlType.Text' } 15)) -and ($null -ne (Find-Like '^Moments you marked as laggy$'))) ''
+    Check 'The recording offers its report and CSV export' ($null -ne (Wait-For { Find-Named 'Export probe data (CSV)' 'ControlType.Button' | Where-Object { $_.Current.IsEnabled } } 5)) ''
+    Check 'The recording graph is drawn' ($null -ne (Find-Like '^Recording graph$')) ''
+    Check 'Lag marked with the shortcut is listed in the report' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
+    Check 'History shows how much space recordings use' ($null -ne (Find-Like '^1 recording, .* MB on this PC')) ''
+    Check 'History writes its summary index' (Test-Path (Join-Path $DataDir 'sessions\index.json')) ''
+
 
     # ---- Settings: change a value, save, and confirm it was applied and written ----
     Click-Element (Find-Like '^Settings$')

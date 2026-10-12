@@ -57,7 +57,9 @@ public sealed class SettingsViewModel : ViewModelBase
     private string _lossText = "";
 
     private int _probeInterval, _recentWindow, _historyMinutes, _dedupSeconds;
-    private bool _spikeOn, _lossOn, _minimizeToTray, _closeToTray, _startWithWindows;
+    private bool _spikeOn, _lossOn, _minimizeToTray, _closeToTray, _startWithWindows, _lagSound;
+    private string _hotkey = "Ctrl+Shift+F9";
+    private int _retentionDays;
 
     private string _newName = "", _newHost = "", _newPort = "443";
     private int _newMethod;
@@ -98,6 +100,11 @@ public sealed class SettingsViewModel : ViewModelBase
         new("Show every occurrence", 0), new("Collapse repeats within 15 s", 15), new("Collapse repeats within 30 s - recommended", 30),
         new("Collapse repeats within 1 minute", 60), new("Collapse repeats within 2 minutes", 120)
     };
+    public IReadOnlyList<Choice> RetentionChoices { get; } = new Choice[]
+    {
+        new("Keep forever", 0), new("Delete after 30 days", 30), new("Delete after 90 days", 90), new("Delete after 1 year", 365)
+    };
+    public IReadOnlyList<string> HotkeyChoices { get; } = HotkeyGesture.Presets;
     public IReadOnlyList<string> NewMethods { get; } = new[] { "Ping (ICMP)", "TCP connect", "HTTPS handshake" };
 
     public ObservableCollection<TargetEditRow> Targets { get; } = new();
@@ -124,6 +131,12 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool MinimizeToTray { get => _minimizeToTray; set => Set(ref _minimizeToTray, value); }
     public bool CloseToTray { get => _closeToTray; set => Set(ref _closeToTray, value); }
     public bool StartWithWindows { get => _startWithWindows; set => Set(ref _startWithWindows, value); }
+    public string MarkLagHotkey { get => _hotkey; set => Set(ref _hotkey, value); }
+    public bool MarkLagSound { get => _lagSound; set => Set(ref _lagSound, value); }
+    public int RecordingRetentionDays { get => _retentionDays; set => Set(ref _retentionDays, value); }
+    /// <summary>Set by the window when Windows refuses the shortcut (another program already uses it).</summary>
+    public string HotkeyStatus { get => _hotkeyStatus; set => SetProperty(ref _hotkeyStatus, value); }
+    private string _hotkeyStatus = "";
     public string LatencySpikeText { get => _latencyText; set => Set(ref _latencyText, value); }
     public string PacketLossText { get => _lossText; set => Set(ref _lossText, value); }
 
@@ -176,6 +189,9 @@ public sealed class SettingsViewModel : ViewModelBase
             MinimizeToTray = d.MinimizeToTray;
             CloseToTray = d.CloseToTray;
             StartWithWindows = d.StartWithWindows;
+            MarkLagHotkey = HotkeyChoices.Contains(d.MarkLagHotkey) ? d.MarkLagHotkey : HotkeyChoices[0];
+            MarkLagSound = d.MarkLagSound;
+            RecordingRetentionDays = Nearest(RetentionChoices, d.RecordingRetentionDays);
             LatencySpikeText = d.LatencySpikeThresholdMs.ToString("0.#", CultureInfo.CurrentCulture);
             PacketLossText = d.PacketLossThresholdPercent.ToString("0.#", CultureInfo.CurrentCulture);
 
@@ -224,6 +240,9 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.MinimizeToTray = MinimizeToTray;
         _draft.CloseToTray = CloseToTray;
         _draft.StartWithWindows = StartWithWindows;
+        _draft.MarkLagHotkey = MarkLagHotkey;
+        _draft.MarkLagSound = MarkLagSound;
+        _draft.RecordingRetentionDays = RecordingRetentionDays;
         _draft.LatencySpikeThresholdMs = spike;
         _draft.PacketLossThresholdPercent = loss;
         _draft.Targets = Targets.Select(r => r.Draft).ToList();
@@ -250,6 +269,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
         _draft.ApplyTo(_host.Settings);
         _host.Engine.SyncTargets();
+        _host.ApplyRetention();
 
         if (!_host.SaveSettings(out var error))
         {

@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)]()
 [![Runtime](https://img.shields.io/badge/.NET-10.0%20(Self--Contained)-512BD4.svg)]()
-[![Tests](https://img.shields.io/badge/tests-21%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-247%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
@@ -70,8 +70,11 @@ NetPulse clearly distinguishes between:
 - **On-Demand Bandwidth Benchmark:** Multi-stream throughput test with traffic warning prompt and live Mbps gauge.
 - **Active Adapter & Wi-Fi Telemetry:** Reports interface name, link speed, IPv4/IPv6, gateway, DNS, and native Windows Wi-Fi metrics (SSID, signal strength %, channel, 802.11 protocol).
 - **Chronological Event Timeline:** Records latency spikes, packet loss bursts, gateway degradations, and route shifts.
-- **Zero-Telemetry Local Privacy:** 100% of data is stored in memory and exported on demand. No accounts, no telemetry, no cloud dependencies.
-- **Native Windows Desktop Integration:** Tray icon, minimize to tray, start with Windows, and balloon notifications for critical connection events.
+- **Game Monitor (7 games, all Reference-only):** detects the game, lists the connections its process opens, records the session, and marks lag with a system-wide shortcut (default `Ctrl+Shift+F9`) that works while the game has focus. Optional automatic recording starts when the game starts and saves when it closes. See [docs/GAME_MONITOR.md](docs/GAME_MONITOR.md).
+- **History & reports:** every recording with an interactive graph (hover for exact values), per-target statistics, what was measured around each lag marker, and Markdown/CSV export.
+- **Live ping graph** of the last minutes on the Overview.
+- **Local-only privacy:** no accounts, no telemetry. Settings, recordings and an error log stay in `%LOCALAPPDATA%\NetPulse`; optional automatic clean-up of old recordings.
+- **Native Windows Desktop Integration:** tray icon with live status and quick actions (Mark lag, start/stop the Game Monitor), minimize/close to tray, start with Windows.
 
 ---
 
@@ -174,9 +177,9 @@ NetPulse targets modern **.NET 10.0-windows** with high-performance native WPF r
 ### Build & Run Tests
 ```powershell
 # Restore and build the solution
-dotnet build NetPulse.sln
+dotnet build NetPulse.slnx
 
-# Run all 21 automated unit and integration tests
+# Run the automated unit and integration tests
 dotnet test tests/NetPulse.Tests/NetPulse.Tests.csproj
 
 # Run the master automated build & release packager
@@ -187,9 +190,10 @@ dotnet test tests/NetPulse.Tests/NetPulse.Tests.csproj
 
 ## 📚 Documentation Links
 
-- [Architecture & Design Document](file:///e:/LAGG/docs/ARCHITECTURE.md)
-- [Measurement Methodology & Statistical Definitions](file:///e:/LAGG/docs/METHODOLOGY.md)
-- [Automated Test Execution Results](file:///e:/LAGG/docs/TEST_RESULTS.md)
+- [Game Monitor: what it does and what is verified](docs/GAME_MONITOR.md)
+- [Architecture & Design Document](docs/ARCHITECTURE.md)
+- [Measurement Methodology & Statistical Definitions](docs/METHODOLOGY.md)
+- [Release notes](RELEASE_NOTES.md)
 
 ---
 

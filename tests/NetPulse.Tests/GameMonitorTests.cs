@@ -209,7 +209,8 @@ public class GameMonitorTests : IDisposable
         _host.StartSession();
         M.Select("lol", out _);
         Assert.False(M.Start(out var msg));
-        Assert.Contains("already in progress", msg);
+        Assert.Contains("already running", msg);
+        Assert.Contains("History & reports", msg);
         _host.StopSession(out _);
     }
 

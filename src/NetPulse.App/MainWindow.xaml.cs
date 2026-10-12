@@ -16,6 +16,9 @@ public partial class MainWindow : Window
     private static readonly HashSet<string> AdvancedRouteColumns = new() { "Best (ms)", "Worst (ms)", "ASN / Organization", "Diagnostics" };
 
     private SystemTrayManager? _trayManager;
+    private GlobalHotkey? _hotkey;
+    private System.Windows.Threading.DispatcherTimer? _trayTimer;
+    private bool _toldAboutTray;
 
     public MainWindow()
     {
@@ -23,7 +26,15 @@ public partial class MainWindow : Window
         DataContext = new MainViewModel(App.Host);
         InitializeComponent();
 
-        SourceInitialized += (_, _) => WindowChrome.ApplyDarkTitleBar(this);
+        SourceInitialized += (_, _) =>
+        {
+            WindowChrome.ApplyDarkTitleBar(this);
+            if (System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle) is { } source)
+            {
+                _hotkey = new GlobalHotkey(source, OnMarkLagShortcut);
+                ApplyHotkey();
+            }
+        };
         Loaded += MainWindow_Loaded;
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
@@ -42,11 +53,40 @@ public partial class MainWindow : Window
                     Dispatcher.BeginInvoke(new Action(() => ApplyMode(vm.IsAdvancedMode)), System.Windows.Threading.DispatcherPriority.Loaded);
             };
             ApplyMode(vm.IsAdvancedMode);
+            vm.Settings.Applied += (_, _) => ApplyHotkey();
+
+            // tray hover text: a glance at the connection without opening the window
+            _trayTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(5), System.Windows.Threading.DispatcherPriority.Background, (_, _) => UpdateTrayTooltip(vm), Dispatcher);
+            UpdateTrayTooltip(vm);
 
             // started by the "start with Windows" entry: begin in the tray / taskbar rather than in front of the user
             if (Environment.GetCommandLineArgs().Contains("--minimized", StringComparer.OrdinalIgnoreCase))
                 WindowState = WindowState.Minimized;
         }
+    }
+
+    private void ApplyHotkey()
+    {
+        if (_hotkey == null || DataContext is not MainViewModel vm) return;
+        var error = _hotkey.Set(App.Host.Settings.MarkLagHotkey);
+        vm.Settings.HotkeyStatus = error ?? (_hotkey.Current == null ? "No shortcut is set." : $"{_hotkey.Current.Display} is active, also while a game has focus.");
+        vm.GameMonitor.NotifyShortcutChanged();
+    }
+
+    private void OnMarkLagShortcut()
+    {
+        if (DataContext is not MainViewModel vm) return;
+        bool ok = vm.MarkLagFromShortcut();
+        if (!App.Host.Settings.MarkLagSound) return;
+        // a short confirmation the player can hear in game; a different sound when nothing is being recorded
+        if (ok) System.Media.SystemSounds.Asterisk.Play();
+        else System.Media.SystemSounds.Hand.Play();
+    }
+
+    private void UpdateTrayTooltip(MainViewModel vm)
+    {
+        string state = vm.GameMonitor.IsMonitoring ? $"Recording {vm.GameMonitor.SelectedProfile?.Profile.DisplayName}" : App.Host.IsRecording ? "Recording" : "Monitoring";
+        _trayManager?.SetTooltip($"NetPulse - {state}\nReference ping {vm.QuickInternetLatency:0} ms, variation {vm.QuickJitter:0} ms, probe loss {vm.QuickPacketLoss:0.#}%\n{vm.StatusCategory}");
     }
 
     private void ApplyMode(bool advanced)
@@ -81,7 +121,9 @@ public partial class MainWindow : Window
         if (WindowState == WindowState.Minimized && App.Host.Settings.MinimizeToTray)
         {
             Hide();
-            _trayManager?.ShowNotification("NetPulse Running in Background", "Click tray icon to restore window.", System.Windows.Forms.ToolTipIcon.Info);
+            // say it once per run, not on every minimise
+            if (!_toldAboutTray) _trayManager?.ShowNotification("NetPulse is still running", "It keeps measuring in the tray. Double-click the icon to open it again.", System.Windows.Forms.ToolTipIcon.Info);
+            _toldAboutTray = true;
         }
     }
 
@@ -100,7 +142,8 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             Hide();
-            _trayManager?.ShowNotification("NetPulse is still running", "Open it from the tray icon. Choose Exit there to quit.", System.Windows.Forms.ToolTipIcon.Info);
+            if (!_toldAboutTray) _trayManager?.ShowNotification("NetPulse is still running", "Open it from the tray icon. Choose Exit there to quit.", System.Windows.Forms.ToolTipIcon.Info);
+            _toldAboutTray = true;
             return;
         }
 
@@ -108,6 +151,8 @@ public partial class MainWindow : Window
         {
             vm.OnAppExiting();
         }
+        _trayTimer?.Stop();
+        _hotkey?.Dispose();
         _trayManager?.Dispose();
     }
 }

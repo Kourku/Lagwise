@@ -62,6 +62,8 @@ public sealed class GameMonitorService : IDisposable
     private CancellationTokenSource? _loopCts;
     private Task? _loopTask;
     private bool _monitoring;
+    private bool _autoStarted;
+    private DateTime? _notRunningSinceUtc;
     private DateTime? _startedUtc;
     private IReadOnlyList<GameFinding> _findings = Array.Empty<GameFinding>();
     private IReadOnlyList<string> _warnings = Array.Empty<string>();
@@ -71,6 +73,11 @@ public sealed class GameMonitorService : IDisposable
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(2);
     /// <summary>Poll period while a game is selected but not being monitored (process list only).</summary>
     public TimeSpan IdlePollInterval { get; set; } = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// With automatic recording, how long the game must stay closed before the recording is stopped and saved.
+    /// Bridges quick restarts and the gap between a game's processes (for example League's loading screen).
+    /// </summary>
+    public TimeSpan AutoStopGrace { get; set; } = TimeSpan.FromSeconds(20);
     public event EventHandler? Updated;
 
     public GameMonitorService(
@@ -92,6 +99,8 @@ public sealed class GameMonitorService : IDisposable
     }
 
     public bool IsMonitoring { get { lock (_lock) return _monitoring; } }
+    /// <summary>True when the current recording was started by automatic recording (and will stop when the game closes).</summary>
+    public bool StartedAutomatically { get { lock (_lock) return _monitoring && _autoStarted; } }
     public GameProfile? SelectedProfile { get { lock (_lock) return _profile; } }
 
     // ------------------------------------------------------------------ selection / loop
@@ -192,6 +201,16 @@ public sealed class GameMonitorService : IDisposable
             monitoring = _monitoring;
         }
 
+        if (!monitoring && update.State.State == GameRunState.Running && _settings().AutoRecordGame && !_recorder.IsRecording)
+        {
+            monitoring = StartCore(automatic: true, out _);
+        }
+        else if (monitoring && AutoStopDue(update.State.State, now))
+        {
+            Stop(out _);
+            return;
+        }
+
         if (!monitoring)
         {
             RaiseUpdated();
@@ -240,6 +259,18 @@ public sealed class GameMonitorService : IDisposable
         RaiseUpdated();
     }
 
+    /// <summary>An automatic recording ends once the game has stayed closed for <see cref="AutoStopGrace"/>.</summary>
+    private bool AutoStopDue(GameRunState state, DateTime now)
+    {
+        lock (_lock)
+        {
+            if (!_monitoring || !_autoStarted) return false;
+            if (state == GameRunState.Running) { _notRunningSinceUtc = null; return false; }
+            _notRunningSinceUtc ??= now;
+            return now - _notRunningSinceUtc.Value >= AutoStopGrace;
+        }
+    }
+
     private void LogConnectionChanges(IReadOnlyList<ConnectionChange> changes)
     {
         // Only sockets with a visible remote peer on a non-loopback address are worth a timeline entry.
@@ -272,7 +303,9 @@ public sealed class GameMonitorService : IDisposable
 
     // ------------------------------------------------------------------ user actions
 
-    public bool Start(out string message)
+    public bool Start(out string message) => StartCore(automatic: false, out message);
+
+    private bool StartCore(bool automatic, out string message)
     {
         MonitoringSession session;
         lock (_lock)
@@ -280,7 +313,7 @@ public sealed class GameMonitorService : IDisposable
             if (_disposed) { message = "The monitor has been shut down."; return false; }
             if (_profile == null) { message = "Select a game first."; return false; }
             if (_monitoring) { message = "Already monitoring."; return false; }
-            if (_recorder.IsRecording) { message = "A network recording session is already in progress. Stop it on the Data & Export tab first."; return false; }
+            if (_recorder.IsRecording) { message = "A network recording is already running. Stop it on the History & reports page first."; return false; }
 
             session = _startSession(_profile.Id, $"{_profile.DisplayName} {_clock().ToLocalTime():yyyy-MM-dd HH:mm}");
             _recorder.SetGameContext(_profile);
@@ -290,8 +323,10 @@ public sealed class GameMonitorService : IDisposable
             _findings = Array.Empty<GameFinding>();
             _startedUtc = session.StartedUtc;
             _monitoring = true;
+            _autoStarted = automatic;
+            _notRunningSinceUtc = null;
 
-            _events.LogEvent("GameMonitor", "Info", $"Started monitoring for {_profile.DisplayName}. " +
+            _events.LogEvent("GameMonitor", "Info", $"Started monitoring for {_profile.DisplayName}{(automatic ? " automatically, because the game started" : "")}. " +
                 "Measurements are reference measurements until you choose an endpoint; they are not game-server ping.", _profile.DisplayName, timestamp: _clock());
             message = $"Monitoring {_profile.DisplayName}.";
         }
@@ -310,7 +345,9 @@ public sealed class GameMonitorService : IDisposable
             if (!_monitoring) return null;
 
             var now = _clock();
-            _events.LogEvent("GameMonitor", "Info", $"Stopped monitoring for {_profile?.DisplayName}.", _profile?.DisplayName ?? "", timestamp: now);
+            _events.LogEvent("GameMonitor", "Info", _autoStarted
+                ? $"Stopped monitoring for {_profile?.DisplayName} automatically, because the game was closed."
+                : $"Stopped monitoring for {_profile?.DisplayName}.", _profile?.DisplayName ?? "", timestamp: now);
 
             // final analysis, then close out connections and measured endpoints
             var finalFindings = GameDiagnosticAnalyzer.Analyze(new GameDiagnosticInput
@@ -329,6 +366,8 @@ public sealed class GameMonitorService : IDisposable
             _engine.ClearDynamicTargets();
             _measured.Clear();
             _monitoring = false;
+            _autoStarted = false;
+            _notRunningSinceUtc = null;
             _startedUtc = null;
             _findings = finalFindings;
 

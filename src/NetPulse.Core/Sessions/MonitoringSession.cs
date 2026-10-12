@@ -97,6 +97,8 @@ public class MonitoringSession
     public int SchemaVersion { get; set; } = 1;
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
+    /// <summary>NetPulse version that recorded the session (stored findings reflect that version's analysis). Null for recordings made before 0.4.</summary>
+    public string? AppVersion { get; set; }
     /// <summary>Selected game profile id, or null when monitoring without a game selected.</summary>
     public string? GameId { get; set; }
     public DateTime StartedUtc { get; set; }
@@ -139,4 +141,25 @@ public class SessionSummary
     public bool IsComplete { get; set; }
     public int SampleCount { get; set; }
     public int EventCount { get; set; }
+    public int LagMarkerCount { get; set; }
+    public string? GameDisplayName { get; set; }
+    public string? AppVersion { get; set; }
+    /// <summary>Size of the file on disk.</summary>
+    public long SizeBytes { get; set; }
+
+    public static SessionSummary From(MonitoringSession s, long sizeBytes) => new()
+    {
+        Id = s.Id,
+        Name = s.Name,
+        GameId = s.GameId,
+        StartedUtc = s.StartedUtc,
+        EndedUtc = s.EndedUtc,
+        IsComplete = s.IsComplete,
+        SampleCount = s.Samples.Count,
+        EventCount = s.Events.Count,
+        LagMarkerCount = s.LagMarkers.Count,
+        GameDisplayName = s.GameDisplayName,
+        AppVersion = s.AppVersion,
+        SizeBytes = sizeBytes
+    };
 }

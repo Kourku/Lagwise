@@ -80,6 +80,9 @@ public sealed class SettingsDraft
     public bool MinimizeToTray { get; set; }
     public bool CloseToTray { get; set; }
     public bool StartWithWindows { get; set; }
+    public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
+    public bool MarkLagSound { get; set; }
+    public int RecordingRetentionDays { get; set; }
     public List<TargetDraft> Targets { get; set; } = new();
 
     private static readonly HashSet<string> BuiltInIds = AppSettings.CreateDefault().Targets.Select(t => t.Id).ToHashSet();
@@ -97,6 +100,9 @@ public sealed class SettingsDraft
         MinimizeToTray = s.MinimizeToTray,
         CloseToTray = s.CloseToTray,
         StartWithWindows = startWithWindows,
+        MarkLagHotkey = s.MarkLagHotkey,
+        MarkLagSound = s.MarkLagSound,
+        RecordingRetentionDays = s.RecordingRetentionDays,
         Targets = s.Targets.Select(t => new TargetDraft
         {
             Id = t.Id, Name = t.Name, Host = t.Host, Protocol = t.Protocol, Port = t.Port, Enabled = t.IsEnabled,
@@ -113,6 +119,8 @@ public sealed class SettingsDraft
         if (LatencySpikeThresholdMs < 5 || LatencySpikeThresholdMs > 10_000) errors.Add("The latency spike limit must be between 5 and 10000 ms.");
         if (PacketLossThresholdPercent < 0.1 || PacketLossThresholdPercent > 100) errors.Add("The packet loss limit must be between 0.1 and 100 %.");
         if (!Targets.Any(t => t.Enabled && !t.IsGateway && !t.IsDnsResolver)) errors.Add("Keep at least one reference server enabled; without one NetPulse has nothing to compare your router against.");
+        if (!HotkeyGesture.TryParse(MarkLagHotkey, out _)) errors.Add("The Mark lag shortcut is not a valid key combination.");
+        if (RecordingRetentionDays < 0 || RecordingRetentionDays > 3650) errors.Add("Recordings can be kept for at most 10 years.");
         if (Targets.Count > TargetValidator.MaxTargets) errors.Add($"At most {TargetValidator.MaxTargets} targets can be monitored.");
         return errors;
     }
@@ -134,6 +142,9 @@ public sealed class SettingsDraft
         settings.MinimizeToTray = MinimizeToTray;
         settings.CloseToTray = CloseToTray;
         settings.StartWithWindows = StartWithWindows;
+        settings.MarkLagHotkey = MarkLagHotkey;
+        settings.MarkLagSound = MarkLagSound;
+        settings.RecordingRetentionDays = RecordingRetentionDays;
 
         var existing = settings.Targets.ToDictionary(t => t.Id);
         var merged = new List<TargetConfig>();

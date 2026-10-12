@@ -25,6 +25,26 @@ public partial class App : System.Windows.Application
         }
 
         Host = new NetPulseHost();
+        ErrorLog.Directory = Path.Combine(Host.DataDirectory, "logs");
+
+        // An unexpected error in one button or background task must not take the whole app (and a running recording) down.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            ErrorLog.Write("UI", args.Exception);
+            args.Handled = true;
+            ErrorLog.TellUserOnce(args.Exception);
+        };
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            ErrorLog.Write("Background task", args.Exception);
+            args.SetObserved();
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex) ErrorLog.Write("Fatal", ex);
+            // last chance: save whatever is being recorded
+            try { Host.StopSession(out string? _); } catch { /* already failing */ }
+        };
 
         // A table inside a scrolling page swallows the mouse wheel even when it has nothing to scroll; hand it on to the page instead.
         EventManager.RegisterClassHandler(typeof(System.Windows.Controls.DataGrid), UIElement.PreviewMouseWheelEvent, new System.Windows.Input.MouseWheelEventHandler(ForwardWheel));

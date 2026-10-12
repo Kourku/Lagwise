@@ -54,6 +54,42 @@ public class SystemTrayManager : IDisposable
 
         contextMenu.Items.Add(new ToolStripSeparator());
 
+        var markLag = new ToolStripMenuItem("Mark lag", null, (s, e) =>
+        {
+            if (!_viewModel.MarkLagFromShortcut())
+                ShowNotification("Nothing is being recorded", "Start the Game Monitor or a recording first, then mark lag.", ToolTipIcon.Info);
+        });
+        var gameRecording = new ToolStripMenuItem("Start Game Monitor", null, (s, e) =>
+        {
+            var gm = _viewModel.GameMonitor;
+            if (gm.IsMonitoring) gm.StopCommand.Execute(null);
+            else if (gm.StartCommand.CanExecute(null)) gm.StartCommand.Execute(null);
+            else
+            {
+                RestoreWindow();
+                _viewModel.CurrentTab = "GameMonitor";
+            }
+        });
+        contextMenu.Items.Add(markLag);
+        contextMenu.Items.Add(gameRecording);
+        contextMenu.Items.Add("Open History && reports", null, (s, e) =>
+        {
+            RestoreWindow();
+            _viewModel.CurrentTab = "History";
+        });
+        contextMenu.Opening += (_, _) =>
+        {
+            var gm = _viewModel.GameMonitor;
+            string game = gm.SelectedProfile?.Profile.DisplayName ?? "a game";
+            gameRecording.Text = gm.IsMonitoring ? $"Stop && save {game} recording" : gm.SelectedProfile == null ? "Choose a game to monitor..." : $"Start monitoring {game}";
+            markLag.Enabled = App.Host.IsRecording;
+            string key = App.Host.Settings.MarkLagHotkey;
+            markLag.ShortcutKeyDisplayString = key == NetPulse.Core.Models.HotkeyGesture.Off ? "" : key;
+            markLag.ShowShortcutKeys = key != NetPulse.Core.Models.HotkeyGesture.Off;
+        };
+
+        contextMenu.Items.Add(new ToolStripSeparator());
+
         contextMenu.Items.Add("Run Bufferbloat Test", null, (s, e) =>
         {
             RestoreWindow();
@@ -87,6 +123,13 @@ public class SystemTrayManager : IDisposable
         _mainWindow.Show();
         _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Activate();
+    }
+
+    /// <summary>Hover text of the tray icon; Windows limits it to 127 characters.</summary>
+    public void SetTooltip(string text)
+    {
+        if (_notifyIcon == null) return;
+        _notifyIcon.Text = text.Length > 127 ? text[..126] + "\u2026" : text;
     }
 
     public void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)

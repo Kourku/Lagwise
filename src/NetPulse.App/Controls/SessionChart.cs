@@ -10,7 +10,8 @@ namespace NetPulse.App.Controls;
 
 /// <summary>
 /// Time-series chart for a recorded session: one line per target, lag markers (amber dashes), monitoring gaps (grey) and outages (red).
-/// Values above the axis cap are clipped to the top edge. Pure rendering; all numbers come from <see cref="ChartData"/>.
+/// Values above the axis cap are clipped to the top edge (the hover read-out still shows the real value).
+/// Pure rendering; all numbers come from <see cref="ChartData"/>.
 /// </summary>
 public class SessionChart : FrameworkElement
 {
@@ -41,6 +42,41 @@ public class SessionChart : FrameworkElement
     private static readonly Brush GapBrush = Frozen(Color.FromArgb(60, 152, 162, 181));
     private static readonly Brush OutageBrush = Frozen(Color.FromArgb(70, 248, 113, 113));
     private static readonly Pen LagPen = MakePen(Color.FromRgb(251, 191, 36), 1.4, new DashStyle(new double[] { 3, 3 }, 0));
+    private static readonly Pen CursorPen = MakePen(Color.FromArgb(160, 152, 162, 181), 1);
+    private static readonly Brush TipBackground = Frozen(Color.FromArgb(240, 22, 27, 38));
+    private static readonly Pen TipBorder = MakePen(Color.FromRgb(48, 58, 77), 1);
+    private static readonly Brush TipText = Frozen(Color.FromRgb(230, 234, 242));
+
+    private double? _hoverX;
+
+    /// <summary>Exposes the chart to screen readers and UI Automation as an image named by AutomationProperties.Name.</summary>
+    protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new ChartAutomationPeer(this);
+
+    private sealed class ChartAutomationPeer : System.Windows.Automation.Peers.FrameworkElementAutomationPeer
+    {
+        public ChartAutomationPeer(SessionChart owner) : base(owner) { }
+        protected override System.Windows.Automation.Peers.AutomationControlType GetAutomationControlTypeCore() => System.Windows.Automation.Peers.AutomationControlType.Image;
+        protected override string GetClassNameCore() => nameof(SessionChart);
+        protected override string GetHelpTextCore()
+        {
+            var data = ((SessionChart)Owner).Data;
+            return data == null ? "No data" : $"{data.Series.Count} line(s), {data.LagMarkerSeconds.Count} lag marker(s), {data.DurationSeconds / 60:0.#} minutes";
+        }
+    }
+
+    protected override void OnMouseMove(System.Windows.Input.MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        _hoverX = e.GetPosition(this).X;
+        InvalidateVisual();
+    }
+
+    protected override void OnMouseLeave(System.Windows.Input.MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hoverX = null;
+        InvalidateVisual();
+    }
 
     private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     private static Pen MakePen(Color c, double w, DashStyle? dash = null)
@@ -67,8 +103,9 @@ public class SessionChart : FrameworkElement
             return;
         }
 
-        double cap = Math.Max(1e-6, data.YCap);
-        double step = NiceStep(cap / 4);
+        double step = NiceStep(Math.Max(1e-6, data.YCap) / 4);
+        // round the top up to a whole grid step, so the highest grid line is labelled
+        double cap = data.Unit == "%" ? Math.Max(1e-6, data.YCap) : Math.Ceiling(Math.Max(1e-6, data.YCap) / step) * step;
         for (double v = 0; v <= cap + 1e-9; v += step)
         {
             double y = plot.Bottom - v / cap * plot.Height;
@@ -131,6 +168,47 @@ public class SessionChart : FrameworkElement
             }
             tri.Freeze();
             dc.DrawGeometry(LagPen.Brush, null, tri);
+        }
+
+        DrawHover(dc, data, plot, dur, order); // last, so the read-out sits on top
+    }
+
+    /// <summary>Vertical cursor plus a read-out of every visible series at that moment (nearest time slice).</summary>
+    private void DrawHover(DrawingContext dc, ChartData data, Rect plot, double dur, IReadOnlyList<string> order)
+    {
+        if (_hoverX is not double hx || hx < plot.Left || hx > plot.Right || data.Series.Count == 0) return;
+
+        double sec = (hx - plot.Left) / plot.Width * dur;
+        dc.DrawLine(CursorPen, new Point(hx, plot.Top), new Point(hx, plot.Bottom));
+
+        var lines = new List<(string Text, Brush Brush)>
+        {
+            (data.StartUtc.AddSeconds(sec).ToLocalTime().ToString("HH:mm:ss"), LabelBrush)
+        };
+        foreach (var series in data.Series)
+        {
+            var nearest = series.Points.OrderBy(p => Math.Abs(p.X - sec)).FirstOrDefault();
+            if (nearest == null || Math.Abs(nearest.X - sec) > data.BucketSeconds * 1.5) continue;
+            string value = data.Unit == "%" ? $"{nearest.Y:0.#}%" : $"{nearest.Y:0.#} ms";
+            var color = ColorFor(series.TargetId, order);
+            lines.Add(($"{series.Name}: {value}", Frozen(color)));
+        }
+        if (lines.Count == 1) lines.Add(("no measurement here", LabelBrush));
+
+        double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var texts = lines.Select(l => new FormattedText(l.Text, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
+            new Typeface(new System.Windows.Media.FontFamily("Segoe UI Variable Text, Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+            12, l.Brush == LabelBrush ? LabelBrush : TipText, dpi)).ToList();
+
+        double w = texts.Max(t => t.Width) + 26, lineH = 17, h = texts.Count * lineH + 12;
+        double x = hx + 12 + w > plot.Right ? hx - 12 - w : hx + 12;
+        double y = plot.Top + 6;
+        dc.DrawRoundedRectangle(TipBackground, TipBorder, new Rect(x, y, w, h), 6, 6);
+        for (int i = 0; i < texts.Count; i++)
+        {
+            double ty = y + 6 + i * lineH;
+            if (i > 0) dc.DrawEllipse(lines[i].Brush, null, new Point(x + 10, ty + 8.5), 3.5, 3.5);
+            dc.DrawText(texts[i], new Point(x + (i > 0 ? 19 : 10), ty));
         }
     }
 

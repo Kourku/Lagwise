@@ -47,7 +47,12 @@ public class MainViewModel : ViewModelBase
     private string _statusCategory = "Analyzing";
     private string _likelyCause = "Gathering initial network packets across local and Internet hops.";
     private string _recommendedAction = "Monitoring active.";
-    private Brush _statusBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246));
+    private static readonly Brush AnalyzingBrush = Frozen(Color.FromRgb(59, 130, 246));
+    private static readonly Brush CriticalBrush = Frozen(Color.FromRgb(239, 68, 68));
+    private static readonly Brush DegradedBrush = Frozen(Color.FromRgb(245, 158, 11));
+    private static readonly Brush HealthyBrush = Frozen(Color.FromRgb(16, 185, 129));
+    private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+    private Brush _statusBrush = AnalyzingBrush;
     private string _evidenceSummary = string.Empty;
 
     // Quick stats
@@ -177,7 +182,14 @@ public class MainViewModel : ViewModelBase
             if (e.PropertyName is nameof(GameMonitorViewModel.ProcessStatus) or nameof(GameMonitorViewModel.IsMonitoring) or nameof(GameMonitorViewModel.SelectedProfile)) UpdateGameCard();
         };
         MtrHops.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoHops));
+        GameMonitor.OpenRecordingRequested += (_, id) => OpenRecording(id);
+        _host.SessionSaved += (_, e) => Application.Current.Dispatcher.InvokeAsync(() => OnSessionSaved(e));
         UpdateGameCard();
+
+        // live graph on the Overview: rebuilt every few seconds, only while the Overview is on screen
+        _liveTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(3), System.Windows.Threading.DispatcherPriority.Background,
+            (_, _) => { if (CurrentTab == "Dashboard" && Application.Current.MainWindow?.IsVisible == true) RefreshLiveChart(); }, Application.Current.Dispatcher);
+        LiveLegend.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LiveChartOrder));
 
         // Start the shared engine (idempotent: tray and window share one host)
         _host.Start();
@@ -192,6 +204,8 @@ public class MainViewModel : ViewModelBase
         {
             if (!SetProperty(ref _currentTab, value)) return;
             if (value == "History") _ = History.RefreshAsync();   // pick up recordings saved since the tab was last open
+            GameMonitor.IsVisible = value == "GameMonitor";
+            if (value == "Dashboard") RefreshLiveChart();
         }
     }
 
@@ -446,9 +460,48 @@ public class MainViewModel : ViewModelBase
 
     #endregion
 
+    // ---- Live graph (Overview) ----
+
+    private readonly System.Windows.Threading.DispatcherTimer _liveTimer;
+    private ChartData? _liveChart;
+    private int _liveMinutes = 5;
+
+    public ChartData? LiveChart { get => _liveChart; private set => SetProperty(ref _liveChart, value); }
+    public ObservableCollection<LegendItem> LiveLegend { get; } = new();
+    public IReadOnlyList<string> LiveChartOrder => LiveLegend.Select(l => l.TargetId).ToList();
+    public IReadOnlyList<Choice> LiveWindows { get; } = new Choice[] { new("Last 2 minutes", 2), new("Last 5 minutes", 5), new("Last 15 minutes", 15) };
+    public int LiveMinutes
+    {
+        get => _liveMinutes;
+        set { if (SetProperty(ref _liveMinutes, value)) RefreshLiveChart(); }
+    }
+    public string LiveChartCaption =>
+        $"Slowest reply in each time slice, so short spikes stay visible. Only plain pings are drawn, because they are directly comparable. "
+        + $"NetPulse keeps the last {_host.Settings.HistoryWindowMinutes} min in memory; record a session to keep more.";
+
+    private void RefreshLiveChart()
+    {
+        var targets = _host.Settings.Targets
+            .Where(t => t.IsEnabled && t.Protocol == NetworkProtocol.Icmp)
+            .Select(t => new SessionTarget { Id = t.Id, Name = t.IsGateway ? "Your router" : t.Name, Host = t.Host, Protocol = t.Protocol, Kind = t.IsGateway ? MeasurementKind.LocalGateway : MeasurementKind.ReferenceEndpoint })
+            .ToList();
+
+        // keep the legend (and the user's on/off choices) stable; only add or remove targets that changed
+        var ids = targets.Select(t => t.Id).ToList();
+        foreach (var gone in LiveLegend.Where(l => !ids.Contains(l.TargetId)).ToList()) LiveLegend.Remove(gone);
+        foreach (var t in targets.Where(t => LiveLegend.All(l => l.TargetId != t.Id)))
+            LiveLegend.Add(new LegendItem(t.Id, t.Name, NetPulse.App.Controls.SessionChart.ColorFor(t.Id, ids), RefreshLiveChart));
+
+        var on = LiveLegend.Where(l => l.IsOn).Select(l => l.TargetId).ToHashSet();
+        var minutes = Math.Min(_liveMinutes, _host.Settings.HistoryWindowMinutes);
+        LiveChart = SessionChartBuilder.BuildLive(_engine.GetAllHistory(), targets.Where(t => on.Contains(t.Id)), DateTime.UtcNow, TimeSpan.FromMinutes(minutes), ChartMode.Latency);
+        OnPropertyChanged(nameof(LiveChartCaption));
+    }
+
     private void UpdateMetrics(IReadOnlyList<TargetMetrics> metrics)
     {
         if (IsRecording) RefreshSessionStatus();
+        UpdateFooterRecording();
         foreach (var m in metrics.Where(x => !x.IsGameEndpoint))
         {
             var existing = Targets.FirstOrDefault(t => t.TargetId == m.TargetId);
@@ -491,9 +544,9 @@ public class MainViewModel : ViewModelBase
 
         StatusBrush = diag.Status switch
         {
-            DiagnosticStatus.Critical => new SolidColorBrush(Color.FromRgb(239, 68, 68)), // Red
-            DiagnosticStatus.Degraded => new SolidColorBrush(Color.FromRgb(245, 158, 11)), // Amber
-            _ => new SolidColorBrush(Color.FromRgb(16, 185, 129)) // Green
+            DiagnosticStatus.Critical => CriticalBrush,
+            DiagnosticStatus.Degraded => DegradedBrush,
+            _ => HealthyBrush
         };
     }
 
@@ -780,36 +833,54 @@ public class MainViewModel : ViewModelBase
     /// <summary>Plain-language disclosure of the external service used by Speed Test and Bufferbloat.</summary>
     public string TransferDisclosure => _host.TransferProvider.Disclosure;
 
+    public string FooterPrivacyText => $"Local-first \u2022 No telemetry \u2022 {_host.TransferProvider.DisplayName} only for speed tests";
+
+    private bool _isAnyRecording;
+    private string _footerRecordingText = "";
+    /// <summary>True while the Game Monitor or a plain recording is running (shown in the footer on every page).</summary>
+    public bool IsAnyRecording { get => _isAnyRecording; private set => SetProperty(ref _isAnyRecording, value); }
+    public string FooterRecordingText { get => _footerRecordingText; private set => SetProperty(ref _footerRecordingText, value); }
+
+    private void UpdateFooterRecording()
+    {
+        IsAnyRecording = _host.IsRecording;
+        if (!IsAnyRecording) { FooterRecordingText = ""; return; }
+        var elapsed = DateTime.UtcNow - (_host.Recorder.StartedUtc ?? DateTime.UtcNow);
+        string what = GameMonitor.IsMonitoring ? $"Recording {GameMonitor.SelectedProfile?.Profile.DisplayName}" : "Recording network session";
+        string key = _host.Settings.MarkLagHotkey;
+        FooterRecordingText = $"{what}  {elapsed:hh\\:mm\\:ss}" + (key == HotkeyGesture.Off ? "" : $"  \u2022  {key} marks lag");
+    }
+
     public string PrivacyFooter =>
         "Local-first: no analytics or telemetry. Continuous probes go to your router and public DNS/CDN endpoints; Speed Test and Bufferbloat contact "
         + _host.TransferProvider.DisplayName + " only when you run them.";
 
     private void InitializeSessionCommands()
     {
+        // The Game Monitor and this plain recording share one recorder: only one can run at a time.
         StartSessionCommand = new RelayCommand(() =>
         {
-            _host.StartSession();
+            if (!_host.TryStartSession(out var error))
+            {
+                SessionStatus = error ?? "Could not start recording.";
+                return;
+            }
             IsRecording = true;
             RefreshSessionStatus();
             CommandManager.InvalidateRequerySuggested();
-        }, () => !IsRecording);
+        }, () => !_host.IsRecording);
 
         StopSessionCommand = new RelayCommand(() =>
         {
-            var session = _host.StopSession(out var error);
+            // the outcome is reported through NetPulseHost.SessionSaved (OnSessionSaved)
+            if (_host.StopSession(out _) == null) SessionStatus = "No session was being recorded.";
             IsRecording = false;
-            SessionStatus = session == null
-                ? "No session was being recorded."
-                : error == null
-                    ? $"Session saved ({session.Samples.Count:N0} samples, {session.Events.Count} events, {session.Gaps.Count} monitoring gaps, {session.Disconnects.Count} disconnects) in {_host.Sessions.Directory}"
-                    : $"Session recorded but could not be saved: {error}";
             CommandManager.InvalidateRequerySuggested();
         }, () => IsRecording);
 
         MarkLagCommand = new RelayCommand(() =>
         {
-            _host.Recorder.MarkLag();
-            RefreshSessionStatus("Lag marker added.");
+            if (_host.MarkLag()) RefreshSessionStatus("Lag marker added.");
         }, () => IsRecording);
 
         OpenSessionsFolderCommand = new RelayCommand(() =>
@@ -826,6 +897,39 @@ public class MainViewModel : ViewModelBase
         });
     }
 
+    /// <summary>Called by the system-wide shortcut. Marks lag in whichever recording is running; false when none is.</summary>
+    public bool MarkLagFromShortcut()
+    {
+        bool ok = _host.MarkLag("Marked with the keyboard shortcut");
+        if (ok && IsRecording) RefreshSessionStatus("Lag marker added.");
+        return ok;
+    }
+
+    public void OpenRecording(string id)
+    {
+        CurrentTab = "History";
+        _ = History.OpenAsync(id);
+    }
+
+    private string? _lastSavedId;
+    private RelayCommand? _openLast;
+    public RelayCommand OpenLastRecordingCommand => _openLast ??= new RelayCommand(() => { if (_lastSavedId != null) OpenRecording(_lastSavedId); }, () => _lastSavedId != null && !IsRecording);
+
+    private void OnSessionSaved(SessionSavedEventArgs e)
+    {
+        var s = e.Session;
+        if (s.GameId == null)
+        {
+            IsRecording = false;
+            _lastSavedId = e.Error == null ? s.Id : null;
+            SessionStatus = e.Error == null
+                ? $"Saved \"{s.Name}\": {s.Samples.Count:N0} probes, {s.Events.Count} events, {s.LagMarkers.Count} lag markers, {s.Gaps.Count} monitoring gaps, {s.Disconnects.Count} connection losses."
+                : $"The recording was made but could not be saved: {e.Error}";
+        }
+        if (CurrentTab == "History") _ = History.RefreshAsync();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
     private void RefreshSessionStatus(string? prefix = null)
     {
         if (!_host.Recorder.IsRecording) return;
@@ -839,6 +943,7 @@ public class MainViewModel : ViewModelBase
         _speedTestCts?.Cancel();
         _compareCts?.Cancel();
         _mtrService.Stop();
+        _liveTimer.Stop();
         // The shared engine, settings and any recording session are stopped and saved by NetPulseHost.Dispose.
     }
 }

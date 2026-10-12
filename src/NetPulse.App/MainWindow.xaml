@@ -275,6 +275,40 @@
                             </Border>
                         </UniformGrid>
 
+                        <!-- Live graph of the last few minutes -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,20">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="PING OVER TIME" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
+                                        <TextBlock Text="Hover the graph to read exact values." FontSize="12.5" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" Width="170" ItemsSource="{Binding LiveWindows}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding LiveMinutes, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Graph time range" />
+                                </Grid>
+                                <controls:SessionChart Height="190" Data="{Binding LiveChart}" TargetOrder="{Binding LiveChartOrder}" AutomationProperties.Name="Live ping graph" />
+                                <ItemsControl ItemsSource="{Binding LiveLegend}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,18,6" Background="Transparent">
+                                                <CheckBox IsChecked="{Binding IsOn, Mode=TwoWay}" VerticalAlignment="Center" />
+                                                <Ellipse Width="9" Height="9" Fill="{Binding Brush}" Margin="8,0,6,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding LiveChartCaption}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- Game + latest event: what is being watched and what happened last -->
                         <UniformGrid Columns="2" Margin="0,0,0,20">
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0">
@@ -441,6 +475,12 @@
                                 </StackPanel>
                                 <TextBlock Text="{Binding ActionMessage}" FontSize="13.5" Foreground="{StaticResource AccentBlueBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding SessionMessage}" FontSize="13.5" Foreground="{StaticResource AccentGreenBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                <Button Content="Open this recording" Command="{Binding OpenRecordingCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5"
+                                        HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="{Binding IsEnabled, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToVis}}" />
+                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,10" />
+                                <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AutoRecord, Mode=TwoWay}"
+                                          Content="Record automatically: start when the game starts, save when it closes" />
+                                <TextBlock Text="{Binding MarkLagShortcutText}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding WarningText}" FontSize="13.5" Foreground="{StaticResource AccentAmberBrush}" Margin="0,6,0,0" TextWrapping="Wrap"
                                            Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
@@ -1159,12 +1199,12 @@
                                 <Grid>
                                     <DataGrid ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession, Mode=TwoWay}" IsReadOnly="True" SelectionMode="Single" MaxHeight="260" MinHeight="64">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Recording" Binding="{Binding Name}" Width="*" />
-                                            <DataGridTextColumn Header="Game" Binding="{Binding Game}" Width="150" />
+                                            <DataGridTextColumn Header="Recording" Binding="{Binding Name}" Width="*" MinWidth="220" />
                                             <DataGridTextColumn Header="Started" Binding="{Binding StartedText}" Width="150" />
                                             <DataGridTextColumn Header="Length" Binding="{Binding DurationText}" Width="100" />
                                             <DataGridTextColumn Header="Probes" Binding="{Binding SamplesText}" Width="110" />
                                             <DataGridTextColumn Header="Events" Binding="{Binding EventsText}" Width="90" />
+                                            <DataGridTextColumn Header="Lag marked" Binding="{Binding LagText}" Width="105" />
                                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
                                         </DataGrid.Columns>
                                     </DataGrid>
@@ -1175,6 +1215,7 @@
                                     </StackPanel>
                                 </Grid>
                                 <TextBlock Text="{Binding Message}" Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentBlueHoverBrush}" Margin="0,10,0,0" />
+                                <TextBlock Text="{Binding StorageText}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
                             </StackPanel>
                         </Border>
 
@@ -1224,7 +1265,7 @@
                                         <TextBlock Text="Graph" Style="{StaticResource CardTitle}" VerticalAlignment="Center" />
                                         <ComboBox Grid.Column="1" Width="170" ItemsSource="{Binding ModeLabels}" SelectedIndex="{Binding ModeIndex, Mode=TwoWay}" />
                                     </Grid>
-                                    <controls:SessionChart Height="270" Data="{Binding Chart}" TargetOrder="{Binding ChartTargetOrder}" />
+                                    <controls:SessionChart Height="270" Data="{Binding Chart}" TargetOrder="{Binding ChartTargetOrder}" AutomationProperties.Name="Recording graph" />
                                     <ItemsControl ItemsSource="{Binding Legend}" Margin="0,10,0,0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -1297,6 +1338,10 @@
                                     <TextBlock Text="Possibilities backed by measurements, each with how sure NetPulse is and what to test next." Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
                                     <TextBlock Text="No findings were stored with this recording (findings are produced for Game Monitor recordings)." Style="{StaticResource CaptionText}"
                                                Visibility="{Binding HasNoFindings, Converter={StaticResource BoolToVis}}" />
+                                    <Border Background="{StaticResource BgInputBrush}" CornerRadius="6" Padding="12,8" Margin="0,0,0,10"
+                                            Visibility="{Binding HasVersionNote, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="{Binding VersionNote}" Style="{StaticResource CaptionText}" />
+                                    </Border>
                                     <ItemsControl ItemsSource="{Binding Findings}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -1355,6 +1400,8 @@
                                     <Button Content="Mark lag" Command="{Binding MarkLagCommand}" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" ToolTip="Press when you notice lag so it can be compared with what was measured" />
                                 </StackPanel>
                                 <TextBlock Text="{Binding SessionStatus}" Style="{StaticResource CaptionText}" Margin="0,12,0,0" />
+                                <Button Content="Open this recording" Command="{Binding OpenLastRecordingCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5"
+                                        HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="{Binding IsEnabled, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Border>
 
@@ -1517,6 +1564,33 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Recordings and Mark lag -->
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Recordings and Mark lag" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="Mark lag without leaving your game, and decide how long recordings are kept on this PC." Style="{StaticResource CaptionText}" Margin="0,4,0,14" />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="300" /></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Mark lag shortcut" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Works anywhere in Windows, also while a game has focus, whenever the Game Monitor or a network recording is running." Style="{StaticResource CaptionText}" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding HotkeyChoices}" SelectedItem="{Binding MarkLagHotkey, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Mark lag shortcut" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding HotkeyStatus}" Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentBlueHoverBrush}" Margin="0,0,0,12" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding MarkLagSound, Mode=TwoWay}" Content="Play a short sound when the shortcut marks lag" />
+                                    <TextBlock Text="A different sound plays when nothing is being recorded, so you know the press was not stored." Style="{StaticResource CaptionText}" Margin="52,4,0,14" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="300" /></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Keep recordings" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Older recordings are deleted when NetPulse starts. Interrupted recordings are always kept." Style="{StaticResource CaptionText}" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding RetentionChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding RecordingRetentionDays, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Keep recordings" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Window behaviour -->
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                                 <StackPanel>
@@ -1592,9 +1666,14 @@
                     <TextBlock Text="{Binding ProbeIntervalText}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <TextBlock Text="Local-first • No telemetry • Speed Test &amp; Bufferbloat contact Cloudflare only when run" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" ToolTip="{Binding PrivacyFooter}" Cursor="Help" />
+                <!-- what is being recorded right now, visible from every page -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="{Binding IsAnyRecording, Converter={StaticResource BoolToVis}}">
+                    <Ellipse Width="8" Height="8" Fill="{StaticResource AccentRedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding FooterRecordingText}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="NoWrap" />
                 </StackPanel>
+
+                <TextBlock Grid.Column="2" Text="{Binding FooterPrivacyText}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" ToolTip="{Binding PrivacyFooter}" Cursor="Help"
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxWidth="460" />
             </Grid>
         </Border>
 

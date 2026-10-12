@@ -43,6 +43,31 @@ public sealed class ChartData
 /// <summary>Turns a recorded session into plot-ready series: downsampled to a fixed number of time slices, independent of the UI.</summary>
 public static class SessionChartBuilder
 {
+    /// <summary>
+    /// Chart of the last <paramref name="window"/> of live measurements (the engine's in-memory history), for the Overview.
+    /// Uses the same rules as a recording's chart so the two always look and read the same.
+    /// </summary>
+    public static ChartData BuildLive(IEnumerable<Models.Measurement> history, IEnumerable<SessionTarget> targets, DateTime nowUtc, TimeSpan window, ChartMode mode, int maxBuckets = 180)
+    {
+        var wanted = targets.ToList();
+        var ids = wanted.Select(t => t.Id).ToHashSet();
+        var start = nowUtc - window;
+        var samples = history
+            .Where(m => m.Timestamp >= start && m.Timestamp <= nowUtc && ids.Contains(m.TargetId))
+            .Select(m => new SessionSample { T = m.Timestamp, TargetId = m.TargetId, Ok = m.Success, RttMs = m.Success ? m.RttMs : null })
+            .ToList();
+
+        // just after start-up there is less history than the window: show what exists (at least 30 s) instead of an empty graph
+        if (samples.Count > 0)
+        {
+            var first = samples.Min(x => x.T);
+            if (first > start) start = first < nowUtc.AddSeconds(-30) ? first : nowUtc.AddSeconds(-30);
+        }
+
+        var session = new MonitoringSession { StartedUtc = start, EndedUtc = nowUtc, Targets = wanted, Samples = samples };
+        return Build(session, mode, null, maxBuckets);
+    }
+
     public static ChartData Build(MonitoringSession s, ChartMode mode, ISet<string>? targetIds = null, int maxBuckets = 400)
     {
         var end = s.EndedUtc ?? (s.Samples.Count > 0 ? s.Samples.Max(x => x.T) : s.StartedUtc);

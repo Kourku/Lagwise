@@ -13,6 +13,14 @@ namespace NetPulse.Core.Services;
 /// Game Monitor all share the same measurement engine, event log, settings and session recorder.
 /// Contains no UI types.
 /// </summary>
+public sealed class SessionSavedEventArgs : EventArgs
+{
+    public SessionSavedEventArgs(MonitoringSession session, string? error) { Session = session; Error = error; }
+    public MonitoringSession Session { get; }
+    /// <summary>Null when the file was written successfully.</summary>
+    public string? Error { get; }
+}
+
 public sealed class NetPulseHost : IDisposable
 {
     private static readonly TimeSpan CheckpointInterval = TimeSpan.FromSeconds(30);
@@ -93,7 +101,70 @@ public sealed class NetPulseHost : IDisposable
         _checkpointTimer = new Timer(_ => Checkpoint(), null, CheckpointInterval, CheckpointInterval);
     }
 
-    public void Start() => Engine.Start();
+    /// <summary>Raised after a recording has been stopped and saved (or failed to save), from any source: the History tab, the Game Monitor or automatic recording.</summary>
+    public event EventHandler<SessionSavedEventArgs>? SessionSaved;
+
+    public void Start()
+    {
+        Engine.Start();
+        ApplyRetention();
+    }
+
+    /// <summary>Deletes recordings older than the retention setting, in the background. Returns immediately.</summary>
+    public void ApplyRetention()
+    {
+        int days = Settings.RecordingRetentionDays;
+        if (days <= 0) return;
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                int n = Sessions.DeleteOlderThan(cutoff);
+                if (n > 0) Events.LogEvent("Recordings", "Info", $"Deleted {n} recording(s) older than {days} days, as set in Settings.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // retention is best effort
+            }
+        });
+    }
+
+    /// <summary>True while any recording (plain or Game Monitor) is running.</summary>
+    public bool IsRecording => Recorder.IsRecording;
+
+    /// <summary>
+    /// Marks a moment of lag in whatever is being recorded: the Game Monitor session if one runs, otherwise a plain
+    /// network recording. Returns false when nothing is being recorded.
+    /// </summary>
+    public bool MarkLag(string? note = null)
+    {
+        if (GameMonitor.IsMonitoring) return GameMonitor.MarkLag(note);
+        if (!Recorder.IsRecording) return false;
+
+        var now = DateTime.UtcNow;
+        Recorder.MarkLag(note, now);
+        Events.LogEvent("LagMarker", "Info", string.IsNullOrWhiteSpace(note) ? "You marked a moment of lag." : $"You marked lag: {note.Trim()}", timestamp: now);
+        return true;
+    }
+
+    /// <summary>Starts a plain network recording. Fails (with a reason) when a recording is already running.</summary>
+    public bool TryStartSession(out string? error)
+    {
+        lock (_sessionLock)
+        {
+            if (Recorder.IsRecording)
+            {
+                error = GameMonitor.IsMonitoring
+                    ? "The Game Monitor is already recording. Stop it there first, or use Mark lag in the Game Monitor."
+                    : "A recording is already running.";
+                return false;
+            }
+            StartSession();
+            error = null;
+            return true;
+        }
+    }
 
     /// <summary>Persists current settings; returns false with the reason on failure.</summary>
     public bool SaveSettings(out string? error) => SettingsService.TrySave(out error);
@@ -125,6 +196,7 @@ public sealed class NetPulseHost : IDisposable
             {
                 saveError = ex.Message;
             }
+            SessionSaved?.Invoke(this, new SessionSavedEventArgs(session, saveError));
             return session;
         }
     }

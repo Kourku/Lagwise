@@ -58,6 +58,7 @@ public class SessionRecorder
             _session = new MonitoringSession
             {
                 Name = string.IsNullOrWhiteSpace(name) ? $"Session {now.ToLocalTime():yyyy-MM-dd HH:mm}" : name.Trim(),
+                AppVersion = AppInfo.Version,
                 GameId = gameId,
                 StartedUtc = now,
                 MonitoringIntervalMs = _intervalMs,

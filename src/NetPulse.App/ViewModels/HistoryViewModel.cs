@@ -26,12 +26,13 @@ public sealed class SessionRow
     {
         Id = s.Id;
         Name = s.Name;
-        Game = string.IsNullOrEmpty(s.GameId) ? "Network only" : (Core.Games.GameProfiles.Find(s.GameId)?.DisplayName ?? s.GameId);
+        Game = string.IsNullOrEmpty(s.GameId) ? "Network only" : (s.GameDisplayName ?? Core.Games.GameProfiles.Find(s.GameId)?.DisplayName ?? s.GameId);
         StartedText = s.StartedUtc.ToLocalTime().ToString("ddd d MMM, HH:mm");
         var end = s.EndedUtc;
         DurationText = end.HasValue ? FormatDuration(end.Value - s.StartedUtc) : "-";
         SamplesText = $"{s.SampleCount:N0} probes";
         EventsText = $"{s.EventCount} events";
+        LagText = s.LagMarkerCount == 0 ? "" : $"{s.LagMarkerCount} lag mark{(s.LagMarkerCount == 1 ? "" : "s")}";
         IsComplete = s.IsComplete;
         Status = s.IsComplete ? "Saved" : "Interrupted";
     }
@@ -43,6 +44,8 @@ public sealed class SessionRow
     public string DurationText { get; }
     public string SamplesText { get; }
     public string EventsText { get; }
+    public string LagText { get; }
+    public bool HasLag => LagText.Length > 0;
     public bool IsComplete { get; }
     public string Status { get; }
 
@@ -168,16 +171,28 @@ public sealed class HistoryViewModel : ViewModelBase
 
     public IReadOnlyList<string> ModeLabels { get; } = new[] { "Latency", "Variation", "Probe loss" };
     public string SessionsFolder => _sessionsFolderText;
+    private string _storageText = "";
+    /// <summary>"3 recordings, 4.2 MB on this PC" plus the retention rule.</summary>
+    public string StorageText { get => _storageText; private set => SetProperty(ref _storageText, value); }
+    private string _versionNote = "";
+    /// <summary>Explains that stored findings come from the version that recorded the session.</summary>
+    public string VersionNote { get => _versionNote; private set { if (SetProperty(ref _versionNote, value)) OnPropertyChanged(nameof(HasVersionNote)); } }
+    public bool HasVersionNote => _versionNote.Length > 0;
 
     public SessionRow? SelectedSession
     {
         get => _selected;
         set
         {
+            // while the list is being rebuilt the table reports "nothing selected"; that is not the user's choice
+            if (_rebuildingList) return;
             if (!SetProperty(ref _selected, value)) return;
-            _ = LoadDetailAsync(value?.Id);
+            if (value?.Id != _session?.Id || value == null) _ = LoadDetailAsync(value?.Id);
         }
     }
+
+    private bool _rebuildingList;
+    private int _refreshVersion;
 
     public bool HasSessions => Sessions.Count > 0;
     public bool HasNoSessions => Sessions.Count == 0;
@@ -210,19 +225,38 @@ public sealed class HistoryViewModel : ViewModelBase
 
     public async Task RefreshAsync()
     {
+        int version = ++_refreshVersion;
         IsLoading = true;
         try
         {
             var list = await Task.Run(() => _host.Sessions.List());
-            string? keep = SelectedSession?.Id;
-            Sessions.Clear();
-            foreach (var s in list) Sessions.Add(new SessionRow(s));
+            if (version != _refreshVersion) return; // a newer refresh started meanwhile; it will apply its own result
+
+            string? keep = _pendingOpenId ?? _selected?.Id;
+            _rebuildingList = true;
+            try
+            {
+                Sessions.Clear();
+                foreach (var s in list) Sessions.Add(new SessionRow(s));
+            }
+            finally
+            {
+                _rebuildingList = false;
+            }
             OnPropertyChanged(nameof(HasSessions));
             OnPropertyChanged(nameof(HasNoSessions));
 
+            long bytes = list.Sum(s => s.SizeBytes);
+            int days = _host.Settings.RecordingRetentionDays;
+            StorageText = $"{list.Count} recording{(list.Count == 1 ? "" : "s")}, {bytes / 1048576.0:0.#} MB on this PC. "
+                + (days > 0 ? $"Recordings older than {days} days are deleted automatically (Settings)." : "Recordings are kept until you delete them (Settings can delete old ones automatically).");
+
+            _pendingOpenId = null;
             var again = Sessions.FirstOrDefault(r => r.Id == keep);
-            if (again != null) { _selected = again; OnPropertyChanged(nameof(SelectedSession)); }
-            else if (keep != null) { _selected = null; OnPropertyChanged(nameof(SelectedSession)); ClearDetail(); }
+            _selected = again;
+            OnPropertyChanged(nameof(SelectedSession)); // re-highlights the row in the rebuilt table
+            if (again == null) { if (_session != null) ClearDetail(); }
+            else if (again.Id != _session?.Id) _ = LoadDetailAsync(again.Id);
         }
         catch (Exception ex)
         {
@@ -230,8 +264,17 @@ public sealed class HistoryViewModel : ViewModelBase
         }
         finally
         {
-            IsLoading = false;
+            if (version == _refreshVersion) IsLoading = false;
         }
+    }
+
+    private string? _pendingOpenId;
+
+    /// <summary>Shows the recording with this id (used after a recording is saved elsewhere in the app).</summary>
+    public Task OpenAsync(string id)
+    {
+        _pendingOpenId = id;
+        return RefreshAsync();
     }
 
     private async Task LoadDetailAsync(string? id)
@@ -275,7 +318,7 @@ public sealed class HistoryViewModel : ViewModelBase
         _stats = null;
         TargetStats.Clear(); LagMarkers.Clear(); Findings.Clear(); Events.Clear(); Legend.Clear(); Cards.Clear();
         Chart = null;
-        DetailTitle = DetailSubtitle = LimitationsText = ConnectionsText = "";
+        DetailTitle = DetailSubtitle = LimitationsText = ConnectionsText = VersionNote = "";
         NotifyDetail();
     }
 
@@ -311,6 +354,10 @@ public sealed class HistoryViewModel : ViewModelBase
 
         Findings.Clear();
         foreach (var f in s.Findings) Findings.Add(new FindingItem(f));
+        VersionNote = s.Findings.Count == 0 ? ""
+            : s.AppVersion == null ? "These findings were worked out by an older NetPulse when the recording was saved. Later versions may judge the same measurements differently; the graph and statistics above are always recalculated."
+            : s.AppVersion != Core.AppInfo.Version ? $"These findings were worked out by NetPulse {s.AppVersion} when the recording was saved. The graph and statistics above are recalculated by this version ({Core.AppInfo.Version})."
+            : "";
 
         Events.Clear();
         foreach (var e in s.Events.OrderByDescending(e => e.Timestamp).Take(200)) Events.Add(e);

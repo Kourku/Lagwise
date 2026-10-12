@@ -32,6 +32,18 @@ public class AppSettings
     /// <summary>Last game profile chosen in the Game Monitor.</summary>
     public string? LastGameId { get; set; }
 
+    // Game Monitor behaviour
+    /// <summary>Start recording when the selected game starts, and stop and save once it has been closed for a short while.</summary>
+    public bool AutoRecordGame { get; set; } = false;
+    /// <summary>System-wide shortcut that marks lag while a recording runs (see <see cref="HotkeyGesture"/>); "Off" disables it.</summary>
+    public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
+    /// <summary>Play a short sound when lag is marked with the shortcut, so the player knows it worked without leaving the game.</summary>
+    public bool MarkLagSound { get; set; } = true;
+
+    // Recordings
+    /// <summary>Saved recordings older than this many days are deleted at start-up; 0 keeps them forever.</summary>
+    public int RecordingRetentionDays { get; set; } = 0;
+
     // Configured targets
     public List<TargetConfig> Targets { get; set; } = new();
 
@@ -44,7 +56,9 @@ public class AppSettings
         EventDedupSeconds = System.Math.Clamp(EventDedupSeconds, 0, 600);
         PacketLossNotifyThreshold = System.Math.Clamp(PacketLossNotifyThreshold, 0.1, 100);
         LatencySpikeNotifyThreshold = System.Math.Clamp(LatencySpikeNotifyThreshold, 5, 10_000);
+        RecordingRetentionDays = System.Math.Clamp(RecordingRetentionDays, 0, 3650);
         if (string.IsNullOrWhiteSpace(TransferProviderId)) TransferProviderId = "cloudflare";
+        if (!HotkeyGesture.TryParse(MarkLagHotkey, out _)) MarkLagHotkey = "Ctrl+Shift+F9";
         Targets ??= new List<TargetConfig>();
         if (Targets.Count == 0) Targets = CreateDefault().Targets;
         foreach (var t in Targets)

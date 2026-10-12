@@ -139,6 +139,10 @@ public sealed class FindingItem
 /// <summary>Presentation logic for the Game Monitor tab. All state comes from the shared <see cref="GameMonitorService"/>.</summary>
 public sealed class GameMonitorViewModel : ViewModelBase
 {
+    private static readonly Brush RunningBrush = Frozen(Color.FromRgb(16, 185, 129));
+    private static readonly Brush WaitingBrush = Frozen(Color.FromRgb(245, 158, 11));
+    private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+
     private readonly NetPulseHost _host;
     private readonly GameMonitorService _monitor;
     private readonly Dispatcher _dispatcher;
@@ -166,6 +170,12 @@ public sealed class GameMonitorViewModel : ViewModelBase
     private bool _isMonitoring;
     private ConnectionRow? _selectedConnection;
     private MeasurementRow? _selectedMeasured;
+    private bool _isVisible;
+    private string _findingsSignature = "";
+    private string? _lastSavedId;
+
+    /// <summary>Raised when the user asks to open a saved recording in History &amp; reports.</summary>
+    public event EventHandler<string>? OpenRecordingRequested;
 
     public GameMonitorViewModel(NetPulseHost host, Dispatcher dispatcher)
     {
@@ -183,6 +193,8 @@ public sealed class GameMonitorViewModel : ViewModelBase
         StopMeasuringCommand = new RelayCommand(StopMeasuring, () => SelectedMeasured != null);
         OpenStatusPageCommand = new RelayCommand(OpenStatusPage, () => !string.IsNullOrEmpty(_statusPageUrl));
         OpenSessionsFolderCommand = new RelayCommand(OpenSessionsFolder);
+        OpenRecordingCommand = new RelayCommand(() => { if (_lastSavedId != null) OpenRecordingRequested?.Invoke(this, _lastSavedId); }, () => _lastSavedId != null && !IsMonitoring);
+        _host.SessionSaved += (_, e) => { if (e.Session.GameId != null) _dispatcher.InvokeAsync(() => OnSessionSaved(e)); };
 
         _monitor.Updated += (_, _) => QueueRefresh();
         _host.Engine.MetricsUpdated += (_, _) => QueueRefresh();
@@ -211,6 +223,38 @@ public sealed class GameMonitorViewModel : ViewModelBase
     public RelayCommand StopMeasuringCommand { get; }
     public RelayCommand OpenStatusPageCommand { get; }
     public RelayCommand OpenSessionsFolderCommand { get; }
+    public RelayCommand OpenRecordingCommand { get; }
+
+    /// <summary>
+    /// Set by the shell when the Game Monitor page is shown. While hidden only the cheap parts (process status for the
+    /// Overview card) are refreshed; the connection table and findings are rebuilt when the page comes back.
+    /// </summary>
+    public bool IsVisible
+    {
+        get => _isVisible;
+        set { if (SetProperty(ref _isVisible, value) && value) QueueRefresh(); }
+    }
+
+    /// <summary>Start recording when the game starts and save when it closes. Applied and saved immediately.</summary>
+    public bool AutoRecord
+    {
+        get => _host.Settings.AutoRecordGame;
+        set
+        {
+            if (_host.Settings.AutoRecordGame == value) return;
+            _host.Settings.AutoRecordGame = value;
+            _host.SaveSettings(out _);
+            OnPropertyChanged();
+            ActionMessage = value
+                ? "Automatic recording is on: NetPulse starts recording when the game starts and saves the recording once it has been closed for 20 seconds."
+                : "Automatic recording is off.";
+        }
+    }
+
+    public string MarkLagShortcutText => _host.Settings.MarkLagHotkey == Core.Models.HotkeyGesture.Off
+        ? "Tip: set a keyboard shortcut for Mark lag in Settings, so you can mark lag without leaving the game."
+        : $"Shortcut: press {_host.Settings.MarkLagHotkey} in game to mark lag (works while the game has focus).";
+    public void NotifyShortcutChanged() => OnPropertyChanged(nameof(MarkLagShortcutText));
 
     public GameProfileItem? SelectedProfile
     {
@@ -304,17 +348,26 @@ public sealed class GameMonitorViewModel : ViewModelBase
         _sessionStart = null;
 
         if (session == null) SessionMessage = "No session was being recorded.";
-        else if (error == null)
+        // otherwise OnSessionSaved reports the result (it also covers recordings stopped automatically)
+        ActionMessage = "";
+        QueueRefresh();
+    }
+
+    private void OnSessionSaved(SessionSavedEventArgs e)
+    {
+        var session = e.Session;
+        if (e.Error == null)
         {
-            string file = Path.Combine(_host.Sessions.Directory, session.Id + ".session.json");
-            SessionMessage = $"Session saved: {file}\n{session.Samples.Count:N0} samples, {session.Connections.Count} connections, {session.Events.Count} events, {session.Gaps.Count} monitoring gaps, {session.LagMarkers.Count} lag markers.";
+            _lastSavedId = session.Id;
+            SessionMessage = $"Recording saved: {session.Name}. {session.Samples.Count:N0} probes, {session.Connections.Count} connections, {session.Events.Count} events, "
+                + $"{session.Gaps.Count} monitoring gaps, {session.LagMarkers.Count} lag markers. Open it in History & reports to see the graph and findings.";
         }
         else
         {
-            SessionMessage = $"The session was recorded but could not be saved: {error}";
+            _lastSavedId = null;
+            SessionMessage = $"The session was recorded but could not be saved: {e.Error}";
         }
-        ActionMessage = "";
-        QueueRefresh();
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private void MarkLag()
@@ -415,13 +468,31 @@ public sealed class GameMonitorViewModel : ViewModelBase
                 ? $"  [PIDs: {string.Join(", ", snap.Process.GameProcesses.Select(p => p.Pid))}; confidence {snap.Process.Confidence}]" : "");
             ProcessBrush = snap.Process.State switch
             {
-                GameRunState.Running => new SolidColorBrush(Color.FromRgb(16, 185, 129)),
+                GameRunState.Running => RunningBrush,
                 GameRunState.NotRunning => System.Windows.Media.Brushes.Gray,
-                _ => new SolidColorBrush(Color.FromRgb(245, 158, 11))
+                _ => WaitingBrush
             };
         }
 
+        bool wasMonitoring = IsMonitoring;
         IsMonitoring = snap.IsMonitoring;
+        if (!wasMonitoring && snap.IsMonitoring && _monitor.StartedAutomatically)
+        {
+            Timeline.Clear();
+            SessionMessage = "";
+            ActionMessage = $"{snap.Profile?.DisplayName} started, so recording started automatically. It is saved once the game has been closed for 20 seconds.";
+            _clock.Start();
+        }
+        else if (wasMonitoring && !snap.IsMonitoring)
+        {
+            _clock.Stop();
+        }
+
+        if (!IsVisible)
+        {
+            UpdateElapsed();
+            return; // the tables below are rebuilt when the page is shown again
+        }
 
         // connections: update rows in place so selection survives
         var seen = new HashSet<string>();
@@ -464,9 +535,14 @@ public sealed class GameMonitorViewModel : ViewModelBase
             if (_referenceRows.TryGetValue(m.TargetId, out var rr)) rr.Update(m);
         }
 
-        // findings
-        Findings.Clear();
-        foreach (var f in snap.Findings) Findings.Add(new FindingItem(f));
+        // findings: rebuilt only when they change, so an expanded "details" section does not snap shut every second
+        string signature = string.Join("\u001f", snap.Findings.Select(f => f.Title + "|" + f.Confidence + "|" + string.Join("|", f.Observations) + "|" + string.Join("|", f.Evidence)));
+        if (signature != _findingsSignature)
+        {
+            _findingsSignature = signature;
+            Findings.Clear();
+            foreach (var f in snap.Findings) Findings.Add(new FindingItem(f));
+        }
         OnPropertyChanged(nameof(HasNoFindings));
         OnPropertyChanged(nameof(NoFindingsText));
 

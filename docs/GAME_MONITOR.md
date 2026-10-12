@@ -1,6 +1,6 @@
 # Game Monitor: what exists and what has actually been verified
 
-Status as of NetPulse 0.3.0 (2026-10-12).
+Status as of NetPulse 0.4.0 (2026-10-12).
 
 ## Support status of the seven games
 
@@ -37,6 +37,13 @@ No profile lists a "verified endpoint": match servers are dynamic and none was v
   and a next test. Latency is judged against each target's own baseline, never a fixed ping. Contradicting measurements lower confidence.
 - **Sessions**: samples, events, monitoring gaps (kept separate from outages), disconnects, lag markers, game processes, connections,
   limitations and final findings, saved locally under `%LOCALAPPDATA%\NetPulse\sessions`. Checkpointed every 30 s and saved on shutdown.
+  Each recording stores the NetPulse version that made it, because its findings are that version's analysis.
+- **Mark lag shortcut** (`GlobalHotkey`, Windows `RegisterHotKey`): a system-wide shortcut, `Ctrl+Shift+F9` by default, marks lag in
+  whichever recording runs, also while the game has focus. Optional confirmation sound (a different sound when nothing is recording).
+  If another program owns the combination, Settings says so instead of failing silently.
+- **Automatic recording** (off by default): when the selected game starts, recording starts; once the game has stayed closed for 20 s
+  the recording is stopped and saved, so a quick restart does not split it. A recording started by hand is never stopped automatically,
+  and a running network recording is never interrupted.
 
 ## Known limitations (also shown in the UI)
 
@@ -49,19 +56,21 @@ No profile lists a "verified endpoint": match servers are dynamic and none was v
 
 ## Verification performed
 
-**Automated (176 tests, all passing):** profile invariants; process detection with simulated processes (multiple processes, launchers,
+**Automated (247 tests, all passing):** profile invariants; process detection with simulated processes (multiple processes, launchers,
 anti-cheat, path mismatch, restarts, PID reuse); connection tracking with synthetic IPv4/IPv6/TCP/UDP snapshots (dedup, state change,
 flapping, short-lived, owner exit); the **real Windows APIs** against sockets created by the test process itself (IPv4 and IPv6 TCP and
 UDP); endpoint advice and ICMP-filtering handling; analyzer scenarios incl. contradictions and confidence; the full monitor workflow
 with fake sources (start, game launch, measure, mark lag, exit, stop, saved file) and shutdown while monitoring; engine behaviour for
-game endpoints; settings, sessions, cancellation.
+game endpoints; settings, sessions, cancellation; automatic recording (start, grace period, restart, never stopping a manual
+recording); Mark lag routing between the Game Monitor and network recordings; shortcut parsing.
 
 **Real League of Legends client (read-only, development PC):** with the Riot Client running and no match, the app correctly reported
 "Only League of Legends support programs (launcher, crash reporter) are running; the game itself is not", Start/Mark lag/Stop & save
 worked and produced a saved session. Installed executable names were read from the actual install folder.
 
 **Published build (`build.ps1`):** self-test inside the published exe (real process list, real socket tables, real session file, settings
-round-trip) and an 18-step UI Automation run of the Game Monitor in the published exe against an isolated data folder.
+round-trip) and a UI Automation run of the published exe against an isolated data folder: Game Monitor workflow, Mark lag by
+button and by the real system-wide shortcut, opening the saved recording in History, and a settings change.
 
 ## NOT verified (needs a live League match)
 
