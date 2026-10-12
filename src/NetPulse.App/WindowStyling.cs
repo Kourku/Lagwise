@@ -6,11 +6,13 @@ using System.Windows.Interop;
 namespace NetPulse.App;
 
 /// <summary>Makes the Windows title bar match the dark UI (Windows 10 20H1+ / Windows 11). Silently does nothing where unsupported.</summary>
-internal static class WindowChrome
+internal static class WindowStyling
 {
     private const int DwmUseImmersiveDarkMode = 20;
     private const int DwmCaptionColor = 35;
     private const int DwmTextColor = 36;
+    private const int DwmCornerPreference = 33;
+    private const int DwmBorderColor = 34;
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
@@ -28,6 +30,12 @@ internal static class WindowChrome
             int text = 0x00F6F0ED;      // #EDF0F6
             DwmSetWindowAttribute(hwnd, DwmCaptionColor, ref caption, sizeof(int));
             DwmSetWindowAttribute(hwnd, DwmTextColor, ref text, sizeof(int));
+
+            // Windows 11: keep rounded corners and a subtle border with the custom (WindowChrome) title bar
+            int round = 2;               // DWMWCP_ROUND
+            int border = 0x00392A22;     // #222A39
+            DwmSetWindowAttribute(hwnd, DwmCornerPreference, ref round, sizeof(int));
+            DwmSetWindowAttribute(hwnd, DwmBorderColor, ref border, sizeof(int));
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {

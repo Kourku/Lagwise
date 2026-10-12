@@ -89,7 +89,7 @@ try {
     $start = Find-Named 'Start monitoring' 'ControlType.Button'
     Check 'Start monitoring is enabled' ($start.Current.IsEnabled) ''
     Click-Element $start
-    Check 'Monitoring state is displayed' ($null -ne (Wait-For { All | Where-Object { $_.Current.Name -cmatch 'MONITORING$' } | Select-Object -First 1 } 10)) ''
+    Check 'Monitoring state is displayed' ($null -ne (Wait-For { All | Where-Object { $_.Current.Name -cmatch 'RECORDING$' } | Select-Object -First 1 } 10)) ''
     Start-Sleep -Seconds 6
     Click-Element (Find-Named 'Mark lag' 'ControlType.Button')
     Check 'Lag marker accepted' ($null -ne (Wait-For { Find-Like 'Lag marked' } 5)) ''

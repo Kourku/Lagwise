@@ -8,6 +8,8 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
+![NetPulse Overview](docs/screenshots/overview-0.5.png)
+
 ---
 
 ## 📖 Table of Contents

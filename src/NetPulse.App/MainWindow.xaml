@@ -7,14 +7,19 @@
         xmlns:controls="clr-namespace:NetPulse.App.Controls"
         xmlns:local="clr-namespace:NetPulse.App"
         mc:Ignorable="d"
-        Title="NetPulse - Real-Time Network Quality &amp; Path Diagnostics"
-        Height="820" Width="1280" MinHeight="700" MinWidth="1080"
+        Title="NetPulse"
+        Height="860" Width="1320" MinHeight="700" MinWidth="1080"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDarkBrush}"
         Foreground="{StaticResource TextPrimaryBrush}"
         FontFamily="{StaticResource UiFont}" FontSize="15"
         TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
+
+    <!-- One integrated title bar instead of the Windows caption plus a second app bar -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0,0,0,1" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -24,57 +29,68 @@
         <local:SeverityBrushConverter x:Key="SeverityBrush" />
         <local:StringEqualsConverter x:Key="EqualsParam" />
         <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+
+        <!-- One step of the "what NetPulse measures" chain on the Overview -->
+        <Style x:Key="ChainNodeIcon" TargetType="Border">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="CornerRadius" Value="23" />
+            <Setter Property="Background" Value="{StaticResource BlueSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BlueEdgeBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ChainConnector" TargetType="Grid">
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,22,0,0" />
+        </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
-            <!-- Top App Bar -->
-            <RowDefinition Height="68" />
-            <!-- Main Content with Tabs -->
+            <RowDefinition Height="48" />
             <RowDefinition Height="*" />
-            <!-- Bottom Status Bar -->
-            <RowDefinition Height="34" />
+            <RowDefinition Height="32" />
         </Grid.RowDefinitions>
 
         <!-- ==================================================== -->
-        <!-- Top App Bar -->
+        <!-- Title bar (drag area, connection, mode, window buttons) -->
         <!-- ==================================================== -->
-        <Border Grid.Row="0" Background="{StaticResource BgSidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="20,0">
-            <Grid VerticalAlignment="Center">
+        <Border Grid.Row="0" Background="{StaticResource BgSidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="232" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Brand -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource BrandGradientBrush}" Margin="0,0,12,0">
-                        <TextBlock Text="&#xE9D9;" Style="{StaticResource IconText}" FontSize="19" Foreground="White" HorizontalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
+                    <Border Width="26" Height="26" CornerRadius="7" Background="{StaticResource BrandGradientBrush}">
+                        <TextBlock Text="&#xE9D9;" Style="{StaticResource IconText}" FontSize="14" Foreground="White" HorizontalAlignment="Center" />
                     </Border>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="NetPulse" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="18" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Network diagnostics for gamers" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                    </StackPanel>
+                    <TextBlock Text="NetPulse" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="15" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" />
                 </StackPanel>
 
-                <!-- Active connection pill -->
-                <Border Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource BgCardBrush}" CornerRadius="18" Padding="16,7"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <!-- Active connection -->
+                <Border Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="32,0,0,0" Background="{StaticResource BgCardBrush}" CornerRadius="15" Padding="12,5"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" ToolTip="The network adapter Windows is using now, and your router's address">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding ActiveNic.Name, FallbackValue='Detecting...'}" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="{Binding ActiveNic.SpeedDisplay, FallbackValue='', StringFormat='   {0}'}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Text="   Router " FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Text="{Binding ActiveNic.Ipv4Gateway, FallbackValue='searching'}" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource AccentBlueHoverBrush}" />
+                        <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" Margin="0,0,9,0" VerticalAlignment="Center" />
+                        <TextBlock Text="&#xE839;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,7,0" />
+                        <TextBlock Text="{Binding ActiveNic.Name, FallbackValue='Detecting...'}" FontWeight="SemiBold" FontSize="12.5" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                        <TextBlock Text="{Binding ActiveNic.SpeedDisplay, FallbackValue='', StringFormat='  ·  {0}'}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                        <TextBlock Text="  ·  Router " FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                        <TextBlock Text="{Binding ActiveNic.Ipv4Gateway, FallbackValue='searching'}" FontWeight="SemiBold" FontSize="12.5" Foreground="{StaticResource AccentBlueHoverBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
                     </StackPanel>
                 </Border>
 
-                <!-- Mode switch + export -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="{StaticResource BgInputBrush}" CornerRadius="10" Padding="3" Margin="0,0,12,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <!-- Detail level + report -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Border Background="{StaticResource BgInputBrush}" CornerRadius="9" Padding="3" Margin="0,0,10,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="Beginner" ToolTip="Plain-language summaries and recommendations" Command="{Binding SetModeCommand}" CommandParameter="Beginner">
+                            <Button Content="Beginner" ToolTip="Plain-language summaries and recommendations" Command="{Binding SetModeCommand}" CommandParameter="Beginner" Padding="12,4" FontSize="12.5">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
                                         <Style.Triggers>
@@ -86,7 +102,7 @@
                                     </Style>
                                 </Button.Style>
                             </Button>
-                            <Button Content="Advanced" ToolTip="Full statistics, protocols, routes and diagnostic evidence" Command="{Binding SetModeCommand}" CommandParameter="Advanced">
+                            <Button Content="Advanced" ToolTip="Full statistics, protocols, routes and diagnostic evidence" Command="{Binding SetModeCommand}" CommandParameter="Advanced" Padding="12,4" FontSize="12.5">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
                                         <Style.Triggers>
@@ -100,7 +116,23 @@
                             </Button>
                         </StackPanel>
                     </Border>
-                    <Button Content="Export report" Style="{StaticResource OutlineButton}" Command="{Binding ExportReportCommand}" />
+                    <Button Style="{StaticResource OutlineButton}" Command="{Binding ExportReportCommand}" Padding="12,4" MinHeight="32" FontSize="12.5"
+                            WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Export diagnostic report" ToolTip="Save a readable report of the current state (Markdown)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9F9;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,7,0" />
+                            <TextBlock Text="Export report" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Window buttons -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button x:Name="MinimizeButton" Content="&#xE921;" Style="{StaticResource CaptionButton}" Height="47" Click="MinimizeButton_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Minimise" ToolTip="Minimise" />
+                    <Button x:Name="MaximizeButton" Content="&#xE922;" Style="{StaticResource CaptionButton}" Height="47" Click="MaximizeButton_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Maximise" ToolTip="Maximise" />
+                    <Button x:Name="CloseButton" Content="&#xE8BB;" Style="{StaticResource CloseCaptionButton}" Height="47" Click="CloseButton_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Close" ToolTip="Close" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -115,7 +147,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Navigation Sidebar -->
-            <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0" Padding="12,14">
+            <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0" Padding="12,16,12,12">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Bottom">
                         <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,0,8,10" />
@@ -125,6 +157,7 @@
                         <RadioButton Content="Help &amp; glossary" Tag="&#xE897;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Help}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Help" />
+                        <TextBlock Text="{Binding AppVersionText}" FontSize="11.5" Foreground="{StaticResource TextTertiaryBrush}" Margin="16,10,0,0" />
                     </StackPanel>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
@@ -132,9 +165,19 @@
                         <RadioButton Content="Overview" Tag="&#xE80F;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Dashboard}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Dashboard" />
-                        <RadioButton Content="Game Monitor" Tag="&#xE7FC;" GroupName="nav" Style="{StaticResource NavTabButton}"
-                                     IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=GameMonitor}"
-                                     Command="{Binding SwitchTabCommand}" CommandParameter="GameMonitor" />
+                        <Grid>
+                            <RadioButton Content="Game Monitor" Tag="&#xE7FC;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                                         IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=GameMonitor}"
+                                         Command="{Binding SwitchTabCommand}" CommandParameter="GameMonitor" />
+                            <!-- recording indicator -->
+                            <Border HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" Style="{StaticResource Pill}" Background="{StaticResource RedSoftBrush}" BorderBrush="{StaticResource RedEdgeBrush}"
+                                    Padding="7,1,8,2" IsHitTestVisible="False" Visibility="{Binding GameMonitor.IsMonitoring, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" Fill="{StaticResource AccentRedBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                    <TextBlock Text="REC" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource AccentRedBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                         <TextBlock Text="DIAGNOSE" Style="{StaticResource SectionLabel}" Foreground="{StaticResource TextTertiaryBrush}" Margin="16,18,0,6" />
                         <RadioButton Content="Targets &amp; probes" Tag="&#xEC05;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Monitoring}"
@@ -164,7 +207,7 @@
             </Border>
 
             <!-- Tab Content Switcher -->
-            <Grid Grid.Column="1" Margin="32,26,32,22">
+            <Grid Grid.Column="1" Margin="32,26,32,22" MaxWidth="1440">
 
                 <!-- TAB 1: OVERVIEW / DASHBOARD -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -180,9 +223,8 @@
                             </Style>
                         </StackPanel.Style>
 
-                        <!-- Big Diagnostic Status Banner -->
-                        <Border CornerRadius="10" Padding="20,16" Margin="0,0,0,20" BorderThickness="1"
-                                Background="{StaticResource BgCardBrush}" BorderBrush="{Binding StatusBrush}">
+                        <!-- Status hero: tinted by the overall verdict -->
+                        <Border CornerRadius="14" Padding="22,20" Margin="0,0,0,16" BorderThickness="1" Background="{Binding StatusSoftBrush}" BorderBrush="{Binding StatusEdgeBrush}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -190,93 +232,44 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="24" Background="{Binding StatusBrush}" Margin="0,0,16,0">
-                                    <TextBlock Text="●" FontSize="28" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Border Width="52" Height="52" CornerRadius="26" Background="{Binding StatusBrush}" VerticalAlignment="Top">
+                                    <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource IconFont}" FontSize="23" Foreground="{StaticResource BgDarkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
 
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="CONNECTION STATUS: " FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="{Binding StatusCategory}" FontWeight="SemiBold" FontSize="13.5" Foreground="{Binding StatusBrush}" />
+                                        <TextBlock Text="Connection status" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <Border Style="{StaticResource Pill}" Margin="10,0,0,0" Background="Transparent" BorderBrush="{Binding StatusBrush}">
+                                            <TextBlock Text="{Binding StatusCategory}" FontSize="12" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" TextWrapping="NoWrap" />
+                                        </Border>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding StatusHeadline}" FontSize="21" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,2" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding LikelyCause}" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    <TextBlock Text="{Binding StatusHeadline}" FontSize="22" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,8,0,4" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding LikelyCause}" FontSize="14" LineHeight="20" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
                                 </StackPanel>
 
-                                <Border Grid.Column="2" Background="{StaticResource BgInputBrush}" CornerRadius="8" Padding="14,10" VerticalAlignment="Center" Margin="16,0,0,0">
+                                <Border Grid.Column="2" Background="#33000000" CornerRadius="10" Padding="16,12" VerticalAlignment="Center" Margin="20,0,0,0" MaxWidth="300">
                                     <StackPanel>
-                                        <TextBlock Text="Recommended Action" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="{Binding RecommendedAction}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" MaxWidth="260" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE82F;" /><Run Text="  Recommended next step" /></TextBlock>
+                                        <TextBlock Text="{Binding RecommendedAction}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="19" />
                                     </StackPanel>
                                 </Border>
                             </Grid>
                         </Border>
 
-                        <!-- Metric Cards Grid -->
-                        <UniformGrid Columns="4" Margin="0,0,0,20">
-                            <!-- Card 1: Internet Latency -->
-                            <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="Reference ping" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="7,2,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextTertiaryBrush}" Cursor="Help" ToolTip="{Binding TipLatency}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
-                                        <TextBlock Text="{Binding QuickInternetLatency, StringFormat='{}{0:F1}'}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        <TextBlock Text=" ms" FontSize="15" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="2,0,0,4" />
-                                    </StackPanel>
-                                    <TextBlock Text="Typical ping to public servers (not a game server)" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Card 2: Jitter -->
-                            <Border Style="{StaticResource CardPanel}" Margin="8,0,8,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Latency variation" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="7,2,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextTertiaryBrush}" Cursor="Help" ToolTip="{Binding TipVariation}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
-                                        <TextBlock Text="{Binding QuickJitter, StringFormat='{}{0:F1}'}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        <TextBlock Text=" ms" FontSize="15" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="2,0,0,4" />
-                                    </StackPanel>
-                                    <TextBlock Text="How much ping swings, last 60 s" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Card 3: Packet Loss -->
-                            <Border Style="{StaticResource CardPanel}" Margin="8,0,8,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Probe loss" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="7,2,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextTertiaryBrush}" Cursor="Help" ToolTip="{Binding TipLoss}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
-                                        <TextBlock Text="{Binding QuickPacketLoss, StringFormat='{}{0:F1}'}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        <TextBlock Text=" %" FontSize="15" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="2,0,0,4" />
-                                    </StackPanel>
-                                    <TextBlock Text="Unanswered test messages, last 60 s" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Card 4: Local Gateway -->
-                            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Your router" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="7,2,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextTertiaryBrush}" Cursor="Help" ToolTip="{Binding TipRouter}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
-                                        <TextBlock Text="{Binding QuickGatewayLatency, StringFormat='{}{0:F1}'}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        <TextBlock Text=" ms" FontSize="15" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="2,0,0,4" />
-                                    </StackPanel>
-                                    <TextBlock Text="PC to router (first step)" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                </StackPanel>
-                            </Border>
+                        <!-- Headline numbers -->
+                        <UniformGrid Columns="4" Margin="0,0,0,16">
+                            <controls:StatTile Margin="0,0,8,0" Label="Reference ping" Glyph="&#xE774;" Unit="ms" Info="{Binding TipLatency}"
+                                               Value="{Binding QuickInternetLatency, StringFormat={}{0:F1}}" Caption="Typical ping to public servers (not a game server)" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Latency variation" Glyph="&#xE9D2;" Unit="ms" Info="{Binding TipVariation}" Accent="#A78BFA"
+                                               Value="{Binding QuickJitter, StringFormat={}{0:F1}}" Caption="How much ping swings, last 60 s" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Probe loss" Glyph="&#xE711;" Unit="%" Info="{Binding TipLoss}" Accent="#F472B6"
+                                               Value="{Binding QuickPacketLoss, StringFormat={}{0:F1}}" Caption="Test messages with no reply, last 60 s" />
+                            <controls:StatTile Margin="8,0,0,0" Label="Your router" Glyph="&#xE968;" Unit="ms" Info="{Binding TipRouter}" Accent="#2DD4BF"
+                                               Value="{Binding QuickGatewayLatency, StringFormat={}{0:F1}}" Caption="This PC to your router (the first step)" />
                         </UniformGrid>
 
                         <!-- Live graph of the last few minutes -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,20">
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
@@ -284,8 +277,8 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="PING OVER TIME" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="Hover the graph to read exact values." FontSize="12.5" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,2,0,0" />
+                                        <TextBlock Text="Ping over time" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Your router and the public reference servers. Hover the graph to read exact values." Style="{StaticResource CardSubtitle}" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" Width="170" ItemsSource="{Binding LiveWindows}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                               SelectedValue="{Binding LiveMinutes, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Graph time range" />
@@ -310,81 +303,104 @@
                         </Border>
 
                         <!-- Game + latest event: what is being watched and what happened last -->
-                        <UniformGrid Columns="2" Margin="0,0,0,20">
+                        <UniformGrid Columns="2" Margin="0,0,0,16">
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0">
-                                <StackPanel>
-                                    <TextBlock Text="GAME MONITOR" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding GameCardTitle}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,6,0,2" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding GameCardDetail}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
-                                    <Button Content="Open Game Monitor" Command="{Binding SwitchTabCommand}" CommandParameter="GameMonitor" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5" HorizontalAlignment="Left" Margin="0,10,0,0" />
-                                </StackPanel>
-                            </Border>
-                            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0">
-                                <StackPanel>
-                                    <TextBlock Text="LATEST ISSUE" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding LatestEventText}" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,6,0,2" TextWrapping="Wrap" />
-                                    <Button Content="Open event timeline" Command="{Binding SwitchTabCommand}" CommandParameter="Events" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5" HorizontalAlignment="Left" Margin="0,10,0,0" />
-                                </StackPanel>
-                            </Border>
-                        </UniformGrid>
-
-                        <!-- Network Path Chain Visualization -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,20">
-                            <StackPanel>
-                                <TextBlock Text="WHAT NETPULSE MEASURES, STEP BY STEP" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,2" />
-                                <TextBlock Text="Each box is a measurement NetPulse makes. The internet box uses public reference servers, not your game's servers." FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-
-                                    <!-- Step 1: PC -->
-                                    <Border Grid.Column="0" Background="{StaticResource BgInputBrush}" CornerRadius="8" Padding="12,10">
-                                        <StackPanel HorizontalAlignment="Center">
-                                            <TextBlock FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"><Run FontFamily="{StaticResource IconFont}" Text="&#xE839;" Foreground="{StaticResource AccentBlueHoverBrush}" /><Run Text="  This PC" /></TextBlock>
-                                            <TextBlock Text="{Binding ActiveNic.Ipv4Address}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding AdapterStatusText}" FontSize="12" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                                        </StackPanel>
+                                    <Border Width="40" Height="40" CornerRadius="10" Background="{StaticResource BlueSoftBrush}" VerticalAlignment="Top" Margin="0,0,14,0">
+                                        <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{StaticResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
-
-                                    <TextBlock Grid.Column="1" Text="→" FontSize="18" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0" />
-
-                                    <!-- Step 2: Home Router -->
-                                    <Border Grid.Column="2" Background="{StaticResource BgInputBrush}" CornerRadius="8" Padding="12,10">
-                                        <StackPanel HorizontalAlignment="Center">
-                                            <TextBlock FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"><Run FontFamily="{StaticResource IconFont}" Text="&#xEC05;" Foreground="{StaticResource AccentBlueHoverBrush}" /><Run Text="  Home Router" /></TextBlock>
-                                            <TextBlock Text="{Binding ActiveNic.Ipv4Gateway}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding QuickGatewayLatency, StringFormat='{}{0:F1} ms'}" FontSize="12" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                                        </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Game Monitor" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
+                                        <TextBlock Text="{Binding GameCardTitle}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,3,0,2" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding GameCardDetail}" FontSize="13" LineHeight="18" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                        <Button Content="Open Game Monitor" Command="{Binding SwitchTabCommand}" CommandParameter="GameMonitor" Style="{StaticResource OutlineButton}" Padding="12,5" MinHeight="32" FontSize="12.5" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="40" Height="40" CornerRadius="10" Background="{StaticResource AmberSoftBrush}" VerticalAlignment="Top" Margin="0,0,14,0">
+                                        <TextBlock Text="&#xE8FD;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{StaticResource AccentAmberBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Latest issue" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
+                                        <TextBlock Text="{Binding LatestEventText}" FontSize="13.5" LineHeight="19" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,3,0,2" TextWrapping="Wrap" />
+                                        <Button Content="Open event timeline" Command="{Binding SwitchTabCommand}" CommandParameter="Events" Style="{StaticResource OutlineButton}" Padding="12,5" MinHeight="32" FontSize="12.5" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </UniformGrid>
 
-                                    <TextBlock Grid.Column="3" Text="→" FontSize="18" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0" />
+                        <!-- The measurement chain -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="What NetPulse measures, step by step" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="Each step is a separate measurement. If the router is slow, the problem is in your home; if only the internet step is slow, it is further away. The internet step uses public reference servers, not your game's servers."
+                                           Style="{StaticResource CardSubtitle}" Margin="0,3,0,18" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="0.6*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="0.6*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="0.6*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
 
-                                    <!-- Step 3: ISP & Internet -->
-                                    <Border Grid.Column="4" Background="{StaticResource BgInputBrush}" CornerRadius="8" Padding="12,10">
-                                        <StackPanel HorizontalAlignment="Center">
-                                            <TextBlock FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"><Run FontFamily="{StaticResource IconFont}" Text="&#xE774;" Foreground="{StaticResource AccentBlueHoverBrush}" /><Run Text="  Internet" /></TextBlock>
-                                            <TextBlock Text="Public reference servers" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding QuickInternetLatency, StringFormat='{}{0:F1} ms'}" FontSize="12" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                                        </StackPanel>
-                                    </Border>
+                                    <StackPanel Grid.Column="0">
+                                        <Border Style="{StaticResource ChainNodeIcon}"><TextBlock Text="&#xE7F8;" FontFamily="{StaticResource IconFont}" FontSize="19" Foreground="{StaticResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Text="This PC" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,10,0,0" />
+                                        <TextBlock Text="{Binding ActiveNic.Ipv4Address}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding AdapterStatusText}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" Style="{StaticResource ChainConnector}">
+                                        <Border Height="2" Background="{StaticResource BorderStrongBrush}" CornerRadius="1" VerticalAlignment="Center" />
+                                        <Border Background="{StaticResource BgCardBrush}" HorizontalAlignment="Center" Padding="4,0">
+                                            <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+                                        </Border>
+                                    </Grid>
 
-                                    <TextBlock Grid.Column="5" Text="→" FontSize="18" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0" />
+                                    <StackPanel Grid.Column="2">
+                                        <Border Style="{StaticResource ChainNodeIcon}"><TextBlock Text="&#xE968;" FontFamily="{StaticResource IconFont}" FontSize="19" Foreground="{StaticResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Text="Home router" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,10,0,0" />
+                                        <TextBlock Text="{Binding ActiveNic.Ipv4Gateway}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding QuickGatewayLatency, StringFormat='{}{0:F1} ms'}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" Typography.NumeralAlignment="Tabular" />
+                                    </StackPanel>
+                                    <Grid Grid.Column="3" Style="{StaticResource ChainConnector}">
+                                        <Border Height="2" Background="{StaticResource BorderStrongBrush}" CornerRadius="1" VerticalAlignment="Center" />
+                                        <Border Background="{StaticResource BgCardBrush}" HorizontalAlignment="Center" Padding="4,0">
+                                            <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+                                        </Border>
+                                    </Grid>
 
-                                    <!-- Step 4: DNS -->
-                                    <Border Grid.Column="6" Background="{StaticResource BgInputBrush}" CornerRadius="8" Padding="12,10">
-                                        <StackPanel HorizontalAlignment="Center">
-                                            <TextBlock FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"><Run FontFamily="{StaticResource IconFont}" Text="&#xE721;" Foreground="{StaticResource AccentBlueHoverBrush}" /><Run Text="  DNS lookups" /></TextBlock>
-                                            <TextBlock Text="Turning names into addresses" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding QuickDnsLatency, StringFormat='{}{0:F1} ms'}" FontSize="12" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                                        </StackPanel>
-                                    </Border>
+                                    <StackPanel Grid.Column="4">
+                                        <Border Style="{StaticResource ChainNodeIcon}"><TextBlock Text="&#xE774;" FontFamily="{StaticResource IconFont}" FontSize="19" Foreground="{StaticResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Text="Internet" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,10,0,0" />
+                                        <TextBlock Text="Public reference servers" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" TextAlignment="Center" />
+                                        <TextBlock Text="{Binding QuickInternetLatency, StringFormat='{}{0:F1} ms'}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" Typography.NumeralAlignment="Tabular" />
+                                    </StackPanel>
+                                    <Grid Grid.Column="5" Style="{StaticResource ChainConnector}">
+                                        <Border Height="2" Background="{StaticResource BorderStrongBrush}" CornerRadius="1" VerticalAlignment="Center" />
+                                        <Border Background="{StaticResource BgCardBrush}" HorizontalAlignment="Center" Padding="4,0">
+                                            <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+                                        </Border>
+                                    </Grid>
+
+                                    <StackPanel Grid.Column="6">
+                                        <Border Style="{StaticResource ChainNodeIcon}"><TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="19" Foreground="{StaticResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Text="DNS lookups" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,10,0,0" />
+                                        <TextBlock Text="Names into addresses" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" TextAlignment="Center" />
+                                        <TextBlock Text="{Binding QuickDnsLatency, StringFormat='{}{0:F1} ms'}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" Typography.NumeralAlignment="Tabular" />
+                                    </StackPanel>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -392,15 +408,14 @@
                         <!-- Advanced mode: full diagnostic evidence -->
                         <Border Style="{StaticResource CardPanel}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Text="MEASURED EVIDENCE &amp; DIAGNOSTIC INTERPRETATION" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8" />
+                                <TextBlock Text="Measured evidence behind the verdict" Style="{StaticResource CardTitle}" Margin="0,0,0,10" />
                                 <TextBlock Text="{Binding EvidenceSummary}" FontSize="14" LineHeight="20" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
 
                         <!-- Beginner mode: short pointer instead of raw evidence -->
-                        <Border Style="{StaticResource CardPanel}" Visibility="{Binding IsBeginnerMode, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="Want the numbers behind this verdict? Switch to Advanced mode (top right) to see the full measured evidence, protocols, jitter and route detail." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
-                        </Border>
+                        <controls:Callout Kind="Info" Visibility="{Binding IsBeginnerMode, Converter={StaticResource BoolToVis}}"
+                                          Title="Want the numbers behind this verdict?" Text="Switch to Advanced (top right) to see the measured evidence, protocols, jitter and route detail." />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -418,9 +433,8 @@
                     </ScrollViewer.Style>
 
                     <StackPanel DataContext="{Binding GameMonitor}">
-                        <TextBlock Text="Game Monitor" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Watches a game on this PC, lists the network connections the game process has open, and records how your connection behaves while you play. Nothing leaves your PC."
-                                   FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,14" TextWrapping="Wrap" />
+                        <controls:PageHeader Title="Game Monitor" Glyph="&#xE7FC;"
+                                             Subtitle="Watches a game on this PC, lists the connections its process opens, and records how your connection behaves while you play. Nothing leaves your PC." />
 
                         <!-- Game selection + process status -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
@@ -432,10 +446,10 @@
                                     </Grid.ColumnDefinitions>
                                     <ComboBox Grid.Column="0" Width="300" ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
                                               DisplayMemberPath="Display" IsEnabled="{Binding IsIdle}" VerticalAlignment="Center" />
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                                        <Ellipse Width="10" Height="10" Fill="{Binding ProcessBrush}" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding ProcessStatus}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
-                                    </StackPanel>
+                                    <DockPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                        <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{Binding ProcessBrush}" Margin="0,5,10,0" VerticalAlignment="Top" />
+                                        <TextBlock Text="{Binding ProcessStatus}" FontSize="14" FontWeight="SemiBold" LineHeight="19" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                    </DockPanel>
                                 </Grid>
                                 <TextBlock Text="{Binding ProfileSummary}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -452,50 +466,75 @@
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="Start monitoring" Command="{Binding StartCommand}" Padding="16,8" />
+                                    <Button Command="{Binding StartCommand}" Padding="16,8" AutomationProperties.Name="Start monitoring">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Start monitoring" /></StackPanel>
+                                    </Button>
                                     <Button Content="Stop &amp; save" Command="{Binding StopCommand}" Style="{StaticResource OutlineButton}" Padding="16,8" Margin="8,0,0,0" />
-                                    <Button Content="Mark lag" Command="{Binding MarkLagCommand}" Style="{StaticResource OutlineButton}" Padding="16,8" Margin="8,0,0,0"
-                                            ToolTip="Press when you notice lag so it can be matched against the measurements" />
-                                    <Button Content="Open sessions folder" Command="{Binding OpenSessionsFolderCommand}" Style="{StaticResource OutlineButton}" Padding="16,8" Margin="8,0,0,0" />
-                                    <TextBlock VerticalAlignment="Center" Margin="18,0,0,0" FontWeight="SemiBold" FontSize="14">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value="Not monitoring" />
-                                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                    <Button Command="{Binding MarkLagCommand}" Style="{StaticResource OutlineButton}" Padding="16,8" Margin="8,0,0,0" AutomationProperties.Name="Mark lag"
+                                            ToolTip="Press when you notice lag so it can be matched against the measurements">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7C1;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource AccentAmberBrush}" /><TextBlock Text="Mark lag" /></StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding OpenSessionsFolderCommand}" Style="{StaticResource GhostButton}" Padding="12,8" Margin="4,0,0,0" ToolTip="Open the folder where recordings are saved" AutomationProperties.Name="Open sessions folder">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE838;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextSecondaryBrush}" /><TextBlock Text="Open folder" /></StackPanel>
+                                    </Button>
+                                    <Border Margin="16,0,0,0">
+                                        <Border.Style>
+                                            <Style TargetType="Border" BasedOn="{StaticResource Pill}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
-                                                        <Setter Property="Text" Value="● MONITORING" />
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}" />
+                                                        <Setter Property="Background" Value="{StaticResource RedSoftBrush}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource RedEdgeBrush}" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding Elapsed, StringFormat='  Elapsed {0}'}" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" />
+                                        </Border.Style>
+                                        <TextBlock FontWeight="SemiBold" FontSize="12.5" TextWrapping="NoWrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="Not recording" />
+                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
+                                                            <Setter Property="Text" Value="● RECORDING" />
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                    <TextBlock Text="{Binding Elapsed}" VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="12,0,0,0" Typography.NumeralAlignment="Tabular" ToolTip="Time recorded" />
                                 </StackPanel>
-                                <TextBlock Text="{Binding ActionMessage}" FontSize="13.5" Foreground="{StaticResource AccentBlueBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding SessionMessage}" FontSize="13.5" Foreground="{StaticResource AccentGreenBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding ActionMessage}" Style="{StaticResource MessageText}" Foreground="{StaticResource AccentBlueHoverBrush}" Margin="0,12,0,0" />
+                                <controls:Callout Kind="Success" Text="{Binding SessionMessage}" Margin="0,12,0,0">
+                                    <controls:Callout.Style>
+                                        <Style TargetType="controls:Callout" BasedOn="{StaticResource {x:Type controls:Callout}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SessionMessage}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </controls:Callout.Style>
+                                </controls:Callout>
                                 <Button Content="Open this recording" Command="{Binding OpenRecordingCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5"
                                         HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="{Binding IsEnabled, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToVis}}" />
-                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,10" />
+                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,14" />
                                 <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AutoRecord, Mode=TwoWay}"
                                           Content="Record automatically: start when the game starts, save when it closes" />
-                                <TextBlock Text="{Binding MarkLagShortcutText}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding WarningText}" FontSize="13.5" Foreground="{StaticResource AccentAmberBrush}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                           Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Margin="52,4,0,0" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"><Run FontFamily="{StaticResource IconFont}" Text="&#xE765;" /><Run Text="  " /><Run Text="{Binding MarkLagShortcutText, Mode=OneWay}" /></TextBlock>
+                                <controls:Callout Kind="Warning" Text="{Binding WarningText}" Margin="0,10,0,0" Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Border>
 
                         <!-- Game connections -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="CONNECTIONS OPENED BY THE GAME" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock Text="Connections opened by the game" Style="{StaticResource CardTitle}" />
                                 <TextBlock Text="Every address is labelled 'Unknown role': a game also talks to login, matchmaking, telemetry, voice and download services, so none of these is assumed to be the match server."
-                                           FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,8" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding EndpointSummary}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6" TextWrapping="Wrap" />
+                                           Style="{StaticResource CardSubtitle}" />
+                                <TextBlock Text="{Binding EndpointSummary}" Style="{StaticResource MessageText}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10" />
                                 <Grid>
                                     <DataGrid ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedConnection, Mode=TwoWay}" IsReadOnly="True"
-                                              AutoGenerateColumns="False" SelectionMode="Single" MaxHeight="260" MinHeight="60">
+                                              AutoGenerateColumns="False" SelectionMode="Single" MaxHeight="300" MinHeight="170">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="70" />
                                             <DataGridTextColumn Header="Remote endpoint" Binding="{Binding Remote}" Width="200" />
@@ -509,8 +548,8 @@
                                             <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60" />
                                         </DataGrid.Columns>
                                     </DataGrid>
-                                    <TextBlock Text="{Binding ConnectionsEmptyText}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"
-                                               TextWrapping="Wrap" Margin="20,0,20,8" VerticalAlignment="Bottom" Visibility="{Binding ShowConnectionsEmptyText, Converter={StaticResource BoolToVis}}" IsHitTestVisible="False" />
+                                    <controls:EmptyState Glyph="&#xE7FC;" Title="No connections yet" Text="{Binding ConnectionsEmptyText}" Margin="20,40,20,0"
+                                                         Visibility="{Binding ShowConnectionsEmptyText, Converter={StaticResource BoolToVis}}" />
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                     <Button Content="Measure selected with ICMP ping" Command="{Binding MeasureIcmpCommand}" Padding="12,6" FontSize="12.5" />
@@ -523,7 +562,7 @@
                         <!-- Measured endpoints -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="ENDPOINTS BEING MEASURED (CHOSEN BY YOU)" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <TextBlock Text="Endpoints you chose to measure" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
                                 <Grid>
                                     <DataGrid ItemsSource="{Binding MeasuredEndpoints}" SelectedItem="{Binding SelectedMeasured, Mode=TwoWay}" IsReadOnly="True"
                                               AutoGenerateColumns="False" SelectionMode="Single" MaxHeight="180" MinHeight="50">
@@ -545,8 +584,8 @@
                         <!-- Reference measurements -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="REFERENCE MEASUREMENTS (NOT GAME-SERVER PING)" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,2" />
-                                <TextBlock Text="{Binding MeasurementNote}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" TextWrapping="Wrap" />
+                                <TextBlock Text="Reference measurements (not game-server ping)" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="{Binding MeasurementNote}" Style="{StaticResource CardSubtitle}" />
                                 <DataGrid ItemsSource="{Binding ReferenceTargets}" IsReadOnly="True" AutoGenerateColumns="False" MaxHeight="220">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Target" Binding="{Binding Name}" Width="190" />
@@ -563,13 +602,12 @@
                         <!-- Findings -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="WHAT THE MEASUREMENTS SUGGEST" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,2" />
-                                <TextBlock Text="These are possibilities backed by measurements, not verdicts. Each shows how confident NetPulse is and what to test next."
-                                           FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                <TextBlock Text="What the measurements suggest" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="Possibilities backed by measurements, not verdicts. Each shows how confident NetPulse is and what to test next." Style="{StaticResource CardSubtitle}" />
                                 <ItemsControl ItemsSource="{Binding Findings}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="{Binding Brush}" BorderThickness="3,0,0,0" Background="{StaticResource BgSidebarBrush}" Padding="12,8" Margin="0,0,0,8" CornerRadius="4">
+                                            <Border BorderBrush="{Binding Brush}" BorderThickness="3,0,0,0" Background="{StaticResource BgInputBrush}" Padding="14,10" Margin="0,0,0,8" CornerRadius="6">
                                                 <StackPanel>
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
@@ -592,7 +630,7 @@
                         <!-- Timeline -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="SESSION TIMELINE" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <TextBlock Text="Session timeline" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
                                 <DataGrid RowHeight="NaN" MinRowHeight="40" ItemsSource="{Binding Timeline}" IsReadOnly="True" AutoGenerateColumns="False" MaxHeight="260" MinHeight="50">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, Converter={StaticResource LocalTime}}" Width="80" />
@@ -624,15 +662,13 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
-                        <TextBlock Text="Targets and probes" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="NetPulse tests your router and several independent public servers about once a second. These are reference targets for judging your connection in general - they are not your game's servers." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
-                    </StackPanel>
+                    <controls:PageHeader Grid.Row="0" Title="Targets &amp; probes" Glyph="&#xEC05;"
+                                         Subtitle="Your router and several independent public servers, tested about once a second. They judge your connection in general; they are not your game's servers." />
 
                     <DataGrid Grid.Row="1" ItemsSource="{Binding Targets}">
                         <DataGrid.Columns>
                             <!-- Target Name -->
-                            <DataGridTemplateColumn Header="Target Endpoint" Width="220">
+                            <DataGridTemplateColumn Header="Target" Width="240">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -681,7 +717,7 @@
                             <DataGridTextColumn Header="Loss (last 60 s)" Binding="{Binding LossDisplay}" Width="150" />
 
                             <!-- Sparkline Chart -->
-                            <DataGridTemplateColumn Header="Real-time History" Width="*">
+                            <DataGridTemplateColumn Header="Recent history" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <controls:SparklineChart Values="{Binding ChartValues}" LineBrush="{Binding StatusBrush}" Height="28" Margin="4,2" />
@@ -712,13 +748,11 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
-                        <TextBlock Text="Route trace" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Lists each device (hop) your data passes through. A hop that looks slow or lossy only matters if the hops after it are slow too; many routers simply ignore probes." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
-                    </StackPanel>
+                    <controls:PageHeader Grid.Row="0" Title="Route trace" Glyph="&#xE774;"
+                                         Subtitle="Each device (hop) your data passes through. A slow or lossy hop only matters if the hops after it are slow too; many routers simply ignore probes." />
 
                     <!-- MTR Target Input Bar -->
-                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Padding="12,8" Margin="0,0,0,12">
+                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Padding="12,10" Margin="0,0,0,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -728,8 +762,8 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="0" Text="Trace to:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" Foreground="{StaticResource TextSecondaryBrush}" />
-                            <TextBox Grid.Column="1" Text="{Binding MtrDestination, UpdateSourceTrigger=PropertyChanged}" Background="{StaticResource BgInputBrush}" Foreground="White" BorderBrush="{StaticResource BorderBrush}" Padding="8,4" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="0" Text="Trace to" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13.5" Margin="4,0,12,0" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Grid.Column="1" Text="{Binding MtrDestination, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" ToolTip="An IP address or host name" AutomationProperties.Name="Trace destination" />
 
                             <Button Grid.Column="2" Content="Start trace" Command="{Binding StartMtrCommand}" Margin="10,0,6,0" />
                             <Button Grid.Column="3" Content="Stop" Style="{StaticResource OutlineButton}" Command="{Binding StopMtrCommand}" />
@@ -774,9 +808,8 @@
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <TextBlock Grid.Row="2" Text="No trace yet. Press Start trace to follow the path to the address above." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}"
-                               HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,56,0,0" IsHitTestVisible="False"
-                               Visibility="{Binding HasNoHops, Converter={StaticResource BoolToVis}}" />
+                    <controls:EmptyState Grid.Row="2" Glyph="&#xE774;" Title="No trace yet" Text="Press Start trace to follow the path to the address above, hop by hop."
+                                         Visibility="{Binding HasNoHops, Converter={StaticResource BoolToVis}}" />
 
                     <!-- Route Anomalies & Path Comparison -->
                     <Border Grid.Row="3" Style="{StaticResource CardPanel}" Margin="0,12,0,0">
@@ -789,7 +822,9 @@
 
                             <!-- Left: Route Anomalies -->
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="ROUTE ANOMALIES &amp; HOP ANALYSIS" FontWeight="SemiBold" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <TextBlock Text="What stands out on this route" Style="{StaticResource CardTitle}" FontSize="15" Margin="0,0,0,8" />
+                                <TextBlock Text="Run a trace: hops that add delay or lose probes, and whether that carries on to the destination, are listed here." Style="{StaticResource CaptionText}"
+                                           Visibility="{Binding HasNoHops, Converter={StaticResource BoolToVis}}" />
                                 <ItemsControl ItemsSource="{Binding RouteAnomalies}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -803,12 +838,13 @@
 
                             <!-- Right: Path Comparison Tool -->
                             <StackPanel Grid.Column="2">
-                                <TextBlock Text="COMPARE DESTINATIONS (DIVERGENCE ANALYSIS)" FontWeight="SemiBold" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBox Text="{Binding PathCompareDestA}" Width="90" Background="{StaticResource BgInputBrush}" Foreground="White" BorderBrush="{StaticResource BorderBrush}" Padding="4,2" />
-                                    <TextBlock Text=" vs " Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0" />
-                                    <TextBox Text="{Binding PathCompareDestB}" Width="90" Background="{StaticResource BgInputBrush}" Foreground="White" BorderBrush="{StaticResource BorderBrush}" Padding="4,2" />
-                                    <Button Content="Compare" Command="{Binding ComparePathsCommand}" Margin="8,0,0,0" Padding="8,4" FontSize="12.5" />
+                                <TextBlock Text="Compare two destinations" Style="{StaticResource CardTitle}" FontSize="15" Margin="0,0,0,2" />
+                                <TextBlock Text="Shows where the two paths split, which tells you how far a shared problem reaches." Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBox Text="{Binding PathCompareDestA}" Width="130" AutomationProperties.Name="First destination" />
+                                    <TextBlock Text="vs" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="10,0" />
+                                    <TextBox Text="{Binding PathCompareDestB}" Width="130" AutomationProperties.Name="Second destination" />
+                                    <Button Content="Compare" Command="{Binding ComparePathsCommand}" Margin="10,0,0,0" />
                                 </StackPanel>
                                 <TextBlock Text="{Binding PathCompareSummary}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
                             </StackPanel>
@@ -830,76 +866,92 @@
                     </ScrollViewer.Style>
 
                     <StackPanel>
-                        <TextBlock Text="Bufferbloat &amp; Latency Under Load Test" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Measures how much ping rises during bandwidth saturation to detect queue bloat on your router. Only the increase under load is graded; the ping target (1.1.1.1) is a public reference address, not a game server." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,4" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding TransferDisclosure}" FontSize="12.5" Foreground="{StaticResource AccentAmberBrush}" Margin="0,0,0,16" TextWrapping="Wrap" />
+                        <controls:PageHeader Title="Bufferbloat test" Glyph="&#xE9D2;"
+                                             Subtitle="How much your ping rises while your connection is busy downloading or uploading. This is the lag you feel when someone else at home starts a big download." />
+                        <controls:Callout Kind="Info" Title="{Binding TransferProviderTitle}" Text="{Binding TransferDisclosure}" Margin="0,0,0,16" />
 
-                        <!-- Runner Card -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,20">
+                        <!-- Runner -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Automated 3-Phase Loaded Latency Evaluation" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        <TextBlock Text="Phase 1: Baseline Ping → Phase 2: Ping during Download → Phase 3: Ping during Upload" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                                    <StackPanel>
+                                        <TextBlock Text="Three short phases, about 30 seconds" Style="{StaticResource CardTitle}" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Border Style="{StaticResource Pill}"><TextBlock Text="1  Ping at rest" FontSize="12.5" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="NoWrap" /></Border>
+                                            <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="8,0" />
+                                            <Border Style="{StaticResource Pill}"><TextBlock Text="2  Ping while downloading" FontSize="12.5" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="NoWrap" /></Border>
+                                            <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="8,0" />
+                                            <Border Style="{StaticResource Pill}"><TextBlock Text="3  Ping while uploading" FontSize="12.5" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="NoWrap" /></Border>
+                                        </StackPanel>
                                     </StackPanel>
-
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="Start Bufferbloat Test" Command="{Binding RunBufferbloatCommand}" Padding="16,8" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Command="{Binding RunBufferbloatCommand}" Padding="16,8" AutomationProperties.Name="Start bufferbloat test">
+                                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Start test" /></StackPanel>
+                                        </Button>
                                         <Button Content="Cancel" Style="{StaticResource OutlineButton}" Command="{Binding CancelBufferbloatCommand}" Padding="16,8" Margin="8,0,0,0"
                                                 Visibility="{Binding IsBufferbloatRunning, Converter={StaticResource BoolToVis}}" />
                                     </StackPanel>
                                 </Grid>
-
-                                <ProgressBar Height="8" Value="{Binding BufferbloatProgress}" Maximum="100" Margin="0,14,0,6" Background="{StaticResource BgInputBrush}" Foreground="{StaticResource AccentBlueBrush}" />
-                                <TextBlock Text="{Binding BufferbloatStatus}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                <ProgressBar Height="6" Value="{Binding BufferbloatProgress}" Maximum="100" Margin="0,18,0,8" />
+                                <Grid>
+                                    <TextBlock Text="{Binding BufferbloatStatus}" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding BufferbloatLiveText}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"
+                                               Visibility="{Binding IsBufferbloatRunning, Converter={StaticResource BoolToVis}}" Typography.NumeralAlignment="Tabular" />
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <!-- Results Card (if completed) -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,20">
+                        <!-- Result -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Padding="24">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Grade Circle -->
-                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="50" Background="{StaticResource BgInputBrush}" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="3" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding LatestBufferbloatResult.Grade, FallbackValue='–'}" FontSize="36" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Center" />
-                                        <TextBlock Text="GRADE" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                <Grid Width="150" Height="150" VerticalAlignment="Top">
+                                    <controls:RingGauge Value="1" Maximum="1" Sweep="360" Thickness="10" Brush="{Binding GradeBrush}" />
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding LatestBufferbloatResult.Grade, FallbackValue='?'}" FontFamily="{StaticResource DisplayFont}" FontSize="46" FontWeight="SemiBold"
+                                                   Foreground="{Binding GradeBrush}" HorizontalAlignment="Center" TextWrapping="NoWrap" />
+                                        <TextBlock Text="Grade" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,-4,0,0" />
                                     </StackPanel>
-                                </Border>
+                                </Grid>
 
-                                <StackPanel Grid.Column="1" Margin="20,0,0,0">
-                                    <TextBlock Text="{Binding LatestBufferbloatResult.Summary, FallbackValue='Run a test to assess your connection under heavy load.'}" FontWeight="SemiBold" FontSize="15.5" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding LatestBufferbloatResult.Explanation, FallbackValue='Bufferbloat happens when routers buffer too many packets during downloads/uploads, causing huge latency spikes.'}" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                <StackPanel Grid.Column="1" Margin="28,0,0,0">
+                                    <TextBlock Text="{Binding LatestBufferbloatResult.Summary, FallbackValue='No result yet'}" FontWeight="SemiBold" FontSize="18" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding LatestBufferbloatResult.Explanation, FallbackValue='Run the test to see how much your ping rises under load. A small rise is normal; a big one means the router is queueing too much.'}" FontSize="14" LineHeight="20" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
 
-                                    <UniformGrid Columns="3" Margin="0,14,0,10">
-                                        <StackPanel>
-                                            <TextBlock Text="Baseline Latency" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Text="{Binding LatestBufferbloatResult.BaselineLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='--'}" FontWeight="SemiBold" FontSize="18" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        </StackPanel>
-                                        <StackPanel>
-                                            <TextBlock Text="Download Loaded Latency" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Text="{Binding LatestBufferbloatResult.DownloadLoadedLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='--'}" FontWeight="SemiBold" FontSize="18" Foreground="{StaticResource AccentAmberBrush}" />
-                                            <TextBlock Text="{Binding LatestBufferbloatResult.DownloadDeltaMs, StringFormat='{}(+{0:F1} ms delta)', FallbackValue=''}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        </StackPanel>
-                                        <StackPanel>
-                                            <TextBlock Text="Upload Loaded Latency" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Text="{Binding LatestBufferbloatResult.UploadLoadedLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='--'}" FontWeight="SemiBold" FontSize="18" Foreground="{StaticResource AccentAmberBrush}" />
-                                            <TextBlock Text="{Binding LatestBufferbloatResult.UploadDeltaMs, StringFormat='{}(+{0:F1} ms delta)', FallbackValue=''}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        </StackPanel>
+                                    <UniformGrid Columns="3" Margin="0,18,0,14">
+                                        <Border Background="{StaticResource BgInputBrush}" CornerRadius="10" Padding="14,12" Margin="0,0,6,0">
+                                            <StackPanel>
+                                                <TextBlock Text="At rest" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
+                                                <TextBlock Text="{Binding LatestBufferbloatResult.BaselineLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='-'}" Style="{StaticResource BigNumber}" FontSize="22" Margin="0,4,0,0" />
+                                                <TextBlock Text="baseline ping" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="{StaticResource BgInputBrush}" CornerRadius="10" Padding="14,12" Margin="6,0,6,0">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE896;" /><Run Text="  Downloading" /></TextBlock>
+                                                <TextBlock Text="{Binding LatestBufferbloatResult.DownloadLoadedLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='-'}" Style="{StaticResource BigNumber}" FontSize="22" Margin="0,4,0,0" />
+                                                <TextBlock Text="{Binding LatestBufferbloatResult.DownloadDeltaMs, StringFormat='{}+{0:F1} ms over rest', FallbackValue=' '}" FontSize="12" Foreground="{StaticResource AccentAmberBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="{StaticResource BgInputBrush}" CornerRadius="10" Padding="14,12" Margin="6,0,0,0">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE898;" /><Run Text="  Uploading" /></TextBlock>
+                                                <TextBlock Text="{Binding LatestBufferbloatResult.UploadLoadedLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='-'}" Style="{StaticResource BigNumber}" FontSize="22" Margin="0,4,0,0" />
+                                                <TextBlock Text="{Binding LatestBufferbloatResult.UploadDeltaMs, StringFormat='{}+{0:F1} ms over rest', FallbackValue=' '}" FontSize="12" Foreground="{StaticResource AccentAmberBrush}" />
+                                            </StackPanel>
+                                        </Border>
                                     </UniformGrid>
 
-                                    <Border Background="{StaticResource BgInputBrush}" CornerRadius="6" Padding="12,8" Margin="0,6,0,0">
-                                        <TextBlock Text="{Binding LatestBufferbloatResult.Recommendation, StringFormat='Recommendation: {0}', FallbackValue='Recommendation: Run test to evaluate.'}" FontSize="13.5" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" />
-                                    </Border>
+                                    <controls:Callout Kind="Success" Title="Recommendation" Text="{Binding LatestBufferbloatResult.Recommendation}"
+                                                      Visibility="{Binding HasBufferbloatResult, Converter={StaticResource BoolToVis}}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -920,60 +972,63 @@
                     </ScrollViewer.Style>
 
                     <StackPanel>
-                        <TextBlock Text="Bandwidth &amp; Throughput Measurement" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Multi-stream download and upload throughput benchmark." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,4" />
-                        <TextBlock Text="{Binding TransferDisclosure}" FontSize="12.5" Foreground="{StaticResource AccentAmberBrush}" Margin="0,0,0,16" TextWrapping="Wrap" />
+                        <controls:PageHeader Title="Speed test" Glyph="&#xEC4A;"
+                                             Subtitle="Download and upload throughput over several parallel streams. Speed matters for downloads and streaming; for games, steady ping matters far more." />
+                        <controls:Callout Kind="Info" Title="{Binding TransferProviderTitle}" Text="{Binding TransferDisclosure}" Margin="0,0,0,16" />
 
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,20">
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource AccentAmberBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE7BA;" Foreground="{StaticResource AccentAmberBrush}" /><Run Text="  Bandwidth Warning" /></TextBlock>
-                                        <TextBlock Text="This test transfers large volumes of data for ~10 seconds. Do not run continuously." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                                    <StackPanel>
+                                        <TextBlock Text="About 10 seconds of heavy traffic" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Run it once in a while, not continuously, and not while you are playing: it fills your connection on purpose." Style="{StaticResource CaptionText}" FontSize="13" Margin="0,4,0,0" />
                                     </StackPanel>
-
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="Run Speed Test" Command="{Binding RunSpeedTestCommand}" Padding="16,8" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Command="{Binding RunSpeedTestCommand}" Padding="16,8" AutomationProperties.Name="Run speed test">
+                                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Run speed test" /></StackPanel>
+                                        </Button>
                                         <Button Content="Cancel" Style="{StaticResource OutlineButton}" Command="{Binding CancelSpeedTestCommand}" Padding="16,8" Margin="8,0,0,0"
                                                 Visibility="{Binding IsSpeedTestRunning, Converter={StaticResource BoolToVis}}" />
                                     </StackPanel>
                                 </Grid>
-
-                                <ProgressBar Height="8" Value="{Binding SpeedTestProgress}" Maximum="100" Margin="0,14,0,6" Background="{StaticResource BgInputBrush}" Foreground="{StaticResource AccentGreenBrush}" />
-                                <TextBlock Text="{Binding SpeedTestStatus}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                <ProgressBar Height="6" Value="{Binding SpeedTestProgress}" Maximum="100" Margin="0,18,0,8" Foreground="{StaticResource AccentGreenBrush}" />
+                                <TextBlock Text="{Binding SpeedTestStatus}" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" />
                             </StackPanel>
                         </Border>
 
-                        <UniformGrid Columns="2" Margin="0,0,0,20">
-                            <!-- Download Speed Card -->
-                            <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0">
-                                <StackPanel HorizontalAlignment="Center" Margin="0,10">
-                                    <TextBlock Text="DOWNLOAD THROUGHPUT" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,4">
-                                        <TextBlock Text="{Binding LatestSpeedTestResult.DownloadSpeedMbps, StringFormat='{}{0:F1}', FallbackValue='--'}" FontSize="42" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" />
-                                        <TextBlock Text=" Mbps" FontSize="18" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="4,0,0,8" />
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding LatestSpeedTestResult.BytesDownloaded, StringFormat='Transferred: {0:N0} bytes', FallbackValue=''}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                        <UniformGrid Columns="2" Margin="0,0,0,16">
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0" Padding="20,22">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"><Run FontFamily="{StaticResource IconFont}" Text="&#xE896;" Foreground="{StaticResource AccentGreenBrush}" /><Run Text="  Download" /></TextBlock>
+                                    <Grid Width="210" Height="190" Margin="0,12,0,0">
+                                        <controls:RingGauge Width="190" Height="190" Value="{Binding DownloadMbps}" Maximum="{Binding SpeedGaugeMax}" Thickness="12" Sweep="270" Brush="{StaticResource AccentGreenBrush}" />
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding DownloadMbps, StringFormat={}{0:F1}}" Style="{StaticResource BigNumber}" FontSize="38" HorizontalAlignment="Center" />
+                                            <TextBlock Text="Mbps" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="{Binding LatestSpeedTestResult.BytesDownloaded, StringFormat='{}{0:N0} bytes transferred', FallbackValue=' '}" FontSize="12.5" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,-14,0,0" />
                                 </StackPanel>
                             </Border>
-
-                            <!-- Upload Speed Card -->
-                            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0">
-                                <StackPanel HorizontalAlignment="Center" Margin="0,10">
-                                    <TextBlock Text="UPLOAD THROUGHPUT" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,4">
-                                        <TextBlock Text="{Binding LatestSpeedTestResult.UploadSpeedMbps, StringFormat='{}{0:F1}', FallbackValue='--'}" FontSize="42" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" />
-                                        <TextBlock Text=" Mbps" FontSize="18" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="4,0,0,8" />
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding LatestSpeedTestResult.BytesUploaded, StringFormat='Transferred: {0:N0} bytes', FallbackValue=''}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0" Padding="20,22">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"><Run FontFamily="{StaticResource IconFont}" Text="&#xE898;" Foreground="{StaticResource AccentBlueHoverBrush}" /><Run Text="  Upload" /></TextBlock>
+                                    <Grid Width="210" Height="190" Margin="0,12,0,0">
+                                        <controls:RingGauge Width="190" Height="190" Value="{Binding UploadMbps}" Maximum="{Binding SpeedGaugeMax}" Thickness="12" Sweep="270" Brush="{StaticResource AccentBlueBrush}" />
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding UploadMbps, StringFormat={}{0:F1}}" Style="{StaticResource BigNumber}" FontSize="38" HorizontalAlignment="Center" />
+                                            <TextBlock Text="Mbps" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="{Binding LatestSpeedTestResult.BytesUploaded, StringFormat='{}{0:N0} bytes transferred', FallbackValue=' '}" FontSize="12.5" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,-14,0,0" />
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
+                        <TextBlock Text="{Binding SpeedGaugeScale}" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -991,77 +1046,83 @@
                     </ScrollViewer.Style>
 
                     <StackPanel>
-                        <TextBlock Text="Active Network Adapter &amp; Interface" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Hardware link status, addressing, and Windows wireless radio details." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,16" />
+                        <controls:PageHeader Title="Adapter &amp; Wi-Fi" Glyph="&#xE839;"
+                                             Subtitle="The network adapter Windows is using right now: link, addresses, router and DNS servers, and Wi-Fi radio details when you are on Wi-Fi." />
 
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <TextBlock Text="HARDWARE INTERFACE" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8" />
-                                    <TextBlock Text="{Binding ActiveNic.Name}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.Description}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,10" />
-
-                                    <TextBlock Text="Type:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.InterfaceType}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8" />
-
-                                    <TextBlock Text="Link Speed:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.SpeedDisplay}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8" />
-
-                                    <TextBlock Text="Operational Status:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.OperationalStatus}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" />
+                        <UniformGrid Columns="2" Margin="0,0,0,16">
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                        <Border Width="40" Height="40" CornerRadius="10" Background="{StaticResource BlueSoftBrush}" Margin="0,0,12,0">
+                                            <TextBlock Text="&#xE839;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{StaticResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding ActiveNic.Name}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <TextBlock Text="{Binding ActiveNic.Description}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="32" /><RowDefinition Height="32" /><RowDefinition Height="32" /></Grid.RowDefinitions>
+                                        <TextBlock Text="Type" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding ActiveNic.InterfaceType}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="1" Text="Link speed" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveNic.SpeedDisplay}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="2" Text="Status" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource Pill}" Background="{StaticResource GreenSoftBrush}" BorderBrush="{StaticResource GreenEdgeBrush}">
+                                            <TextBlock Text="{Binding ActiveNic.OperationalStatus}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="NoWrap" />
+                                        </Border>
+                                    </Grid>
                                 </StackPanel>
+                            </Border>
 
-                                <StackPanel Grid.Column="1">
-                                    <TextBlock Text="IP &amp; ROUTING CONFIGURATION" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8" />
-
-                                    <TextBlock Text="IPv4 Address:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.Ipv4Address}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8" />
-
-                                    <TextBlock Text="IPv4 Subnet Mask:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.Ipv4Subnet}" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8" />
-
-                                    <TextBlock Text="IPv4 Default Gateway:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveNic.Ipv4Gateway}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8" />
-
-                                    <TextBlock Text="Configured DNS Servers:" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <ItemsControl ItemsSource="{Binding ActiveNic.DnsServers}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,1" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Addresses and routing" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="32" /><RowDefinition Height="32" /><RowDefinition Height="32" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                        <TextBlock Text="IPv4 address" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding ActiveNic.Ipv4Address}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="1" Text="Subnet mask" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveNic.Ipv4Subnet}" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="2" Text="Router (gateway)" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActiveNic.Ipv4Gateway}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueHoverBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Row="3" Text="DNS servers" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,7,0,0" />
+                                        <ItemsControl Grid.Row="3" Grid.Column="1" ItemsSource="{Binding ActiveNic.DnsServers}" Margin="0,7,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
                                 </StackPanel>
-                            </Grid>
-                        </Border>
+                            </Border>
+                        </UniformGrid>
 
-                        <!-- Wi-Fi Specific Card -->
+                        <!-- Wi-Fi -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="WI-FI WIRELESS RADIO INFORMATION" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,10" />
-                                <TextBlock Text="{Binding NonWifiNote}" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                <TextBlock Style="{StaticResource CardTitle}" Margin="0,0,0,12"><Run FontFamily="{StaticResource IconFont}" Text="&#xE701;" Foreground="{StaticResource AccentBlueHoverBrush}" /><Run Text="  Wi-Fi radio" /></TextBlock>
+                                <TextBlock Text="{Binding NonWifiNote}" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
                                            Visibility="{Binding ShowEthernetNote, Converter={StaticResource BoolToVis}}" />
                                 <UniformGrid Columns="4" Visibility="{Binding ShowWifiDetails, Converter={StaticResource BoolToVis}}">
                                     <StackPanel>
                                         <TextBlock Text="Network name (SSID)" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="{Binding ActiveNic.WifiSsid, FallbackValue='Not Connected'}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                        <TextBlock Text="{Binding ActiveNic.WifiSsid, FallbackValue='Not connected'}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <StackPanel>
                                         <TextBlock Text="Signal strength" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="{Binding ActiveNic.WifiSignalPercent, StringFormat='{}{0}%', FallbackValue='N/A'}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" />
+                                        <TextBlock Text="{Binding ActiveNic.WifiSignalPercent, StringFormat='{}{0}%', FallbackValue='N/A'}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <StackPanel>
                                         <TextBlock Text="Wi-Fi standard" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="{Binding ActiveNic.WifiRadioType, FallbackValue='N/A'}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                        <TextBlock Text="{Binding ActiveNic.WifiRadioType, FallbackValue='N/A'}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <StackPanel>
                                         <TextBlock Text="Channel" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="{Binding ActiveNic.WifiChannel, FallbackValue='N/A'}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                        <TextBlock Text="{Binding ActiveNic.WifiChannel, FallbackValue='N/A'}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0" />
                                     </StackPanel>
                                 </UniformGrid>
                             </StackPanel>
@@ -1087,39 +1148,41 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="0" Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="Event timeline" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                            <TextBlock Text="What happened, newest first, in your local time. Repeated identical events are collapsed." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="Clear Log" Style="{StaticResource OutlineButton}" Command="{Binding ClearEventsCommand}" VerticalAlignment="Center" />
-                    </Grid>
+                    <controls:PageHeader Grid.Row="0" Title="Event timeline" Glyph="&#xE8FD;"
+                                         Subtitle="What happened, newest first, in your local time. Repeated identical events are collapsed.">
+                        <controls:PageHeader.Actions>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding ShowProblemsOnly, Mode=TwoWay}" Content="Problems only" FontSize="13.5" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                <Button Content="Clear" Style="{StaticResource OutlineButton}" Command="{Binding ClearEventsCommand}" ToolTip="Clear the timeline (saved recordings keep their own events)" />
+                            </StackPanel>
+                        </controls:PageHeader.Actions>
+                    </controls:PageHeader>
 
-                    <DataGrid RowHeight="NaN" MinRowHeight="40" Grid.Row="1" ItemsSource="{Binding Events}">
+                    <DataGrid RowHeight="NaN" MinRowHeight="44" Grid.Row="1" ItemsSource="{Binding EventsView}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, Converter={StaticResource LocalTime}}" Width="80" />
-                            <DataGridTemplateColumn Header="Level" Width="80">
+                            <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, Converter={StaticResource LocalTime}}" Width="84" />
+                            <DataGridTemplateColumn Header="Level" Width="104">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityLabel}}" Foreground="{Binding Severity, Converter={StaticResource SeverityBrush}}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Border Style="{StaticResource Pill}" Padding="8,1,9,2" BorderBrush="{Binding Severity, Converter={StaticResource SeverityBrush}}" Background="Transparent">
+                                            <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityLabel}}" Foreground="{Binding Severity, Converter={StaticResource SeverityBrush}}" FontSize="12" FontWeight="SemiBold" TextWrapping="NoWrap" />
+                                        </Border>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="What happened" Binding="{Binding EventType, Converter={StaticResource EventLabel}}" Width="170" />
+                            <DataGridTextColumn Header="What happened" Binding="{Binding EventType, Converter={StaticResource EventLabel}}" Width="180" />
                             <DataGridTextColumn Header="Where" Binding="{Binding TargetName}" Width="170" />
                             <DataGridTemplateColumn Header="Details" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Description}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,3" />
+                                        <TextBlock Text="{Binding Description}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,4" LineHeight="18" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
+                    <controls:EmptyState Grid.Row="1" Glyph="&#xE8FD;" Title="Nothing to show yet" Text="{Binding NoEventsText}"
+                                         Visibility="{Binding HasNoEvents, Converter={StaticResource BoolToVis}}" />
                 </Grid>
 
                 <!-- TAB: HELP & GLOSSARY -->
@@ -1135,22 +1198,25 @@
                         </Style>
                     </ScrollViewer.Style>
                     <StackPanel>
-                        <TextBlock Text="Help and glossary" FontSize="26" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="What the words mean, and what NetPulse can and cannot tell you." FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,14" />
+                        <controls:PageHeader Title="Help &amp; glossary" Glyph="&#xE897;" Subtitle="What the words mean, and what NetPulse can and cannot tell you." />
 
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="WHAT NETPULSE DOES - AND DOES NOT - MEASURE" FontWeight="SemiBold" FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <TextBlock Text="What NetPulse does, and does not, measure" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
                                 <TextBlock Text="{Binding HelpMeasuresText}" FontSize="14" LineHeight="20" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
 
+                        <TextBlock Text="Glossary" Style="{StaticResource CardTitle}" FontSize="18" Margin="2,8,0,10" />
                         <ItemsControl ItemsSource="{Binding Glossary}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Style="{StaticResource CardPanel}" Margin="0,0,0,8" Padding="14,10">
+                                    <Border Style="{StaticResource CardPanel}" Margin="0,0,10,10" Padding="16,14">
                                         <StackPanel>
-                                            <TextBlock Text="{Binding Term}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <TextBlock Text="{Binding Term}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource AccentBlueHoverBrush}" />
                                             <TextBlock Text="{Binding Plain}" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Detail}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0" TextWrapping="Wrap"
                                                        Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
@@ -1178,8 +1244,8 @@
                     </ScrollViewer.Style>
 
                     <StackPanel Margin="0,0,10,0">
-                        <TextBlock Text="History and reports" Style="{StaticResource PageTitle}" />
-                        <TextBlock Text="Everything you have recorded, kept on this PC. Open a recording to see its graph, what happened around the moments you marked as laggy, and export a report." Style="{StaticResource PageSubtitle}" Margin="0,4,0,18" />
+                        <controls:PageHeader Title="History &amp; reports" Glyph="&#xE81C;"
+                                             Subtitle="Everything you have recorded, kept on this PC. Open a recording to see its graph, what happened around the moments you marked as laggy, and export a report." />
 
                         <!-- Recordings list -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" DataContext="{Binding History}">
@@ -1440,8 +1506,7 @@
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="0,0,10,12">
-                            <TextBlock Text="Settings" Style="{StaticResource PageTitle}" />
-                            <TextBlock Text="Changes take effect as soon as you save. Nothing here is sent anywhere; settings are stored on this PC." Style="{StaticResource PageSubtitle}" Margin="0,4,0,18" />
+                            <controls:PageHeader Title="Settings" Glyph="&#xE713;" Subtitle="Changes take effect as soon as you save. Nothing here is sent anywhere; settings are stored on this PC." />
 
                             <!-- Monitoring -->
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
@@ -1661,9 +1726,9 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="Monitoring Engine: " FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
-                    <TextBlock Text="ACTIVE" FontWeight="SemiBold" FontSize="12.5" Foreground="{StaticResource AccentGreenBrush}" />
-                    <TextBlock Text="{Binding ProbeIntervalText}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" />
+                    <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="Monitoring" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="NoWrap" />
+                    <TextBlock Text="{Binding ProbeIntervalText}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="NoWrap" />
                 </StackPanel>
 
                 <!-- what is being recorded right now, visible from every page -->

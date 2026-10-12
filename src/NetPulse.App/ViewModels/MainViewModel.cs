@@ -76,18 +76,30 @@ public class MainViewModel : ViewModelBase
     // Bufferbloat
     private bool _isBufferbloatRunning;
     private int _bufferbloatProgress;
-    private string _bufferbloatStatus = "Ready to test bufferbloat under load.";
+    private string _bufferbloatStatus = "Ready when you are.";
     private BufferbloatResult? _latestBufferbloatResult;
 
     // Speed Test
     private bool _isSpeedTestRunning;
     private int _speedTestProgress;
     private double _currentSpeedTestMbps;
-    private string _speedTestStatus = "Ready to measure bandwidth. Warning: generates heavy traffic.";
+    private string _speedTestStatus = "Ready when you are.";
     private SpeedTestResult? _latestSpeedTestResult;
 
     public ObservableCollection<TargetMetricsViewModel> Targets { get; } = new();
     public ObservableCollection<ConnectionEvent> Events { get; } = new();
+    /// <summary>The timeline as shown: all events, or only warnings and problems.</summary>
+    public System.ComponentModel.ICollectionView EventsView { get; }
+    private bool _showProblemsOnly;
+    public bool ShowProblemsOnly
+    {
+        get => _showProblemsOnly;
+        set { if (SetProperty(ref _showProblemsOnly, value)) { EventsView.Refresh(); OnPropertyChanged(nameof(HasNoEvents)); OnPropertyChanged(nameof(NoEventsText)); } }
+    }
+    public bool HasNoEvents => EventsView.IsEmpty;
+    public string NoEventsText => ShowProblemsOnly && Events.Count > 0
+        ? "No warnings or problems. Switch the filter off to see informational events too."
+        : "Spikes, probe loss, router problems, route changes, game starts and your lag markers will appear here.";
     public ObservableCollection<RouteHop> MtrHops { get; } = new();
     public ObservableCollection<string> RouteAnomalies { get; } = new();
 
@@ -114,6 +126,9 @@ public class MainViewModel : ViewModelBase
     public MainViewModel(NetPulseHost host)
     {
         _host = host;
+        EventsView = System.Windows.Data.CollectionViewSource.GetDefaultView(Events);
+        EventsView.Filter = o => !_showProblemsOnly || (o is ConnectionEvent e && e.Severity != "Info");
+        Events.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(HasNoEvents)); OnPropertyChanged(nameof(NoEventsText)); };
         _discoveryService = host.Discovery;
         _pingService = host.Ping;
         _tcpService = host.Tcp;
@@ -264,6 +279,17 @@ public class MainViewModel : ViewModelBase
         get => _statusBrush;
         set => SetProperty(ref _statusBrush, value);
     }
+
+    private string _statusGlyph = "\uE895";
+    private Brush? _statusSoftBrush, _statusEdgeBrush;
+    /// <summary>Fluent icon for the overall status (check, warning, error; sync while analysing).</summary>
+    public string StatusGlyph { get => _statusGlyph; private set => SetProperty(ref _statusGlyph, value); }
+    /// <summary>Tinted background and edge of the status hero, matching <see cref="StatusBrush"/>.</summary>
+    public Brush StatusSoftBrush { get => _statusSoftBrush ??= Res("BlueSoftBrush"); private set => SetProperty(ref _statusSoftBrush, value); }
+    public Brush StatusEdgeBrush { get => _statusEdgeBrush ??= Res("BlueEdgeBrush"); private set => SetProperty(ref _statusEdgeBrush, value); }
+    private static Brush Res(string key) => Application.Current?.TryFindResource(key) as Brush ?? System.Windows.Media.Brushes.Transparent;
+
+    public string AppVersionText => $"NetPulse {AppInfo.Version}";
 
     public string EvidenceSummary
     {
@@ -425,8 +451,14 @@ public class MainViewModel : ViewModelBase
     public BufferbloatResult? LatestBufferbloatResult
     {
         get => _latestBufferbloatResult;
-        set => SetProperty(ref _latestBufferbloatResult, value);
+        set { if (SetProperty(ref _latestBufferbloatResult, value)) { OnPropertyChanged(nameof(GradeBrush)); OnPropertyChanged(nameof(HasBufferbloatResult)); } }
     }
+    public bool HasBufferbloatResult => _latestBufferbloatResult?.IsValid == true;
+    /// <summary>Ring colour for the grade: green for A+/A, amber for B/C, red for D/F.</summary>
+    public Brush GradeBrush => _latestBufferbloatResult?.IsValid != true ? Res("BorderStrongBrush")
+        : _latestBufferbloatResult.Grade switch { "A+" or "A" => HealthyBrush, "B" or "C" => DegradedBrush, _ => CriticalBrush };
+    private string _bufferbloatLiveText = "";
+    public string BufferbloatLiveText { get => _bufferbloatLiveText; private set => SetProperty(ref _bufferbloatLiveText, value); }
 
     public bool IsSpeedTestRunning
     {
@@ -451,6 +483,22 @@ public class MainViewModel : ViewModelBase
         get => _speedTestStatus;
         set => SetProperty(ref _speedTestStatus, value);
     }
+
+    private double _downloadMbps, _uploadMbps;
+    /// <summary>Download speed shown on the gauge: live while the test runs, then the result.</summary>
+    public double DownloadMbps { get => _downloadMbps; private set { if (SetProperty(ref _downloadMbps, value)) { OnPropertyChanged(nameof(SpeedGaugeMax)); OnPropertyChanged(nameof(SpeedGaugeScale)); } } }
+    public double UploadMbps { get => _uploadMbps; private set { if (SetProperty(ref _uploadMbps, value)) { OnPropertyChanged(nameof(SpeedGaugeMax)); OnPropertyChanged(nameof(SpeedGaugeScale)); } } }
+    /// <summary>Full scale of both speed gauges: the next round step above the faster direction (at least 100 Mbps).</summary>
+    public double SpeedGaugeMax
+    {
+        get
+        {
+            double top = Math.Max(100, Math.Max(_downloadMbps, _uploadMbps));
+            foreach (var step in new[] { 100.0, 250, 500, 1000, 2500, 5000, 10000 }) if (top <= step) return step;
+            return Math.Ceiling(top / 1000) * 1000;
+        }
+    }
+    public string SpeedGaugeScale => $"Scale 0 - {SpeedGaugeMax:N0} Mbps";
 
     public SpeedTestResult? LatestSpeedTestResult
     {
@@ -548,6 +596,12 @@ public class MainViewModel : ViewModelBase
             DiagnosticStatus.Degraded => DegradedBrush,
             _ => HealthyBrush
         };
+        (StatusGlyph, StatusSoftBrush, StatusEdgeBrush) = diag.Status switch
+        {
+            DiagnosticStatus.Critical => ("\uEA39", Res("RedSoftBrush"), Res("RedEdgeBrush")),
+            DiagnosticStatus.Degraded => ("\uE7BA", Res("AmberSoftBrush"), Res("AmberEdgeBrush")),
+            _ => ("\uE73E", Res("GreenSoftBrush"), Res("GreenEdgeBrush"))
+        };
     }
 
     private void UpdateMtrHops(List<RouteHop> hops)
@@ -638,6 +692,7 @@ public class MainViewModel : ViewModelBase
         {
             BufferbloatProgress = p.Percent;
             BufferbloatStatus = p.StatusText;
+            if (p.CurrentLatencyMs > 0) BufferbloatLiveText = $"{p.Phase}: {p.CurrentLatencyMs:F0} ms right now";
         });
 
         try
@@ -694,17 +749,21 @@ public class MainViewModel : ViewModelBase
         SpeedTestProgress = 5;
         SpeedTestStatus = "Starting multi-stream bandwidth test...";
 
+        DownloadMbps = UploadMbps = 0;
         var progress = new Progress<SpeedTestProgress>(p =>
         {
             SpeedTestProgress = p.Percent;
             CurrentSpeedTestMbps = p.CurrentSpeedMbps;
             SpeedTestStatus = p.StatusText;
+            if (p.Phase == "Download") DownloadMbps = p.CurrentSpeedMbps;
+            else if (p.Phase == "Upload") UploadMbps = p.CurrentSpeedMbps;
         });
 
         try
         {
             var res = await _speedTestService.RunSpeedTestAsync(progress, _speedTestCts.Token);
             LatestSpeedTestResult = res;
+            if (res.CompletedSuccessfully) { DownloadMbps = res.DownloadSpeedMbps; UploadMbps = res.UploadSpeedMbps; }
             if (res.CompletedSuccessfully)
             {
                 SpeedTestStatus = $"Finished: {res.DownloadSpeedMbps:F1} Mbps Download | {res.UploadSpeedMbps:F1} Mbps Upload";
@@ -832,6 +891,7 @@ public class MainViewModel : ViewModelBase
 
     /// <summary>Plain-language disclosure of the external service used by Speed Test and Bufferbloat.</summary>
     public string TransferDisclosure => _host.TransferProvider.Disclosure;
+    public string TransferProviderTitle => $"This test uses {_host.TransferProvider.DisplayName}";
 
     public string FooterPrivacyText => $"Local-first \u2022 No telemetry \u2022 {_host.TransferProvider.DisplayName} only for speed tests";
 

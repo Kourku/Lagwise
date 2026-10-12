@@ -28,7 +28,7 @@ public partial class MainWindow : Window
 
         SourceInitialized += (_, _) =>
         {
-            WindowChrome.ApplyDarkTitleBar(this);
+            WindowStyling.ApplyDarkTitleBar(this);
             if (System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle) is { } source)
             {
                 _hotkey = new GlobalHotkey(source, OnMarkLagShortcut);
@@ -115,8 +115,29 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---- custom title bar buttons (the window uses WindowChrome, so Windows does not draw them)
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// A maximised WindowChrome window extends past the screen by the resize border, so pad it back in,
+    /// and swap the maximise glyph for "restore".
+    /// </summary>
+    private void UpdateMaximizedLayout()
+    {
+        bool max = WindowState == WindowState.Maximized;
+        var b = SystemParameters.WindowResizeBorderThickness;
+        RootGrid.Margin = max ? new Thickness(b.Left + 4, b.Top + 4, b.Right + 4, b.Bottom + 4) : new Thickness(0);
+        MaximizeButton.Content = max ? "\uE923" : "\uE922";
+        MaximizeButton.ToolTip = max ? "Restore" : "Maximise";
+        System.Windows.Automation.AutomationProperties.SetName(MaximizeButton, max ? "Restore" : "Maximise");
+    }
+
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {
+        UpdateMaximizedLayout();
         // Minimize to tray if minimized
         if (WindowState == WindowState.Minimized && App.Host.Settings.MinimizeToTray)
         {
