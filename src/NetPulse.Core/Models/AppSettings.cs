@@ -40,6 +40,21 @@ public class AppSettings
     /// <summary>Play a short sound when lag is marked with the shortcut, so the player knows it worked without leaving the game.</summary>
     public bool MarkLagSound { get; set; } = true;
 
+    // Appearance
+    /// <summary>"Dark", "Light" or "System" (follow the Windows app theme).</summary>
+    public string Theme { get; set; } = "Dark";
+    /// <summary>Accent colour name (see the app's ThemeManager); unknown names fall back to the default.</summary>
+    public string Accent { get; set; } = "Indigo";
+    /// <summary>Interface size in percent (90-130).</summary>
+    public int UiScalePercent { get; set; } = 100;
+
+    // Mini overlay
+    public bool OverlayVisible { get; set; } = false;
+    public double? OverlayLeft { get; set; }
+    public double? OverlayTop { get; set; }
+    /// <summary>Background opacity of the overlay, 40-100 percent.</summary>
+    public int OverlayOpacityPercent { get; set; } = 85;
+
     // Recordings
     /// <summary>Saved recordings older than this many days are deleted at start-up; 0 keeps them forever.</summary>
     public int RecordingRetentionDays { get; set; } = 0;
@@ -57,6 +72,10 @@ public class AppSettings
         PacketLossNotifyThreshold = System.Math.Clamp(PacketLossNotifyThreshold, 0.1, 100);
         LatencySpikeNotifyThreshold = System.Math.Clamp(LatencySpikeNotifyThreshold, 5, 10_000);
         RecordingRetentionDays = System.Math.Clamp(RecordingRetentionDays, 0, 3650);
+        if (Theme is not ("Dark" or "Light" or "System")) Theme = "Dark";
+        if (string.IsNullOrWhiteSpace(Accent)) Accent = "Indigo";
+        UiScalePercent = System.Math.Clamp(UiScalePercent, 90, 130);
+        OverlayOpacityPercent = System.Math.Clamp(OverlayOpacityPercent, 40, 100);
         if (string.IsNullOrWhiteSpace(TransferProviderId)) TransferProviderId = "cloudflare";
         if (!HotkeyGesture.TryParse(MarkLagHotkey, out _)) MarkLagHotkey = "Ctrl+Shift+F9";
         Targets ??= new List<TargetConfig>();

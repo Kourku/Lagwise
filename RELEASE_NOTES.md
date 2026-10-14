@@ -2,6 +2,18 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3); builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.7.0
+
+**New: themes** - Dark, Light, or Match Windows (follows the Windows app colour setting, also when you change it while NetPulse runs), with five accent colours (Indigo, Teal, Violet, Orange, Rose). Pick them under Settings > Appearance, or flip dark/light with the sun/moon button in the title bar. Everything repaints instantly, including the graphs, gauges and window frame.
+
+**New: mini overlay** - a small always-on-top read-out of reference ping, variation and probe loss, with a REC badge while recording and a status dot from the "Ready to play?" checklist. Open it from the title-bar button or the tray menu; drag it anywhere (it remembers where) and choose how see-through its background is. It never takes focus from your game. It shows over games in windowed or borderless mode; Windows does not allow any window over exclusive fullscreen.
+
+**New: interface size** - 90 % to 130 %, for high-resolution screens or reading from across the room.
+
+**Under the hood**
+- All colours now come from one palette built at runtime (`Themes/ThemeManager.cs`); the control styles (`Themes/Styles.xaml`) no longer contain any colour of their own.
+- Saving settings can no longer fail on an unusual value: anything that cannot be written is reported instead of breaking the app. (Found while building the overlay.)
+
 ## 0.6.0
 
 **New: "Ready to play?" checklist on the Overview** - one line per check, refreshed every few seconds: your router, packet loss, ping stability, ping compared with your normal, DNS, Wi-Fi signal (on Wi-Fi) and lag under load (your last Bufferbloat grade, with a shortcut to run the test if you never have). Each line says what was measured and the rule of thumb used. It is explicit that it covers your PC, home network and connection, not the game's servers. A single public server that ignores pings is no longer enough to mark the connection as lossy.

@@ -37,15 +37,24 @@ public class SessionChart : FrameworkElement
     public ChartData? Data { get => (ChartData?)GetValue(DataProperty); set => SetValue(DataProperty, value); }
     public IReadOnlyList<string>? TargetOrder { get => (IReadOnlyList<string>?)GetValue(TargetOrderProperty); set => SetValue(TargetOrderProperty, value); }
 
-    private static readonly Brush GridBrush = Frozen(Color.FromRgb(34, 42, 57));
-    private static readonly Brush LabelBrush = Frozen(Color.FromRgb(152, 162, 181));
+    // theme colours are looked up at render time so a theme switch repaints correctly
+    private static Brush GridBrush => NetPulse.App.Themes.ThemeManager.Brush("Border");
+    private static Brush LabelBrush => NetPulse.App.Themes.ThemeManager.Brush("TextSecondary");
     private static readonly Brush GapBrush = Frozen(Color.FromArgb(60, 152, 162, 181));
     private static readonly Brush OutageBrush = Frozen(Color.FromArgb(70, 248, 113, 113));
     private static readonly Pen LagPen = MakePen(Color.FromRgb(251, 191, 36), 1.4, new DashStyle(new double[] { 3, 3 }, 0));
     private static readonly Pen CursorPen = MakePen(Color.FromArgb(160, 152, 162, 181), 1);
-    private static readonly Brush TipBackground = Frozen(Color.FromArgb(240, 22, 27, 38));
-    private static readonly Pen TipBorder = MakePen(Color.FromRgb(48, 58, 77), 1);
-    private static readonly Brush TipText = Frozen(Color.FromRgb(230, 234, 242));
+    private static Brush TipBackground => NetPulse.App.Themes.ThemeManager.Brush("PopupBg");
+    private static Pen TipBorder => new(NetPulse.App.Themes.ThemeManager.Brush("BorderStrong"), 1);
+    private static Brush TipText => NetPulse.App.Themes.ThemeManager.Brush("TextPrimary");
+
+    public SessionChart()
+    {
+        Loaded += (_, _) => NetPulse.App.Themes.ThemeManager.Changed += OnThemeChanged;
+        Unloaded += (_, _) => NetPulse.App.Themes.ThemeManager.Changed -= OnThemeChanged;
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
 
     private double? _hoverX;
 
@@ -181,9 +190,10 @@ public class SessionChart : FrameworkElement
         double sec = (hx - plot.Left) / plot.Width * dur;
         dc.DrawLine(CursorPen, new Point(hx, plot.Top), new Point(hx, plot.Bottom));
 
+        var label = LabelBrush;
         var lines = new List<(string Text, Brush Brush)>
         {
-            (data.StartUtc.AddSeconds(sec).ToLocalTime().ToString("HH:mm:ss"), LabelBrush)
+            (data.StartUtc.AddSeconds(sec).ToLocalTime().ToString("HH:mm:ss"), label)
         };
         foreach (var series in data.Series)
         {
@@ -193,12 +203,12 @@ public class SessionChart : FrameworkElement
             var color = ColorFor(series.TargetId, order);
             lines.Add(($"{series.Name}: {value}", Frozen(color)));
         }
-        if (lines.Count == 1) lines.Add(("no measurement here", LabelBrush));
+        if (lines.Count == 1) lines.Add(("no measurement here", label));
 
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var texts = lines.Select(l => new FormattedText(l.Text, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
             new Typeface(new System.Windows.Media.FontFamily("Segoe UI Variable Text, Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
-            12, l.Brush == LabelBrush ? LabelBrush : TipText, dpi)).ToList();
+            12, ReferenceEquals(l.Brush, label) ? label : TipText, dpi)).ToList();
 
         double w = texts.Max(t => t.Width) + 26, lineH = 17, h = texts.Count * lineH + 12;
         double x = hx + 12 + w > plot.Right ? hx - 12 - w : hx + 12;

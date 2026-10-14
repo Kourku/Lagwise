@@ -101,7 +101,7 @@ public class SettingsService
             error = null;
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Text.Json.JsonException)
         {
             error = ex.Message;
             return false;

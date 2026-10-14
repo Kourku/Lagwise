@@ -127,6 +127,6 @@ public class SparklineChart : FrameworkElement
 
         // Highlight latest point
         var lastPoint = points[^1];
-        dc.DrawEllipse(LineBrush, new Pen(new SolidColorBrush(Color.FromRgb(15, 23, 42)), 1.5), lastPoint, 3.5, 3.5);
+        dc.DrawEllipse(LineBrush, new Pen(NetPulse.App.Themes.ThemeManager.Brush("BgCard"), 1.5), lastPoint, 3.5, 3.5); // ring in the card colour, any theme
     }
 }

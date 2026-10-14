@@ -70,4 +70,46 @@ public class HotkeyGestureTests
         d.MarkLagHotkey = "nonsense";
         Assert.Contains(d.Validate(), e => e.Contains("shortcut"));
     }
+
+    [Fact]
+    public void DefaultSettings_AreSaveable_AndAppearanceRoundTrips()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "netpulse-settings-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var svc = new NetPulse.Core.Services.SettingsService(Path.Combine(dir, "settings.json"));
+            svc.Load();
+            Assert.True(svc.TrySave(out var error), error); // every default value must be representable in JSON
+            svc.Current.Theme = "Light";
+            svc.Current.Accent = "Teal";
+            svc.Current.UiScalePercent = 120;
+            svc.Current.OverlayLeft = 100.5;
+            Assert.True(svc.TrySave(out _));
+
+            var again = new NetPulse.Core.Services.SettingsService(Path.Combine(dir, "settings.json"));
+            again.Load();
+            Assert.Equal("Light", again.Current.Theme);
+            Assert.Equal("Teal", again.Current.Accent);
+            Assert.Equal(120, again.Current.UiScalePercent);
+            Assert.Equal(100.5, again.Current.OverlayLeft);
+            Assert.Null(again.Current.OverlayTop);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void UnknownAppearanceValues_AreNormalised()
+    {
+        var s = AppSettings.CreateDefault();
+        s.Theme = "Neon";
+        s.UiScalePercent = 400;
+        s.OverlayOpacityPercent = 5;
+        s.Normalize();
+        Assert.Equal("Dark", s.Theme);
+        Assert.Equal(130, s.UiScalePercent);
+        Assert.Equal(40, s.OverlayOpacityPercent);
+    }
 }

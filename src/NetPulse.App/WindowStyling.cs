@@ -17,23 +17,27 @@ internal static class WindowStyling
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
-    public static void ApplyDarkTitleBar(Window window)
+    public static void ApplyDarkTitleBar(Window window) => Apply(window, light: false);
+
+    /// <summary>Matches the window frame (DWM dark mode, rounded corners, border colour) to the dark or light theme.</summary>
+    public static void Apply(Window window, bool light)
     {
         try
         {
             var hwnd = new WindowInteropHelper(window).Handle;
-            int dark = 1;
+            if (hwnd == IntPtr.Zero) return;
+            int dark = light ? 0 : 1;
             DwmSetWindowAttribute(hwnd, DwmUseImmersiveDarkMode, ref dark, sizeof(int));
 
             // Windows 11: colour the caption to the sidebar surface (COLORREF = 0x00BBGGRR) so the title bar blends with the app bar
-            int caption = 0x0018110D;   // #0D1118
-            int text = 0x00F6F0ED;      // #EDF0F6
+            int caption = light ? 0x00FDFBFA : 0x0018110D;   // #FAFBFD / #0D1118
+            int text = light ? 0x00271811 : 0x00F6F0ED;      // #111827 / #EDF0F6
             DwmSetWindowAttribute(hwnd, DwmCaptionColor, ref caption, sizeof(int));
             DwmSetWindowAttribute(hwnd, DwmTextColor, ref text, sizeof(int));
 
             // Windows 11: keep rounded corners and a subtle border with the custom (WindowChrome) title bar
             int round = 2;               // DWMWCP_ROUND
-            int border = 0x00392A22;     // #222A39
+            int border = light ? 0x00EBE4E0 : 0x00392A22;     // #E0E4EB / #222A39
             DwmSetWindowAttribute(hwnd, DwmCornerPreference, ref round, sizeof(int));
             DwmSetWindowAttribute(hwnd, DwmBorderColor, ref border, sizeof(int));
         }

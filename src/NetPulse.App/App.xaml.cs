@@ -26,6 +26,7 @@ public partial class App : System.Windows.Application
 
         Host = new NetPulseHost();
         ErrorLog.Directory = Path.Combine(Host.DataDirectory, "logs");
+        Themes.ThemeManager.Apply(Host.Settings.Theme, Host.Settings.Accent); // before the first window is built
 
         // An unexpected error in one button or background task must not take the whole app (and a running recording) down.
         DispatcherUnhandledException += (_, args) =>

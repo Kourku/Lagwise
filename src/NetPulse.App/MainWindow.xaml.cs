@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private GlobalHotkey? _hotkey;
     private System.Windows.Threading.DispatcherTimer? _trayTimer;
     private bool _toldAboutTray;
+    private OverlayWindow? _overlay;
 
     public MainWindow()
     {
@@ -28,7 +29,7 @@ public partial class MainWindow : Window
 
         SourceInitialized += (_, _) =>
         {
-            WindowStyling.ApplyDarkTitleBar(this);
+            WindowStyling.Apply(this, NetPulse.App.Themes.ThemeManager.IsLight);
             if (System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle) is { } source)
             {
                 _hotkey = new GlobalHotkey(source, OnMarkLagShortcut);
@@ -54,6 +55,11 @@ public partial class MainWindow : Window
             };
             ApplyMode(vm.IsAdvancedMode);
             vm.Settings.Applied += (_, _) => ApplyHotkey();
+            vm.Appearance.Applied += (_, _) => { ApplyAppearance(); _overlay?.ApplyOpacity(); };
+            vm.OverlayVisibilityChanged += (_, _) => SyncOverlay(vm);
+            SyncOverlay(vm);
+            NetPulse.App.Themes.ThemeManager.Changed += (_, _) => WindowStyling.Apply(this, NetPulse.App.Themes.ThemeManager.IsLight);
+            ApplyAppearance();
 
             // tray hover text: a glance at the connection without opening the window
             _trayTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(5), System.Windows.Threading.DispatcherPriority.Background, (_, _) => UpdateTrayTooltip(vm), Dispatcher);
@@ -63,6 +69,33 @@ public partial class MainWindow : Window
             if (Environment.GetCommandLineArgs().Contains("--minimized", StringComparer.OrdinalIgnoreCase))
                 WindowState = WindowState.Minimized;
         }
+    }
+
+    private void SyncOverlay(MainViewModel vm)
+    {
+        if (vm.IsOverlayVisible)
+        {
+            if (_overlay == null)
+            {
+                _overlay = new OverlayWindow(vm);
+                _overlay.HideRequested += (_, _) => vm.IsOverlayVisible = false;
+            }
+            _overlay.Show();
+        }
+        else
+        {
+            _overlay?.Hide();
+        }
+    }
+
+    /// <summary>Interface size: the whole window content is scaled, and the draggable title area grows with it.</summary>
+    private void ApplyAppearance()
+    {
+        double scale = App.Host.Settings.UiScalePercent / 100.0;
+        RootGrid.LayoutTransform = Math.Abs(scale - 1) < 0.001 ? System.Windows.Media.Transform.Identity : new System.Windows.Media.ScaleTransform(scale, scale);
+        var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(this);
+        if (chrome != null) chrome.CaptionHeight = 48 * scale;
+        WindowStyling.Apply(this, NetPulse.App.Themes.ThemeManager.IsLight);
     }
 
     private void ApplyHotkey()
@@ -173,6 +206,7 @@ public partial class MainWindow : Window
             vm.OnAppExiting();
         }
         _trayTimer?.Stop();
+        _overlay?.Close();
         _hotkey?.Dispose();
         _trayManager?.Dispose();
     }

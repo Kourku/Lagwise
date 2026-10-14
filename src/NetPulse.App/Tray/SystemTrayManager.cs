@@ -70,8 +70,10 @@ public class SystemTrayManager : IDisposable
                 _viewModel.CurrentTab = "GameMonitor";
             }
         });
+        var overlay = new ToolStripMenuItem("Mini overlay", null, (s, e) => _viewModel.IsOverlayVisible = !_viewModel.IsOverlayVisible);
         contextMenu.Items.Add(markLag);
         contextMenu.Items.Add(gameRecording);
+        contextMenu.Items.Add(overlay);
         contextMenu.Items.Add("Open History && reports", null, (s, e) =>
         {
             RestoreWindow();
@@ -83,6 +85,7 @@ public class SystemTrayManager : IDisposable
             string game = gm.SelectedProfile?.Profile.DisplayName ?? "a game";
             gameRecording.Text = gm.IsMonitoring ? $"Stop && save {game} recording" : gm.SelectedProfile == null ? "Choose a game to monitor..." : $"Start monitoring {game}";
             markLag.Enabled = App.Host.IsRecording;
+            overlay.Checked = _viewModel.IsOverlayVisible;
             string key = App.Host.Settings.MarkLagHotkey;
             markLag.ShortcutKeyDisplayString = key == NetPulse.Core.Models.HotkeyGesture.Off ? "" : key;
             markLag.ShowShortcutKeys = key != NetPulse.Core.Models.HotkeyGesture.Off;

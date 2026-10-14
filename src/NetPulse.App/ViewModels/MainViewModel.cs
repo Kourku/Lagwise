@@ -122,6 +122,7 @@ public class MainViewModel : ViewModelBase
     public GameMonitorViewModel GameMonitor { get; }
     public SettingsViewModel Settings { get; }
     public HistoryViewModel History { get; }
+    public AppearanceViewModel Appearance { get; }
 
     public MainViewModel(NetPulseHost host)
     {
@@ -188,6 +189,14 @@ public class MainViewModel : ViewModelBase
         GameMonitor = new GameMonitorViewModel(host, Application.Current.Dispatcher);
         History = new HistoryViewModel(host, Application.Current.Dispatcher);
         Settings = new SettingsViewModel(host);
+        Appearance = new AppearanceViewModel(host);
+        // brushes taken from the palette in code (status tints, grade ring) are re-read after a theme switch
+        NetPulse.App.Themes.ThemeManager.Changed += (_, _) =>
+        {
+            if (_lastDiagnosis != null) UpdateDiagnosis(_lastDiagnosis);
+            OnPropertyChanged(nameof(GradeBrush));
+            Appearance.Sync();
+        };
         Settings.Applied += (_, _) =>
         {
             OnPropertyChanged(nameof(ProbeIntervalText));
@@ -291,6 +300,28 @@ public class MainViewModel : ViewModelBase
     private static Brush Res(string key) => Application.Current?.TryFindResource(key) as Brush ?? System.Windows.Media.Brushes.Transparent;
 
     public string AppVersionText => $"NetPulse {AppInfo.Version}";
+
+    // ---- mini overlay ----
+
+    /// <summary>Raised when the overlay should be shown or hidden (the window owns the overlay window itself).</summary>
+    public event EventHandler? OverlayVisibilityChanged;
+    public bool IsOverlayVisible
+    {
+        get => _host.Settings.OverlayVisible;
+        set
+        {
+            if (_host.Settings.OverlayVisible == value) return;
+            _host.Settings.OverlayVisible = value;
+            _host.SaveSettings(out _);
+            OnPropertyChanged();
+            OverlayVisibilityChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+    private RelayCommand? _toggleOverlay;
+    public RelayCommand ToggleOverlayCommand => _toggleOverlay ??= new RelayCommand(() => IsOverlayVisible = !IsOverlayVisible);
+    public string OverlayHint => _host.Settings.MarkLagHotkey == HotkeyGesture.Off
+        ? "Reference ping, not your game server's ping."
+        : $"{_host.Settings.MarkLagHotkey} marks lag while recording.";
 
     public string EvidenceSummary
     {
@@ -626,8 +657,11 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private DiagnosticResult? _lastDiagnosis;
+
     private void UpdateDiagnosis(DiagnosticResult diag)
     {
+        _lastDiagnosis = diag;
         StatusHeadline = diag.Headline;
         StatusCategory = Lexicon.CategoryLabel(diag.Category);
         LikelyCause = diag.LikelyCause;

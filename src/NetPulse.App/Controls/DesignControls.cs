@@ -126,7 +126,7 @@ public class RingGauge : FrameworkElement
     public static readonly DependencyProperty BrushProperty = DependencyProperty.Register(nameof(Brush), typeof(Brush), typeof(RingGauge),
         new FrameworkPropertyMetadata(Brushes.CornflowerBlue, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty TrackBrushProperty = DependencyProperty.Register(nameof(TrackBrush), typeof(Brush), typeof(RingGauge),
-        new FrameworkPropertyMetadata(new SolidColorBrush(Color.FromRgb(30, 38, 54)), FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
     public double Value { get => (double)GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
     public double Maximum { get => (double)GetValue(MaximumProperty); set => SetValue(MaximumProperty, value); }
@@ -134,7 +134,16 @@ public class RingGauge : FrameworkElement
     /// <summary>Total angle of the track in degrees: 360 for a full ring, 270 for an open speedometer arc.</summary>
     public double Sweep { get => (double)GetValue(SweepProperty); set => SetValue(SweepProperty, value); }
     public Brush Brush { get => (Brush)GetValue(BrushProperty); set => SetValue(BrushProperty, value); }
-    public Brush TrackBrush { get => (Brush)GetValue(TrackBrushProperty); set => SetValue(TrackBrushProperty, value); }
+    /// <summary>Colour of the empty part of the ring; the theme's track colour when not set.</summary>
+    public Brush? TrackBrush { get => (Brush?)GetValue(TrackBrushProperty); set => SetValue(TrackBrushProperty, value); }
+
+    public RingGauge()
+    {
+        Loaded += (_, _) => NetPulse.App.Themes.ThemeManager.Changed += OnThemeChanged;
+        Unloaded += (_, _) => NetPulse.App.Themes.ThemeManager.Changed -= OnThemeChanged;
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -146,7 +155,7 @@ public class RingGauge : FrameworkElement
         double sweep = Math.Clamp(Sweep, 10, 360);
         double start = 90 + (360 - sweep) / 2; // opening at the bottom, angles measured clockwise from +X
 
-        DrawArc(dc, center, r, start, sweep, new Pen(TrackBrush, Thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round });
+        DrawArc(dc, center, r, start, sweep, new Pen(TrackBrush ?? NetPulse.App.Themes.ThemeManager.Brush("TrackBg"), Thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round });
 
         double fraction = Maximum <= 0 ? 0 : Math.Clamp(Value / Maximum, 0, 1);
         if (fraction > 0.001)

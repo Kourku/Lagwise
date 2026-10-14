@@ -69,6 +69,17 @@ try {
     Check 'Application stays responsive' ((Get-Process -Id $proc.Id).Responding) ''
     Check 'Game Monitor navigation entry exists' ($null -ne (Find-Like 'Game Monitor')) ''
     Check 'Overview shows the live ping graph' ($null -ne (Wait-For { Find-Like '^Live ping graph$' } 5)) ''
+    # theme switch (title bar) applies and is saved; the mini overlay opens as its own window
+    $toggle = Find-Named 'Switch theme' 'ControlType.Button'
+    if ($toggle) { ($toggle.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 800 }
+    Check 'The theme switch applies and saves the light theme' ((Get-Process -Id $proc.Id).Responding -and ((Get-Content (Join-Path $DataDir 'settings.json') -Raw -ErrorAction SilentlyContinue) -match '"Theme": "Light"')) ''
+    if ($toggle) { ($toggle.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 800 }
+    $ovBtn = Find-Named 'Mini overlay' 'ControlType.Button'
+    if ($ovBtn) { ($ovBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke() }
+    $overlay = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,
+        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'NetPulse overlay'))) } 5
+    Check 'The mini overlay opens' ($null -ne $overlay) ''
+    if ($ovBtn) { ($ovBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 500 }
     Check 'Overview shows the Ready to play checklist' (($null -ne (Find-Like '^Ready to play\?$')) -and ($null -ne (Wait-For { Find-Like '^Ping stability$' } 10))) ''
 
     Click-Element (Find-Like 'Game Monitor')
@@ -132,7 +143,7 @@ try {
 
     # ---- Settings: change a value, save, and confirm it was applied and written ----
     Click-Element (Find-Like '^Settings$')
-    $combo2 = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ComboBox' } | Select-Object -First 1
+    $combo2 = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ComboBox' -and $_.Current.Name -eq 'Test frequency' } | Select-Object -First 1
     Check 'Settings screen shows the test frequency selector' ($null -ne $combo2) ''
     if ($combo2) {
         ($combo2.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)).Expand()

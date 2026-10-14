@@ -1,7 +1,7 @@
 <Project>
   <!-- Single source of truth for the product version (used by the app, installer, build.ps1 and release notes). -->
   <PropertyGroup>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Authors>NetPulse Diagnostics Team</Authors>
     <Company>NetPulse Diagnostics</Company>
   </PropertyGroup>
