@@ -57,6 +57,29 @@ public class MeasurementEngine
     public event EventHandler<NetworkInterfaceInfo>? NetworkInterfaceUpdated;
     /// <summary>Raised for every processed probe result (used by the session recorder).</summary>
     public event EventHandler<Measurement>? MeasurementProcessed;
+    /// <summary>Long-term "usual" latency per target, remembered across restarts. Null: only the recent window is used.</summary>
+    public BaselineMemory? Baselines { get; set; }
+
+    /// <summary>Stores each target's current typical latency in <see cref="Baselines"/> (called every <see cref="BaselineMemory.SampleInterval"/>).</summary>
+    public void SampleBaselines(DateTime nowUtc)
+    {
+        if (Baselines == null) return;
+        foreach (var m in _metrics.Values)
+        {
+            if (m.IsGameEndpoint) continue;
+            int replies;
+            double median;
+            lock (m)
+            {
+                replies = m.RecentHistory.Count(x => x.Success);
+                median = m.MedianLatency;
+            }
+            // only a window with enough replies describes the target; a mostly failing one says nothing about its latency
+            if (replies >= MinSamplesForBaseline) Baselines.Add(BaselineMemory.KeyOf(m.Protocol, m.TargetHost), median, nowUtc);
+        }
+        Baselines.Save();
+    }
+
     /// <summary>Raised once per completed measurement cycle with the cycle time (UTC).</summary>
     public event EventHandler<DateTime>? CycleCompleted;
 
@@ -330,7 +353,10 @@ public class MeasurementEngine
                     metrics.SmoothedJitterRfc3550 = StatisticalCalculator.UpdateRfc3550Jitter(metrics.SmoothedJitterRfc3550, m.RttMs, prevLatency);
 
                     double jump = m.RttMs - prevLatency;
-                    if (Settings.NotifyOnLatencySpike && jump >= Settings.LatencySpikeNotifyThreshold)
+                    // HTTPS handshakes and DNS lookups include server and cache time that swings by hundreds of ms on its own;
+                    // a "spike" there says nothing about the connection, so only plain round trips are reported
+                    bool roundTrip = m.Protocol is NetworkProtocol.Icmp or NetworkProtocol.Tcp;
+                    if (Settings.NotifyOnLatencySpike && roundTrip && jump >= Settings.LatencySpikeNotifyThreshold)
                     {
                         _eventLogService.LogEvent(
                             "LatencySpike",
@@ -369,7 +395,9 @@ public class MeasurementEngine
                 metrics.RollingAvg = StatisticalCalculator.CalculateMean(rtts);
                 metrics.MedianLatency = StatisticalCalculator.CalculateMedian(rtts);
                 metrics.P95Latency = StatisticalCalculator.CalculatePercentile(rtts, 0.95);
-                metrics.BaselineLatencyMs = rtts.Count >= MinSamplesForBaseline ? metrics.MedianLatency : 0;
+                // "usual" comes from the long-term memory once it has learned this target; until then from the recent window
+                metrics.BaselineLatencyMs = Baselines?.Usual(BaselineMemory.KeyOf(m.Protocol, m.TargetHost))
+                    ?? (rtts.Count >= MinSamplesForBaseline ? metrics.MedianLatency : 0);
             }
 
             // Recent-window statistics describe current conditions and recover once probes succeed again.

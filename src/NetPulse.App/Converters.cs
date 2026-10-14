@@ -32,17 +32,12 @@ public sealed class SeverityLabelConverter : IValueConverter
 /// <summary>Severity string -> brush, so warnings and problems are visible at a glance.</summary>
 public sealed class SeverityBrushConverter : IValueConverter
 {
-    private static readonly Brush Critical = Frozen(239, 68, 68);
-    private static readonly Brush Warning = Frozen(245, 158, 11);
-    private static readonly Brush Info = Frozen(156, 163, 175);
-
-    private static Brush Frozen(byte r, byte g, byte b) { var br = new SolidColorBrush(Color.FromRgb(r, g, b)); br.Freeze(); return br; }
-
+    // read from the active theme at conversion time (a converter cannot hold a DynamicResource)
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => (value as string) switch
     {
-        "Critical" => Critical,
-        "Warning" => Warning,
-        _ => Info
+        "Critical" => NetPulse.App.Themes.ThemeManager.Brush("AccentRed"),
+        "Warning" => NetPulse.App.Themes.ThemeManager.Brush("AccentAmber"),
+        _ => NetPulse.App.Themes.ThemeManager.Brush("TextSecondary")
     };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
@@ -58,6 +53,13 @@ public sealed class StringEqualsConverter : IValueConverter
 }
 
 /// <summary>Visible when the bound count is zero (empty-state placeholders).</summary>
+/// <summary>true -> Collapsed, false -> Visible (placeholders and "nothing yet" hints).</summary>
+public sealed class InverseBoolToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is true ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 public sealed class ZeroToVisibleConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>

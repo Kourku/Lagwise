@@ -78,13 +78,26 @@ public sealed class NetPulseHost : IDisposable
         Bufferbloat = new BufferbloatService(Ping, TransferProvider);
         SpeedTest = new SpeedTestService(TransferProvider);
 
-        Engine = new MeasurementEngine(Discovery, Ping, Tcp, Http, Dns, Diagnostics, Events) { Settings = Settings };
+        Engine = new MeasurementEngine(Discovery, Ping, Tcp, Http, Dns, Diagnostics, Events)
+        {
+            Settings = Settings,
+            Baselines = new Statistics.BaselineMemory(Path.Combine(DataDirectory, "baselines.json"))
+        };
 
         Recorder = new SessionRecorder();
         Sessions = new SessionStore(Path.Combine(DataDirectory, "sessions"));
 
         Engine.MeasurementProcessed += (_, m) => Recorder.RecordMeasurement(m);
-        Engine.CycleCompleted += (_, t) => Recorder.RecordCycle(t);
+        Engine.CycleCompleted += (_, t) =>
+        {
+            Recorder.RecordCycle(t);
+            if (_lastBaselineSample == default) _lastBaselineSample = t;
+            else if (t - _lastBaselineSample >= Statistics.BaselineMemory.SampleInterval)
+            {
+                _lastBaselineSample = t;
+                Engine.SampleBaselines(t);
+            }
+        };
         Events.EventLogged += (_, e) => Recorder.RecordEvent(e);
         Recorder.GapDetected += (_, gap) => Events.LogEvent("MonitoringGap", "Info",
             $"NetPulse was not measuring for {gap.DurationSeconds:F0} s (system sleep or stalled monitoring). This is not a network outage.",
@@ -100,6 +113,8 @@ public sealed class NetPulseHost : IDisposable
 
         _checkpointTimer = new Timer(_ => Checkpoint(), null, CheckpointInterval, CheckpointInterval);
     }
+
+    private DateTime _lastBaselineSample;
 
     /// <summary>Raised after a recording has been stopped and saved (or failed to save), from any source: the History tab, the Game Monitor or automatic recording.</summary>
     public event EventHandler<SessionSavedEventArgs>? SessionSaved;

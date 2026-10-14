@@ -26,9 +26,9 @@ public class DiagnosticEngine
         {
             result.Category = DiagnosticCategory.Disconnected;
             result.Status = DiagnosticStatus.Critical;
-            result.Headline = "No active network connection detected.";
-            result.LikelyCause = "Network interface is down or disconnected.";
-            result.RecommendedAction = "Check your Wi-Fi connection or ensure your Ethernet cable is securely plugged in.";
+            result.Headline = "This PC is not connected to a network.";
+            result.LikelyCause = "Windows reports no working network adapter (cable unplugged, Wi-Fi off or disconnected).";
+            result.RecommendedAction = "Check that Wi-Fi is on and connected, or that the network cable is plugged in at both ends.";
             evidence.Add("Network adapter status is reported as DOWN by Windows.");
             result.EvidenceItems = evidence;
             result.DetailSummary = string.Join("\n", evidence);
@@ -65,26 +65,26 @@ public class DiagnosticEngine
         if (gatewayMetrics != null && gatewayMetrics.TotalProbes > 0)
         {
             evidence.Add(gwReachable
-                ? $"• Local router (gateway) responding: {gwLatency:F1} ms (Jitter: {gwJitter:F1} ms, Loss: {gwLoss:F0}%)"
-                : "• Local router (gateway) is UNREACHABLE (100% packet loss)");
+                ? $"• Your router answers in {gwLatency:F1} ms (variation {gwJitter:F1} ms, {gwLoss:F0}% lost)"
+                : "• Your router is not answering (every recent probe was lost)");
         }
 
         if (validInternet.Count > 0)
         {
             int reaching = validInternet.Count(t => t.IsReachable);
-            evidence.Add($"• Internet endpoints reachable: {reaching}/{validInternet.Count} targets (Avg Latency: {inetAvgLatency:F1} ms, Loss: {inetAvgLoss:F0}%)");
+            evidence.Add($"• Internet servers answering: {reaching} of {validInternet.Count} (average {inetAvgLatency:F1} ms, {inetAvgLoss:F0}% lost)");
         }
 
         if (dnsMetrics != null && dnsMetrics.TotalProbes > 0)
         {
             evidence.Add(dnsMetrics.IsReachable
-                ? $"• DNS resolution: {dnsLatency:F1} ms"
-                : "• DNS resolution: FAILING / UNRESPONSIVE");
+                ? (dnsLatency < 1 ? "• Name lookups (DNS): under 1 ms, answered from Windows' cache" : $"• Name lookups (DNS): {dnsLatency:F1} ms")
+                : "• Name lookups (DNS): failing, no answers");
         }
 
         if (nic.IsWifi && nic.WifiSignalPercent.HasValue)
         {
-            evidence.Add($"• Wi-Fi Signal Strength: {nic.WifiSignalPercent.Value}% ({nic.WifiRadioType ?? "802.11"})");
+            evidence.Add($"• Wi-Fi signal: {nic.WifiSignalPercent.Value}% ({nic.WifiRadioType ?? "802.11"})");
         }
 
         // ====================================================
@@ -94,9 +94,9 @@ public class DiagnosticEngine
         {
             result.Category = DiagnosticCategory.Disconnected;
             result.Status = DiagnosticStatus.Critical;
-            result.Headline = "Disconnected from router and Internet.";
-            result.LikelyCause = "Your computer cannot communicate with your home router or the local gateway.";
-            result.RecommendedAction = "Verify your Wi-Fi or Ethernet connection to your router. Restart the router if necessary.";
+            result.Headline = "Your router is not answering, so nothing gets through.";
+            result.LikelyCause = "This PC cannot reach your home router, the first step of every connection.";
+            result.RecommendedAction = "Check the Wi-Fi or cable between this PC and the router. If that looks fine, restart the router.";
             result.EvidenceItems = evidence;
             result.DetailSummary = string.Join("\n", evidence);
             return result;
@@ -113,13 +113,13 @@ public class DiagnosticEngine
         {
             result.Category = DiagnosticCategory.LocalNetworkIssue;
             result.Status = (gwLoss > 15.0 || gwLatency > 60.0) ? DiagnosticStatus.Critical : DiagnosticStatus.Degraded;
-            result.Headline = "Problem appears to originate on your local network or Wi-Fi.";
+            result.Headline = "The problem looks like it is in your local network or Wi-Fi.";
             result.LikelyCause = wifiWeak
-                ? "Weak Wi-Fi signal is causing local packet loss and latency spikes before traffic even reaches your router."
-                : "Elevated latency or packet loss was measured between your PC and the local router/gateway.";
+                ? "The Wi-Fi signal is weak, so packets are lost or delayed before they even reach your router."
+                : "Replies from your router are slow or going missing, so the trouble starts between this PC and the router.";
             result.RecommendedAction = wifiWeak
-                ? "Move closer to your Wi-Fi router, reduce physical obstructions, or connect using an Ethernet cable."
-                : "Check your local network cable/Wi-Fi connection, or restart your router.";
+                ? "Move closer to the router, or better, use a network cable for gaming."
+                : "Check the cable or Wi-Fi between this PC and the router, or restart the router.";
             result.EvidenceItems = evidence;
             result.DetailSummary = string.Join("\n", evidence);
             return result;
@@ -134,9 +134,9 @@ public class DiagnosticEngine
             {
                 result.Category = DiagnosticCategory.DnsIssue;
                 result.Status = DiagnosticStatus.Degraded;
-                result.Headline = "DNS resolver is slow or failing.";
-                result.LikelyCause = "Your computer can reach the Internet, but domain name resolution is timing out or taking unusually long.";
-                result.RecommendedAction = "Change your DNS resolver settings to Cloudflare (1.1.1.1) or Google (8.8.8.8) in Windows Network Settings.";
+                result.Headline = "Name lookups (DNS) are slow or failing.";
+                result.LikelyCause = "The internet itself works, but turning names like a game's login server into addresses is slow or failing. This delays logging in and loading, not the match itself.";
+                result.RecommendedAction = "Try a public DNS service such as Cloudflare (1.1.1.1) or Google (8.8.8.8) in Windows network settings, or restart the router.";
                 evidence.Add($"• DNS resolution latency ({dnsLatency:F1} ms) is disproportionately higher than IP packet latency ({inetAvgLatency:F1} ms).");
                 result.EvidenceItems = evidence;
                 result.DetailSummary = string.Join("\n", evidence);
@@ -155,9 +155,9 @@ public class DiagnosticEngine
             {
                 result.Category = DiagnosticCategory.IspInternetIssue;
                 result.Status = inetAvgLoss > 10.0 ? DiagnosticStatus.Critical : DiagnosticStatus.Degraded;
-                result.Headline = "Local network is healthy; degradation detected upstream on the ISP or Internet path.";
-                result.LikelyCause = "Data passes cleanly between your PC and router, but degradation occurs across multiple independent Internet routes.";
-                result.RecommendedAction = "This issue lies outside your home network. Save and share this diagnostic report with your Internet Service Provider (ISP).";
+                result.Headline = "Your home network is fine; the slowdown is at your internet provider or further out.";
+                result.LikelyCause = "Your router answers quickly and reliably, but several independent internet servers are slow or losing packets at the same time.";
+                result.RecommendedAction = "Nothing to fix at home. If it lasts or keeps coming back, export a report and show it to your internet provider.";
                 result.EvidenceItems = evidence;
                 result.DetailSummary = string.Join("\n", evidence);
                 return result;
@@ -173,9 +173,9 @@ public class DiagnosticEngine
             var singleTarget = failingTargets[0];
             result.Category = DiagnosticCategory.TargetSpecificIssue;
             result.Status = DiagnosticStatus.Degraded;
-            result.Headline = $"Issue appears specific to '{singleTarget.TargetName}'. General Internet is healthy.";
-            result.LikelyCause = $"Only {singleTarget.TargetName} is experiencing packet loss or high latency. Other diverse endpoints are responding normally.";
-            result.RecommendedAction = "No action required on your local network. The remote service or its specific host provider is having issues.";
+            result.Headline = $"Only {singleTarget.TargetName} is having trouble; the rest of the internet is fine.";
+            result.LikelyCause = $"{singleTarget.TargetName} is slow or losing packets while the other servers answer normally.";
+            result.RecommendedAction = "Nothing to fix on your side: that server or its network is having a problem. Some servers also simply limit how often they answer pings.";
             evidence.Add($"• Target '{singleTarget.TargetName}' is degraded, while other endpoints are operating normally.");
             result.EvidenceItems = evidence;
             result.DetailSummary = string.Join("\n", evidence);
@@ -189,9 +189,9 @@ public class DiagnosticEngine
         {
             result.Category = DiagnosticCategory.BufferbloatCongestion;
             result.Status = DiagnosticStatus.Degraded;
-            result.Headline = "Significant latency increase under load (Bufferbloat) detected.";
-            result.LikelyCause = "When large downloads or uploads occur, your router queues packets excessively, causing high ping spikes.";
-            result.RecommendedAction = "Enable Smart Queue Management (SQM like CAKE or fq_codel) on your router to keep latency low during active usage.";
+            result.Headline = "Ping rises a lot while the connection is busy (bufferbloat).";
+            result.LikelyCause = "When something downloads or uploads, your router lets a long queue build up, and your game's packets wait in it.";
+            result.RecommendedAction = "If your router has 'Smart Queue Management' (SQM, CAKE or fq_codel), turn it on. Otherwise avoid big downloads while you play.";
             evidence.Add($"• Bufferbloat Grade: {bufferbloatResult.Grade} (+{Math.Max(bufferbloatResult.DownloadDeltaMs, bufferbloatResult.UploadDeltaMs):F0} ms latency jump under load).");
             result.EvidenceItems = evidence;
             result.DetailSummary = string.Join("\n", evidence);
@@ -205,9 +205,9 @@ public class DiagnosticEngine
         {
             result.Category = DiagnosticCategory.Optimal;
             result.Status = DiagnosticStatus.Healthy;
-            result.Headline = "Your connection is healthy, fast, and stable.";
-            result.LikelyCause = "All monitored layers (local router, DNS, and diverse Internet backbones) are performing within ideal parameters.";
-            result.RecommendedAction = "No action needed. Your connection is in excellent condition.";
+            result.Headline = "Your connection looks healthy and steady.";
+            result.LikelyCause = "Your router, name lookups and several independent internet servers all answer quickly and reliably.";
+            result.RecommendedAction = "Nothing to do. NetPulse keeps watching in the background.";
             result.EvidenceItems = evidence;
             result.DetailSummary = string.Join("\n", evidence);
             return result;
@@ -218,9 +218,9 @@ public class DiagnosticEngine
         // ====================================================
         result.Category = DiagnosticCategory.Inconclusive;
         result.Status = DiagnosticStatus.Healthy;
-        result.Headline = "Connection is generally stable with minor transient fluctuations.";
-        result.LikelyCause = "Minor latency variations observed, but measurements cannot confidently attribute causality to a specific fault.";
-        result.RecommendedAction = "Monitoring is active. No immediate intervention is required.";
+        result.Headline = "Your connection is mostly steady, with small ups and downs.";
+        result.LikelyCause = "Ping moves around a little, but not enough to point at any one cause. Brief wobbles like this are normal.";
+        result.RecommendedAction = "Nothing to do right now. NetPulse keeps watching and will note anything that gets worse.";
         result.EvidenceItems = evidence;
         result.DetailSummary = string.Join("\n", evidence);
         return result;

@@ -13,6 +13,11 @@ public class HttpsTimingBreakdown
 
     public override string ToString() =>
         $"DNS: {DnsLookupMs:F1}ms | TCP: {TcpConnectMs:F1}ms | TLS: {TlsHandshakeMs:F1}ms | TTFB: {TtfbMs:F1}ms | Total: {TotalMs:F1}ms";
+
+    /// <summary>"DNS cached · TCP 31 · TLS 32 · first byte 36 ms": a lookup under 1 ms was answered from Windows' cache, not "0 ms".</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ShortText =>
+        $"DNS {(DnsLookupMs < 1 ? "cached" : DnsLookupMs.ToString("F0"))} · TCP {TcpConnectMs:F0} · TLS {TlsHandshakeMs:F0} · first byte {TtfbMs:F0} ms";
 }
 
 public class Measurement

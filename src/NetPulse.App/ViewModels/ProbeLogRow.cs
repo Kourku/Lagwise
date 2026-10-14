@@ -14,7 +14,7 @@ public sealed class ProbeLogRow
         Ok = m.Success;
         Result = m.Success ? $"{m.RttMs:F1} ms" : "no reply";
         Detail = !m.Success ? m.ErrorMessage ?? ""
-            : m.HttpsBreakdown is { } b ? $"DNS {b.DnsLookupMs:F0} · TCP {b.TcpConnectMs:F0} · TLS {b.TlsHandshakeMs:F0} · first byte {b.TtfbMs:F0} ms"
+            : m.HttpsBreakdown is { } b ? b.ShortText
             : "";
     }
 

@@ -675,6 +675,7 @@ public class MainViewModel : ViewModelBase
 
         var r = ReadinessCheck.Evaluate(_engine.GetCurrentMetrics(), ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow);
         ReadinessHeadline = r.Headline;
+        UpdateBadges(r);
         (ReadinessGlyph, ReadinessBrush) = StatusVisual(r.Overall);
         for (int i = 0; i < r.Items.Count; i++)
         {
@@ -699,7 +700,6 @@ public class MainViewModel : ViewModelBase
     {
         if (IsRecording) RefreshSessionStatus();
         UpdateFooterRecording();
-        RefreshReadiness();
         foreach (var m in metrics.Where(x => !x.IsGameEndpoint))
         {
             var existing = Targets.FirstOrDefault(t => t.TargetId == m.TargetId);
@@ -730,7 +730,7 @@ public class MainViewModel : ViewModelBase
             QuickJitter = NetPulse.Core.Statistics.StatisticalCalculator.CalculateMedian(basis.Select(i => i.Jitter).ToList());
             QuickPacketLoss = internet.Average(i => i.PacketLossPercent);
         }
-        UpdateBadges(metrics, gw);
+        RefreshReadiness();   // after the headline numbers, which the tile ratings use
     }
 
     private DiagnosticResult? _lastDiagnosis;
@@ -751,29 +751,41 @@ public class MainViewModel : ViewModelBase
     /// One or two words per headline number. Ping is judged against the servers' own normal (never a fixed number, since a
     /// distant server is not "bad"); stability and loss use the same rules of thumb as the "Ready to play?" checklist.
     /// </summary>
-    private void UpdateBadges(IReadOnlyList<TargetMetrics> metrics, TargetMetrics? gw)
+    /// <summary>
+    /// The tile ratings are read from the same checklist evaluation as "Ready to play?", so a tile and the checklist
+    /// can never disagree (they used to be judged a few seconds apart, and values near a limit flipped between them).
+    /// </summary>
+    private void UpdateBadges(ReadinessResult r)
     {
-        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == NetworkProtocol.Icmp && m.RecentSampleCount >= ReadinessCheck.MinSamples).ToList();
-        if (refs.Count == 0)
-        {
-            (PingBadge, PingBadgeBrush) = ("Measuring", UnknownBrush);
-            (JitterBadge, JitterBadgeBrush) = ("Measuring", UnknownBrush);
-            (LossBadge, LossBadgeBrush) = ("Measuring", UnknownBrush);
-        }
-        else
-        {
-            int elevated = refs.Count(r => r.IsLatencyElevated);
-            (PingBadge, PingBadgeBrush) = refs.All(r => r.BaselineLatencyMs <= 0) ? ("Learning your normal", UnknownBrush)
-                : elevated >= 2 ? ("Higher than usual", DegradedBrush) : ("Usual for you", HealthyBrush);
-            (JitterBadge, JitterBadgeBrush) = QuickJitter <= 8 ? ("Steady", HealthyBrush) : QuickJitter <= 20 ? ("Some wobble", DegradedBrush) : ("Unsteady", CriticalBrush);
-            int lossy = refs.Count(r => r.PacketLossPercent >= 3);
-            (LossBadge, LossBadgeBrush) = lossy >= 2 ? ("Losing packets", CriticalBrush) : QuickPacketLoss < 0.5 ? ("None", HealthyBrush) : ("A little", lossy == 1 ? HealthyBrush : DegradedBrush);
-        }
+        CheckStatus Of(string id) => r.Items.FirstOrDefault(i => i.Id == id)?.Status ?? CheckStatus.Unknown;
 
-        if (gw == null || gw.RecentSampleCount < ReadinessCheck.MinSamples) (RouterBadge, RouterBadgeBrush) = ("Measuring", UnknownBrush);
-        else if (gw.PacketLossPercent >= 2) (RouterBadge, RouterBadgeBrush) = ("Losing packets", CriticalBrush);
-        else if (gw.MedianLatency > (ActiveNic.IsWifi ? 15 : 5) || gw.Jitter > (ActiveNic.IsWifi ? 10 : 3)) (RouterBadge, RouterBadgeBrush) = ("Slower than ideal", DegradedBrush);
-        else (RouterBadge, RouterBadgeBrush) = ("Quick", HealthyBrush);
+        (PingBadge, PingBadgeBrush) = Of("normal") switch
+        {
+            CheckStatus.Unknown => (Of("loss") == CheckStatus.Unknown ? "Measuring" : "Learning your normal", UnknownBrush),
+            CheckStatus.Good => ("Usual for you", HealthyBrush),
+            _ => ("Higher than usual", DegradedBrush)
+        };
+        (JitterBadge, JitterBadgeBrush) = Of("stability") switch
+        {
+            CheckStatus.Unknown => ("Measuring", UnknownBrush),
+            CheckStatus.Good => ("Steady", HealthyBrush),
+            CheckStatus.Fair => ("Some wobble", DegradedBrush),
+            _ => ("Unsteady", CriticalBrush)
+        };
+        (LossBadge, LossBadgeBrush) = Of("loss") switch
+        {
+            CheckStatus.Unknown => ("Measuring", UnknownBrush),
+            CheckStatus.Poor => ("Losing packets", CriticalBrush),
+            CheckStatus.Fair => ("A little", DegradedBrush),
+            _ => QuickPacketLoss < 0.5 ? ("None", HealthyBrush) : ("A little", HealthyBrush)   // one lossy server alone is judged harmless
+        };
+        (RouterBadge, RouterBadgeBrush) = Of("router") switch
+        {
+            CheckStatus.Unknown => ("Measuring", UnknownBrush),
+            CheckStatus.Good => ("Quick", HealthyBrush),
+            CheckStatus.Fair => ("Slower than ideal", DegradedBrush),
+            _ => ("Losing packets", CriticalBrush)
+        };
     }
 
     // ---- live probe log (Advanced) ----

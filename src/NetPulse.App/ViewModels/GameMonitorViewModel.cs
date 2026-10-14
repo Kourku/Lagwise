@@ -280,6 +280,7 @@ public sealed class GameMonitorViewModel : ViewModelBase
             if (IsMonitoring) { OnPropertyChanged(); return; } // cannot switch while recording; binding reverts
             _selectedProfile = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasProfile));
 
             _monitor.Select(value?.Id, out var message);
             _host.Settings.LastGameId = value?.Id;
@@ -290,6 +291,9 @@ public sealed class GameMonitorViewModel : ViewModelBase
             QueueRefresh();
         }
     }
+
+    /// <summary>False until a game is chosen: the picker shows a prompt and the per-game controls stay hidden.</summary>
+    public bool HasProfile => _selectedProfile != null;
 
     public bool IsMonitoring
     {

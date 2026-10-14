@@ -29,6 +29,7 @@
         <local:SeverityBrushConverter x:Key="SeverityBrush" />
         <local:StringEqualsConverter x:Key="EqualsParam" />
         <local:ZeroToVisibleConverter x:Key="ZeroToVis" />
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
         <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
 
         <!-- One step of the "what NetPulse measures" chain on the Overview -->
@@ -581,19 +582,24 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <ComboBox Grid.Column="0" Width="300" ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
-                                              DisplayMemberPath="Display" IsEnabled="{Binding IsIdle}" VerticalAlignment="Center" />
+                                    <Grid Grid.Column="0" Width="300" VerticalAlignment="Center">
+                                        <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                                                  DisplayMemberPath="Display" IsEnabled="{Binding IsIdle}" AutomationProperties.Name="Game" />
+                                        <TextBlock Text="Choose a game..." Foreground="{DynamicResource TextTertiaryBrush}" FontSize="14" Margin="13,0,36,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="{Binding HasProfile, Converter={StaticResource InverseBoolToVis}}" />
+                                    </Grid>
                                     <DockPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
                                         <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{Binding ProcessBrush}" Margin="0,5,10,0" VerticalAlignment="Top" />
                                         <TextBlock Text="{Binding ProcessStatus}" FontSize="14" FontWeight="SemiBold" LineHeight="19" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
                                     </DockPanel>
                                 </Grid>
                                 <TextBlock Text="{Binding ProfileSummary}" FontSize="13.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding HasProfile, Converter={StaticResource BoolToVis}}">
                                     <Button Content="Open official status page" Command="{Binding OpenStatusPageCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5" />
                                     <TextBlock Text="{Binding StatusPageText}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <Expander Header="Known limitations for this game" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,0" FontSize="13.5">
+                                <Expander Header="Known limitations for this game" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,0" FontSize="13.5"
+                                          Visibility="{Binding HasProfile, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="{Binding LimitationsText}" FontSize="13.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
                                 </Expander>
                             </StackPanel>
@@ -705,7 +711,7 @@
                                             </Style>
                                         </DataGrid.RowStyle>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="70" />
+                                            <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="80" />
                                             <DataGridTextColumn Header="Remote endpoint" Binding="{Binding Remote}" Width="190" />
                                             <DataGridTemplateColumn Header="What it probably is" Width="190">
                                                 <DataGridTemplateColumn.CellTemplate>
@@ -719,7 +725,7 @@
                                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
                                             <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="80" />
                                             <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="80" />
-                                            <DataGridTextColumn Header="Measured by" Binding="{Binding MeasuredBy}" Width="90" />
+                                            <DataGridTextColumn Header="Measured by" Binding="{Binding MeasuredBy}" Width="110" />
                                             <DataGridTextColumn Header="Local endpoint" Binding="{Binding Local}" Width="170" />
                                             <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60" />
                                         </DataGrid.Columns>
@@ -844,25 +850,26 @@
                     <DataGrid Grid.Row="1" ItemsSource="{Binding Targets}">
                         <DataGrid.Columns>
                             <!-- Target Name -->
-                            <DataGridTemplateColumn Header="Target" Width="240">
+                            <DataGridTemplateColumn Header="Target" Width="200" MinWidth="160">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Grid VerticalAlignment="Center" ToolTip="{Binding TargetName}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                             <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" Margin="0,0,8,0" />
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding TargetName}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                                <TextBlock Text="{Binding TargetHost}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding TargetName}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding TargetHost}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
-                                        </StackPanel>
+                                        </Grid>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
                             <!-- Protocol -->
-                            <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="80" />
+                            <DataGridTextColumn Header="Protocol" Binding="{Binding ProtocolText}" Width="72" />
 
                             <!-- Current RTT -->
-                            <DataGridTemplateColumn Header="Latency" Width="90">
+                            <DataGridTemplateColumn Header="Latency" Width="82">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding LatencyDisplay}" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
@@ -871,38 +878,34 @@
                             </DataGridTemplateColumn>
 
                             <!-- Rolling Avg -->
-                            <DataGridTextColumn Header="Usual" Binding="{Binding BaselineDisplay}" Width="95" />
-                            <DataGridTextColumn Header="P95" Binding="{Binding P95Display}" Width="85" />
+                            <DataGridTextColumn Header="Usual" Binding="{Binding BaselineDisplay}" Width="76" />
+                            <DataGridTextColumn Header="P95" Binding="{Binding P95Display}" Width="72" />
 
                             <!-- Min / Max -->
-                            <DataGridTemplateColumn Header="Min / Max" Width="100">
+                            <DataGridTemplateColumn Header="Min / Max" Width="110">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding MinLatency, StringFormat='{}{0:F0} / '}" Foreground="{DynamicResource TextSecondaryBrush}">
-                                            <TextBlock.Inlines>
-                                                <Run Text="{Binding MaxLatency, StringFormat='{}{0:F0} ms', Mode=OneWay}" />
-                                            </TextBlock.Inlines>
-                                        </TextBlock>
+                                        <TextBlock Text="{Binding MinMaxDisplay}" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
                             <!-- Jitter -->
-                            <DataGridTextColumn Header="Jitter (RFC3550)" Binding="{Binding JitterDisplay}" Width="110" />
+                            <DataGridTextColumn Header="Jitter" Binding="{Binding JitterDisplay}" Width="74" />
 
                             <!-- Packet Loss -->
-                            <DataGridTextColumn Header="Loss (last 60 s)" Binding="{Binding LossDisplay}" Width="150" />
+                            <DataGridTextColumn Header="Loss, 60 s" Binding="{Binding LossDisplay}" Width="82" />
 
                             <!-- Sparkline Chart -->
-                            <DataGridTemplateColumn Header="HTTPS timing" Width="260">
+                            <DataGridTemplateColumn Header="HTTPS timing" Width="2*" MinWidth="150">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding HttpsTimingDisplay}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                        <TextBlock Text="{Binding HttpsTimingDisplay}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap"
                                                    ToolTip="Where the last HTTPS probe's time went: name lookup, TCP connect, TLS handshake, first byte of the response" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Recent history" Width="*">
+                            <DataGridTemplateColumn Header="History" Width="*" MinWidth="80">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <controls:SparklineChart Values="{Binding ChartValues}" LineBrush="{Binding StatusBrush}" Height="28" Margin="4,2" />
@@ -963,13 +966,13 @@
                             <DataGridTextColumn Header="Hop" Binding="{Binding HopNumber}" Width="50" />
                             <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="140" />
                             <DataGridTextColumn Header="Hostname / rDNS" Binding="{Binding DisplayHost}" Width="200" />
-                            <DataGridTextColumn Header="Current (ms)" Binding="{Binding CurrentRttMs, StringFormat='{}{0:F1}'}" Width="90" />
-                            <DataGridTextColumn Header="Avg (ms)" Binding="{Binding AvgRttMs, StringFormat='{}{0:F1}'}" Width="80" />
-                            <DataGridTextColumn Header="Best (ms)" Binding="{Binding MinRttMs, StringFormat='{}{0:F1}'}" Width="80" />
-                            <DataGridTextColumn Header="Worst (ms)" Binding="{Binding MaxRttMs, StringFormat='{}{0:F1}'}" Width="80" />
-                            <DataGridTextColumn Header="Loss %" Binding="{Binding LossPercent, StringFormat='{}{0:F0}%'}" Width="70" />
+                            <DataGridTextColumn Header="Now" Binding="{Binding CurrentRttMs, StringFormat='{}{0:F1} ms'}" Width="76" />
+                            <DataGridTextColumn Header="Avg" Binding="{Binding AvgRttMs, StringFormat='{}{0:F1} ms'}" Width="76" />
+                            <DataGridTextColumn Header="Best" Binding="{Binding MinRttMs, StringFormat='{}{0:F1} ms'}" Width="76" />
+                            <DataGridTextColumn Header="Worst" Binding="{Binding MaxRttMs, StringFormat='{}{0:F1} ms'}" Width="76" />
+                            <DataGridTextColumn Header="Loss" Binding="{Binding LossPercent, StringFormat='{}{0:F0}%'}" Width="60" />
                             <DataGridTextColumn Header="ASN / Organization" Binding="{Binding AsDisplay}" Width="160" />
-                            <DataGridTemplateColumn Header="Diagnostics" Width="*">
+                            <DataGridTemplateColumn Header="Diagnostics" Width="*" MinWidth="110">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1349,14 +1352,18 @@
                             <DataGridTemplateColumn Header="Level" Width="104">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource Pill}" Padding="8,1,9,2" BorderBrush="{Binding Severity, Converter={DynamicResource SeverityBrush}}" Background="Transparent">
-                                            <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityLabel}}" Foreground="{Binding Severity, Converter={DynamicResource SeverityBrush}}" FontSize="12" FontWeight="SemiBold" TextWrapping="NoWrap" />
+                                        <Border Style="{StaticResource Pill}" Padding="8,1,9,2" BorderBrush="{Binding Severity, Converter={StaticResource SeverityBrush}}" Background="Transparent">
+                                            <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityLabel}}" Foreground="{Binding Severity, Converter={StaticResource SeverityBrush}}" FontSize="12" FontWeight="SemiBold" TextWrapping="NoWrap" />
                                         </Border>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTextColumn Header="What happened" Binding="{Binding EventType, Converter={StaticResource EventLabel}}" Width="180" />
-                            <DataGridTextColumn Header="Where" Binding="{Binding TargetName}" Width="170" />
+                            <DataGridTemplateColumn Header="Where" Width="190">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding TargetName}" ToolTip="{Binding TargetName}" TextWrapping="Wrap" VerticalAlignment="Center" /></DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Details" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -1822,7 +1829,11 @@
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, Converter={StaticResource LocalTime}}" Width="80" />
                                             <DataGridTextColumn Header="What happened" Binding="{Binding EventType, Converter={StaticResource EventLabel}}" Width="190" />
-                                            <DataGridTextColumn Header="Where" Binding="{Binding TargetName}" Width="170" />
+                                            <DataGridTemplateColumn Header="Where" Width="190">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding TargetName}" ToolTip="{Binding TargetName}" TextWrapping="Wrap" VerticalAlignment="Center" /></DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                                             <DataGridTemplateColumn Header="Details" Width="*">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>

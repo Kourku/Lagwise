@@ -196,6 +196,18 @@ try {
     }
     Click-Element (Find-Like '^Overview$')
     Check 'Advanced Overview shows per-server statistics' ($null -ne (Wait-For { Find-Like '^Per-server statistics$' } 5)) ''
+
+    # every page, opened with its Ctrl+number shortcut (Advanced shows all ten), must render without an interface error;
+    # a broken template only fails when its page is first drawn, and is then written to logs\errors.log
+    foreach ($vk in 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30) {
+        [NpMouse]::keybd_event(0x11, 0, 0, 0); [NpMouse]::keybd_event($vk, 0, 0, 0)
+        Start-Sleep -Milliseconds 60
+        [NpMouse]::keybd_event($vk, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
+        Start-Sleep -Milliseconds 900
+    }
+    $errLog = Join-Path $DataDir 'logs\errors.log'
+    Check 'Every page opens without an interface error' (-not (Test-Path $errLog)) $(if (Test-Path $errLog) { (Get-Content $errLog -TotalCount 3) -join ' ' })
+    Click-Element (Find-Like '^Overview$')
     $beg = Find-Named 'Beginner' 'ControlType.Button'
     if ($beg) { ($beg.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 600 }
 

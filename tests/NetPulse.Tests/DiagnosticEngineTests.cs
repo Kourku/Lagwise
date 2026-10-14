@@ -86,7 +86,7 @@ public class DiagnosticEngineTests
         var diagnosis = _engine.Analyze(nic, gateway, internet, null);
 
         Assert.Equal(DiagnosticCategory.IspInternetIssue, diagnosis.Category);
-        Assert.Contains("upstream", diagnosis.Headline.ToLowerInvariant());
+        Assert.Contains("internet provider or further out", diagnosis.Headline.ToLowerInvariant());
     }
 
     [Fact]

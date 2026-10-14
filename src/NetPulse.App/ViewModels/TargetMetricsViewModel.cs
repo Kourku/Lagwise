@@ -38,19 +38,24 @@ public class TargetMetricsViewModel : ViewModelBase
     public HttpsTimingBreakdown? HttpsBreakdown => _model.LastHttpsBreakdown;
 
     public string LatencyDisplay => _model.IsReachable && _model.TotalProbes > 0
-        ? $"{_model.CurrentLatency:F1} ms"
+        ? Ms(_model.CurrentLatency)
         : "Failed";
 
+    /// <summary>"5.8 ms", but "238 ms": a decimal adds nothing at 100 ms and up, and keeps the columns narrow.</summary>
+    public static string Ms(double v) => v >= 100 ? $"{v:F0} ms" : $"{v:F1} ms";
+
     public string AvgDisplay => $"{RollingAvg:F1} ms";
-    public string JitterDisplay => $"{Jitter:F1} ms";
+    public string JitterDisplay => Ms(Jitter);
+    public string ProtocolText => Protocol.ToString().ToUpperInvariant();
+    public string MinMaxDisplay => _model.TotalProbes == 0 || _model.MinLatency == double.MaxValue ? "-" : $"{_model.MinLatency:F0} / {_model.MaxLatency:F0} ms";
     public string LossDisplay => $"{PacketLossPercent:F1}%";
-    public string P95Display => _model.P95Latency > 0 ? $"{_model.P95Latency:F1} ms" : "-";
+    public string P95Display => _model.P95Latency > 0 ? Ms(_model.P95Latency) : "-";
     /// <summary>"usual 24 ms" - this target's own normal, which is what "higher than usual" is judged against.</summary>
-    public string BaselineDisplay => _model.BaselineLatencyMs > 0 ? $"{_model.BaselineLatencyMs:F1} ms" : "learning...";
+    public string BaselineDisplay => _model.BaselineLatencyMs > 0 ? Ms(_model.BaselineLatencyMs) : "learning...";
     public string StateText => !_model.IsReachable ? "Not answering" : _model.IsLatencyElevated ? "Higher than usual" : _model.TotalProbes == 0 ? "Waiting" : "Normal";
     /// <summary>Where an HTTPS probe's time went (Advanced): DNS, TCP connect, TLS handshake, first byte.</summary>
     public string HttpsTimingDisplay => _model.LastHttpsBreakdown is { } b
-        ? $"DNS {b.DnsLookupMs:F0} · TCP {b.TcpConnectMs:F0} · TLS {b.TlsHandshakeMs:F0} · first byte {b.TtfbMs:F0} ms"
+        ? b.ShortText
         : "";
 
     private static readonly Brush RedBrush = Frozen(239, 68, 68), AmberBrush = Frozen(245, 158, 11), GreenBrush = Frozen(16, 185, 129);
@@ -94,6 +99,7 @@ public class TargetMetricsViewModel : ViewModelBase
         OnPropertyChanged(nameof(LatencyDisplay));
         OnPropertyChanged(nameof(AvgDisplay));
         OnPropertyChanged(nameof(JitterDisplay));
+        OnPropertyChanged(nameof(MinMaxDisplay));
         OnPropertyChanged(nameof(LossDisplay));
         OnPropertyChanged(nameof(StatusBrush));
         OnPropertyChanged(nameof(P95Display));

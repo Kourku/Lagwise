@@ -1,6 +1,26 @@
 # NetPulse release notes
 
-Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3); builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
+Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
+
+## 0.10.0
+
+A polish release: no big new features. Every page was checked in both modes and both themes, and what looked wrong, read badly or misled was fixed.
+
+**Fixed**
+- **Event timeline error** (since 0.7): opening the Event timeline once an event existed showed "Something went wrong" and the list stayed empty. A colour lookup was written in a form WPF cannot use there. The automated check now opens every page in both modes and fails if any page logs an error.
+- **"Usual for you" during a slow evening.** "Usual" only covered the last 15 minutes, so after starting NetPulse on a bad evening the bad ping itself became "usual". NetPulse now remembers each server's normal ping across restarts (`baselines.json`): a sample every 10 minutes of monitoring, the median of the last ~8 hours of samples, nothing older than 14 days. A slow evening now shows as "Higher than usual". A lasting change, such as a new provider, becomes the new normal within a few hours.
+- **The tiles and the checklist disagreed.** For example, the Probe loss tile said "A little" while "Ready to play?" marked packet loss red. Both used the same rule but were judged seconds apart, so values near a limit flipped. The tile ratings now come from the same evaluation as the checklist.
+- **No more "latency spike" events from HTTPS handshakes and DNS lookups.** Those timings include server and cache time that swings by hundreds of milliseconds on its own, and they filled the timeline. Spike events are now reported for plain ping and TCP round trips only.
+- **Cached DNS lookups** showed as "0 ms". They now read "under 1 ms, answered from Windows' cache" in the checklist and "DNS cached" in HTTPS timings.
+
+**Clearer**
+- The connection status texts are rewritten in plain words. For example "Connection is generally stable with minor transient fluctuations ... cannot confidently attribute causality to a specific fault" is now "Your connection is mostly steady, with small ups and downs". "Save and share this report with your ISP" now only suggests it if the problem lasts or keeps coming back. The Advanced evidence lines lose their capitals ("UNREACHABLE", "FAILING").
+- **Targets & probes fits the window.** It no longer cuts off names, Min / Max or the HTTPS timing. Latencies of 100 ms and up are shown without a decimal, protocols read ICMP / HTTPS / DNS, and long names have a tooltip.
+- **Tables:** Route trace column headers are shorter, units move into the cells, and the Game Monitor and Event timeline columns fit their headers and names.
+- **Game Monitor:** the game picker says "Choose a game..." instead of being an empty box, and the status-page button and limitations stay hidden until a game is chosen.
+
+**Repository**
+- NetPulse is now published under the MIT License (`LICENSE`).
 
 ## 0.9.0
 

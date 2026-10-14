@@ -126,7 +126,8 @@ public static class ReadinessCheck
         if (dns == null || dns.RecentSampleCount < 3 || dns.ReplyCount == 0) return new("dns", title, CheckStatus.Unknown, "Not measured yet.");
         if (dns.PacketLossPercent >= 20 || dns.MedianLatency > 200)
             return new("dns", title, CheckStatus.Fair, $"Name lookups are slow or failing ({dns.MedianLatency:F0} ms, {dns.PacketLossPercent:F0}% failed). This slows logging in and loading, not the match itself.");
-        return new("dns", title, CheckStatus.Good, $"Quick ({dns.MedianLatency:F0} ms). Only affects logging in and loading.");
+        string speed = dns.MedianLatency < 1 ? "under 1 ms, answered from Windows' cache" : $"{dns.MedianLatency:F0} ms";
+        return new("dns", title, CheckStatus.Good, $"Quick ({speed}). Only affects logging in and loading.");
     }
 
     private static ReadinessItem WifiSignal(NetworkInterfaceInfo nic)
