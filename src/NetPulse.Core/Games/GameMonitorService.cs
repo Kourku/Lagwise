@@ -184,7 +184,20 @@ public sealed class GameMonitorService : IDisposable
 
     // ------------------------------------------------------------------ one poll (public for deterministic tests)
 
+    /// <summary>
+    /// One poll at a time: the process list is read outside <c>_lock</c> and applied afterwards, so two overlapping polls
+    /// could apply an older reading ("game still running") after a newer one ("game closed"), resetting the automatic
+    /// stop countdown and logging a false restart. Overlap can happen when the loop is restarted while a slow poll is
+    /// still running, or when a caller polls directly.
+    /// </summary>
+    private readonly object _pollLock = new();
+
     public void PollOnce()
+    {
+        lock (_pollLock) PollOnceCore();
+    }
+
+    private void PollOnceCore()
     {
         // Process and socket enumeration are done outside the lock: they are the slow parts.
         GameWatcher? watcher;

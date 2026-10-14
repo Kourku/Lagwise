@@ -143,3 +143,32 @@ public class PolishTests
         Assert.Contains("answered from Windows' cache", r.Items.Single(i => i.Id == "dns").Detail);
     }
 }
+
+public class LoadTestWordingTests
+{
+    [Theory]
+    [InlineData(2, "A+", "Ping stayed steady")]
+    [InlineData(12, "A", "rose a little")]
+    [InlineData(25, "B", "rose noticeably")]
+    [InlineData(45, "C", "bufferbloat")]
+    [InlineData(120, "D", "severe bufferbloat")]
+    public void BufferbloatResult_SaysWhatLoadItWasMeasuredUnder(double delta, string grade, string summary)
+    {
+        var r = new BufferbloatResult { DownloadDeltaMs = delta, UploadDeltaMs = 1, DownloadLoadMbps = 412.4, UploadLoadMbps = 38.6 };
+        r.Grade = BufferbloatResult.CalculateGrade(Math.Max(r.DownloadDeltaMs, r.UploadDeltaMs));
+        BufferbloatService.FormatBufferbloatExplanation(r);
+
+        Assert.Equal(grade, r.Grade);
+        Assert.Contains(summary, r.Summary);
+        Assert.Contains("downloaded at about 412 Mbps and uploaded at about 39 Mbps", r.Explanation);
+        Assert.DoesNotContain("queue management", r.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BufferbloatPhases_AreLongEnoughToFillAConnection()
+    {
+        var s = new BufferbloatService(new PingService());
+        Assert.True(s.PhaseMs >= 10_000);
+        Assert.InRange(s.RampUpMs, 1_000, s.PhaseMs / 2);
+    }
+}

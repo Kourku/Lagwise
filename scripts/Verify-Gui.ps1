@@ -96,6 +96,18 @@ try {
     Check 'Copy summary puts a connection summary on the clipboard' (($clip -match 'connection check') -and ($clip -match 'does not measure game-server ping') -and ($clip -notmatch '192\.168\.|(^|[^\d])10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.')) (($clip -split "`n")[0])
     if ($prevClip) { try { Set-Clipboard -Value $prevClip } catch { } }
 
+    # Export report (Ctrl+E) into the test data folder: the file is written and the result shows as a notification
+    Add-Type -AssemblyName System.Windows.Forms
+    $reportPath = Join-Path $DataDir 'export\report.md'
+    New-Item -ItemType Directory -Force -Path (Split-Path $reportPath) | Out-Null
+    [NpMouse]::keybd_event(0x11, 0, 0, 0); [NpMouse]::keybd_event(0x45, 0, 0, 0)
+    Start-Sleep -Milliseconds 60
+    [NpMouse]::keybd_event(0x45, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
+    Start-Sleep -Seconds 2
+    [System.Windows.Forms.SendKeys]::SendWait($reportPath); Start-Sleep -Milliseconds 400
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    Check 'Export report saves the file and confirms it in a notification' (($null -ne (Wait-For { if (Test-Path $reportPath) { $reportPath } } 8)) -and ($null -ne (Wait-For { Find-Like '^Report saved: report\.md$' } 5))) ''
+
     Click-Element (Find-Like 'Game Monitor')
     Check 'Game Monitor tab shows its heading' ($null -ne (Wait-For { Find-Named 'Game Monitor' 'ControlType.Text' } 5)) ''
 

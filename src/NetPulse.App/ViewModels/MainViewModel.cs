@@ -120,6 +120,8 @@ public class MainViewModel : ViewModelBase
 
     private readonly NetPulseHost _host;
     public GameMonitorViewModel GameMonitor { get; }
+    /// <summary>Short results at the bottom of the window ("Report saved", "Could not save ...").</summary>
+    public ToastViewModel Toast { get; } = new();
     public SettingsViewModel Settings { get; }
     public HistoryViewModel History { get; }
     public AppearanceViewModel Appearance { get; }
@@ -187,7 +189,7 @@ public class MainViewModel : ViewModelBase
         // Start measurement engine
         InitializeSessionCommands();
         GameMonitor = new GameMonitorViewModel(host, Application.Current.Dispatcher);
-        History = new HistoryViewModel(host, Application.Current.Dispatcher);
+        History = new HistoryViewModel(host, Application.Current.Dispatcher) { Toast = Toast };
         Settings = new SettingsViewModel(host);
         Appearance = new AppearanceViewModel(host);
         // brushes taken from the palette in code (status tints, grade ring) are re-read after a theme switch
@@ -527,8 +529,21 @@ public class MainViewModel : ViewModelBase
     public BufferbloatResult? LatestBufferbloatResult
     {
         get => _latestBufferbloatResult;
-        set { if (SetProperty(ref _latestBufferbloatResult, value)) { OnPropertyChanged(nameof(GradeBrush)); OnPropertyChanged(nameof(HasBufferbloatResult)); } }
+        set
+        {
+            if (!SetProperty(ref _latestBufferbloatResult, value)) return;
+            OnPropertyChanged(nameof(GradeBrush));
+            OnPropertyChanged(nameof(HasBufferbloatResult));
+            OnPropertyChanged(nameof(BufferbloatDownloadCaption));
+            OnPropertyChanged(nameof(BufferbloatUploadCaption));
+        }
     }
+
+    /// <summary>"+3.1 ms over rest, at 412 Mbps": the rise, and the load it was measured under (unknown for results saved before 0.11).</summary>
+    public string BufferbloatDownloadCaption => LoadCaption(_latestBufferbloatResult?.DownloadDeltaMs, _latestBufferbloatResult?.DownloadLoadMbps);
+    public string BufferbloatUploadCaption => LoadCaption(_latestBufferbloatResult?.UploadDeltaMs, _latestBufferbloatResult?.UploadLoadMbps);
+    private string LoadCaption(double? delta, double? mbps) =>
+        _latestBufferbloatResult?.IsValid != true || delta == null ? " " : $"+{delta:F1} ms over rest" + (mbps > 0 ? $", at {mbps:F0} Mbps" : "");
     public bool HasBufferbloatResult => _latestBufferbloatResult?.IsValid == true;
     /// <summary>Ring colour for the grade: green for A+/A, amber for B/C, red for D/F.</summary>
     public Brush GradeBrush => _latestBufferbloatResult?.IsValid != true ? Res("BorderStrongBrush")
@@ -1089,11 +1104,16 @@ public class MainViewModel : ViewModelBase
             Filter = "CSV File (*.csv)|*.csv",
             FileName = $"NetPulse_Measurements_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv"
         };
-        if (sfd.ShowDialog() == true)
+        if (sfd.ShowDialog() != true) return;
+        try
         {
             var history = _engine.GetAllHistory();
             await _storageService.ExportToCsvAsync(sfd.FileName, history);
-            MessageBox.Show($"Exported {history.Count} measurements to CSV successfully!", "NetPulse Export", MessageBoxButton.OK, MessageBoxImage.Information);
+            Toast.Saved($"{history.Count:N0} measurements", sfd.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Toast.Error($"The measurements could not be saved. {ToastViewModel.Reason(ex)}");
         }
     }
 
@@ -1116,8 +1136,15 @@ public class MainViewModel : ViewModelBase
                 LatestBufferbloat = LatestBufferbloatResult,
                 LatestSpeedTest = LatestSpeedTestResult
             };
-            await _storageService.ExportToJsonAsync(sfd.FileName, snapshot);
-            MessageBox.Show("Exported diagnostic snapshot to JSON successfully!", "NetPulse Export", MessageBoxButton.OK, MessageBoxImage.Information);
+            try
+            {
+                await _storageService.ExportToJsonAsync(sfd.FileName, snapshot);
+                Toast.Saved("Snapshot", sfd.FileName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Toast.Error($"The snapshot could not be saved. {ToastViewModel.Reason(ex)}");
+            }
         }
     }
 
@@ -1146,8 +1173,15 @@ public class MainViewModel : ViewModelBase
                 LatestBufferbloatResult,
                 LatestSpeedTestResult);
 
-            await File.WriteAllTextAsync(sfd.FileName, report);
-            MessageBox.Show("Exported comprehensive Diagnostic Report successfully!", "NetPulse Export", MessageBoxButton.OK, MessageBoxImage.Information);
+            try
+            {
+                await File.WriteAllTextAsync(sfd.FileName, report);
+                Toast.Saved("Report", sfd.FileName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Toast.Error($"The report could not be saved. {ToastViewModel.Reason(ex)}");
+            }
         }
     }
 

@@ -97,8 +97,8 @@ public sealed class SettingsViewModel : ViewModelBase
     };
     public IReadOnlyList<Choice> DedupChoices { get; } = new Choice[]
     {
-        new("Show every occurrence", 0), new("Collapse repeats within 15 s", 15), new("Collapse repeats within 30 s - recommended", 30),
-        new("Collapse repeats within 1 minute", 60), new("Collapse repeats within 2 minutes", 120)
+        new("Show every occurrence", 0), new("Within 15 s", 15), new("Within 30 s - recommended", 30),
+        new("Within 1 minute", 60), new("Within 2 minutes", 120)
     };
     public IReadOnlyList<Choice> RetentionChoices { get; } = new Choice[]
     {

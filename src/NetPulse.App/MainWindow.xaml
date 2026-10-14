@@ -1067,7 +1067,7 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="Three short phases, about 30 seconds" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Three short phases, about 25 seconds" Style="{StaticResource CardTitle}" />
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Border Style="{StaticResource Pill}"><TextBlock Text="1  Ping at rest" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="NoWrap" /></Border>
                                             <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="8,0" />
@@ -1126,14 +1126,14 @@
                                             <StackPanel>
                                                 <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE896;" /><Run Text="  Downloading" /></TextBlock>
                                                 <TextBlock Text="{Binding LatestBufferbloatResult.DownloadLoadedLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='-'}" Style="{StaticResource BigNumber}" FontSize="22" Margin="0,4,0,0" />
-                                                <TextBlock Text="{Binding LatestBufferbloatResult.DownloadDeltaMs, StringFormat='{}+{0:F1} ms over rest', FallbackValue=' '}" FontSize="12" Foreground="{DynamicResource AccentAmberBrush}" />
+                                                <TextBlock Text="{Binding BufferbloatDownloadCaption}" FontSize="12" Foreground="{DynamicResource AccentAmberBrush}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
                                         <Border Background="{DynamicResource BgInputBrush}" CornerRadius="10" Padding="14,12" Margin="6,0,0,0">
                                             <StackPanel>
                                                 <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE898;" /><Run Text="  Uploading" /></TextBlock>
                                                 <TextBlock Text="{Binding LatestBufferbloatResult.UploadLoadedLatencyMs, StringFormat='{}{0:F1} ms', FallbackValue='-'}" Style="{StaticResource BigNumber}" FontSize="22" Margin="0,4,0,0" />
-                                                <TextBlock Text="{Binding LatestBufferbloatResult.UploadDeltaMs, StringFormat='{}+{0:F1} ms over rest', FallbackValue=' '}" FontSize="12" Foreground="{DynamicResource AccentAmberBrush}" />
+                                                <TextBlock Text="{Binding BufferbloatUploadCaption}" FontSize="12" Foreground="{DynamicResource AccentAmberBrush}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
                                     </UniformGrid>
@@ -1172,7 +1172,7 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="About 10 seconds of heavy traffic" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="About 15 seconds of heavy traffic" Style="{StaticResource CardTitle}" />
                                         <TextBlock Text="Run it once in a while, not continuously, and not while you are playing: it fills your connection on purpose." Style="{StaticResource CaptionText}" FontSize="13" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -1717,6 +1717,8 @@
                                             <TextBlock Text="Compare with another recording" Style="{StaticResource CardTitle}" />
                                             <TextBlock Text="For questions like cable vs Wi-Fi, or evening vs morning. Lower is better for every number; changes within normal noise count as the same." Style="{StaticResource CardSubtitle}" Margin="0,3,0,0" />
                                         </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="Choose a recording..." Foreground="{DynamicResource TextTertiaryBrush}" FontSize="14" Margin="13,0,36,0" VerticalAlignment="Center"
+                                                   IsHitTestVisible="False" Panel.ZIndex="1" Visibility="{Binding HasCompareWith, Converter={StaticResource InverseBoolToVis}}" />
                                         <ComboBox Grid.Column="1" Width="300" ItemsSource="{Binding CompareChoices}" SelectedItem="{Binding CompareWith, Mode=TwoWay}" VerticalAlignment="Center"
                                                   AutomationProperties.Name="Compare with">
                                             <ComboBox.ItemTemplate>
@@ -1728,7 +1730,8 @@
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
-                                        <Button Grid.Column="2" Content="Clear" Style="{StaticResource GhostButton}" Command="{Binding ClearCompareCommand}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                        <Button Grid.Column="2" Content="Clear" Style="{StaticResource GhostButton}" Command="{Binding ClearCompareCommand}" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                Visibility="{Binding HasCompareWith, Converter={StaticResource BoolToVis}}" />
                                     </Grid>
                                     <TextBlock Text="{Binding CompareSummary}" Style="{StaticResource MessageText}" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,10,0,10" />
                                     <DataGrid ItemsSource="{Binding CompareRows}" IsReadOnly="True" MaxHeight="300" Visibility="{Binding HasComparison, Converter={StaticResource BoolToVis}}">
@@ -2077,7 +2080,7 @@
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="300" /></Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Text="History used for your 'normal'" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                            <TextBlock Text="Each target's usual latency is learned from this much history, so a far-away server is not flagged for being far away." Style="{StaticResource CaptionText}" />
+                                            <TextBlock Text="The 95th percentile and typical latency on the Targets page cover this much history. 'Usual' is remembered for longer: once NetPulse has watched a server for about half an hour it uses the last ~8 hours of monitoring, kept across restarts, so a slow evening is not mistaken for normal." Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding HistoryWindows}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding HistoryWindowMinutes, Mode=TwoWay}" VerticalAlignment="Center" />
                                     </Grid>
@@ -2102,10 +2105,10 @@
 
                                     <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding NotifyOnLatencySpike, Mode=TwoWay}" Content="Record sudden latency spikes" />
                                     <Grid Margin="52,8,0,16">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="90" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="90" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <TextBlock Text="when ping jumps by at least" Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="0,0,10,0" />
                                         <TextBox Grid.Column="1" Text="{Binding LatencySpikeText, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBlock Grid.Column="2" Text="ms between two replies" Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="10,0,0,0" />
+                                        <TextBlock Grid.Column="2" Text="ms between two ping replies (HTTPS and DNS timings swing too much to count)" Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="10,0,0,0" />
                                     </Grid>
 
                                     <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding NotifyOnPacketLoss, Mode=TwoWay}" Content="Record sustained probe loss" />
@@ -2119,8 +2122,8 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="300" /></Grid.ColumnDefinitions>
                                         <StackPanel>
-                                            <TextBlock Text="Repeated events" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                            <TextBlock Text="A problem that keeps happening would otherwise fill the timeline." Style="{StaticResource CaptionText}" />
+                                            <TextBlock Text="Collapse repeated events" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="The same problem on the same server is written once, with a count, instead of filling the timeline." Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DedupChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding EventDedupSeconds, Mode=TwoWay}" VerticalAlignment="Center" />
                                     </Grid>
@@ -2169,10 +2172,10 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="170" /><ColumnDefinition Width="*" /><ColumnDefinition Width="170" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBox Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" ToolTip="A short name, for example 'My ISP DNS'" Margin="0,0,8,0" />
-                                                <TextBox Grid.Column="1" Text="{Binding NewHost, UpdateSourceTrigger=PropertyChanged}" ToolTip="An IP address or host name, for example 9.9.9.9 or example.com" Margin="0,0,8,0" />
+                                                <TextBox Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" ToolTip="A short name, for example 'My ISP DNS'" Margin="0,0,8,0" controls:Hint.Text="Name, e.g. My ISP DNS" AutomationProperties.Name="New server name" />
+                                                <TextBox Grid.Column="1" Text="{Binding NewHost, UpdateSourceTrigger=PropertyChanged}" ToolTip="An IP address or host name, for example 9.9.9.9 or example.com" Margin="0,0,8,0" controls:Hint.Text="Address, e.g. 9.9.9.9 or example.com" AutomationProperties.Name="New server address" />
                                                 <ComboBox Grid.Column="2" ItemsSource="{Binding NewMethods}" SelectedIndex="{Binding NewMethodIndex, Mode=TwoWay}" Margin="0,0,8,0" />
-                                                <TextBox Grid.Column="3" Width="70" Text="{Binding NewPort, UpdateSourceTrigger=PropertyChanged}" ToolTip="Port" Margin="0,0,8,0" Visibility="{Binding ShowPort, Converter={StaticResource BoolToVis}}" />
+                                                <TextBox Grid.Column="3" Width="70" Text="{Binding NewPort, UpdateSourceTrigger=PropertyChanged}" ToolTip="Port" Margin="0,0,8,0" Visibility="{Binding ShowPort, Converter={StaticResource BoolToVis}}" controls:Hint.Text="Port" AutomationProperties.Name="New server port" />
                                                 <Button Grid.Column="4" Content="Add" Command="{Binding AddTargetCommand}" />
                                             </Grid>
                                             <TextBlock Text="Name, address, method (and port for TCP or HTTPS)." Style="{StaticResource CaptionText}" Margin="0,8,0,0" />
@@ -2294,6 +2297,52 @@
                 <TextBlock Grid.Column="2" Text="{Binding FooterPrivacyText}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" ToolTip="{Binding PrivacyFooter}" Cursor="Help"
                            TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxWidth="460" />
             </Grid>
+        </Border>
+
+        <!-- Toast: results of exports and other actions, shown over the top of the content (the bottom has sticky bars, e.g. Settings) -->
+        <Border Grid.Row="1" DataContext="{Binding Toast}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="232,14,0,0" Panel.ZIndex="50"
+                MaxWidth="720" CornerRadius="10" Padding="16,10,8,10" BorderThickness="1" Background="{DynamicResource PopupBgBrush}"
+                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Notification" AutomationProperties.LiveSetting="Polite">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.35" />
+            </Border.Effect>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock FontFamily="{StaticResource IconFont}" FontSize="15" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="&#xE73E;" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsError}" Value="True">
+                                    <Setter Property="Text" Value="&#xE783;" />
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center" AutomationProperties.Name="{Binding Text}" />
+                <Button Grid.Column="2" Content="{Binding ActionText}" Command="{Binding ActionCommand}" Style="{StaticResource OutlineButton}" Padding="10,4" MinHeight="28" FontSize="12.5" Margin="14,0,0,0"
+                        VerticalAlignment="Center" Visibility="{Binding HasAction, Converter={StaticResource BoolToVis}}" />
+                <Button Grid.Column="3" Content="&#xE711;" FontFamily="{StaticResource IconFont}" Command="{Binding CloseCommand}" Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="28" FontSize="11"
+                        Margin="6,0,0,0" VerticalAlignment="Center" ToolTip="Dismiss" AutomationProperties.Name="Dismiss notification" />
+            </Grid>
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                            <Setter Property="BorderBrush" Value="{DynamicResource AccentRedBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
         </Border>
 
     </Grid>

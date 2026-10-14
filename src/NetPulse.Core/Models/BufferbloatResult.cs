@@ -27,6 +27,9 @@ public class BufferbloatResult
     public int BaselineSampleCount { get; set; }
     public int DownloadSampleCount { get; set; }
     public int UploadSampleCount { get; set; }
+    /// <summary>Average transfer speed NetPulse reached during each load phase: what the grade was measured under.</summary>
+    public double DownloadLoadMbps { get; set; }
+    public double UploadLoadMbps { get; set; }
 
     public static string CalculateGrade(double maxDelta)
     {

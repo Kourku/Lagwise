@@ -2,6 +2,29 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.11.0
+
+Another polish and bug-fix release.
+
+**Fixed**
+- **The Bufferbloat test could grade a line that was never full.** Each load phase lasted only 5 seconds with 3 download and 2 upload streams, and 200 KB counted as "a load", so a fast connection could get an A+ ("virtually no latency increase under heavy load") without ever being busy. The test also took about 12 s while the page promised 30.
+  - Phases now last 10 seconds, with 6 download and 4 upload streams.
+  - Pings from the first 2.5 seconds, while the transfer speeds up, are shown but not graded.
+  - A phase needs at least 2 MB to count.
+  - The speed reached is recorded and shown with the result ("+3.1 ms over rest, at 412 Mbps") and in the explanation, so you can see what the grade was measured under. The grade texts are in plain words.
+- **The Speed test under-reported fast connections.** It averaged from the very first byte, including the slow start of every transfer. It now measures after a 2-second warm-up, with 6 download and 4 upload streams and slightly longer phases (about 15 seconds in all).
+- **Game Monitor race:** two overlapping polls could apply an older process reading after a newer one, resetting the automatic stop countdown and logging a false "game restarted". Polls now run strictly one at a time. This also fixes two automated tests that failed now and then (18 consecutive clean runs after the fix).
+- **Exports could fail with "Something went wrong".** Saving a report, CSV or JSON file to a locked file or a protected folder was not handled. It now says why in plain words ("The file is open in another program...") and suggests what to do.
+- **History exports confirmed off-screen.** "Report saved" was written at the top of the page, out of sight of the export buttons further down.
+
+**New: notifications inside the window**
+- Results of exports and deletions show as a short notification at the top of the content, with **Show in folder** to select the file in Explorer. This replaces the old pop-up message boxes. Notifications close by themselves after a few seconds; errors stay longer.
+
+**Polish**
+- **Keyboard focus is visible.** Tabbing through the window now shows an accent ring around the focused button, page, switch or dropdown. Before, only text boxes showed focus. The ring never appears after a mouse click.
+- **Example text in empty boxes:** "Add a server" shows what to type ("Address, e.g. 9.9.9.9 or example.com"), and History's comparison picker says "Choose a recording...".
+- **Settings:** the "History used for your 'normal'" description explains the long-term memory added in 0.10. The latency-spike setting notes that HTTPS and DNS timings are not counted. "Collapse repeated events" choices no longer run into the dropdown arrow.
+
 ## 0.10.0
 
 A polish release: no big new features. Every page was checked in both modes and both themes, and what looked wrong, read badly or misled was fixed.

@@ -24,7 +24,9 @@ public class SpeedTestProgress
 /// </summary>
 public class SpeedTestService
 {
-    private const int PhaseMs = 5000;
+    private const int PhaseMs = 7000;
+    /// <summary>Transfers take a moment to reach full speed (TCP slow start); bytes from this first part are not counted in the result.</summary>
+    private const int WarmUpMs = 2000;
 
 
     private readonly HttpClient _http;
@@ -61,7 +63,7 @@ public class SpeedTestService
                 result.ErrorMessage = providerError;
                 return result;
             }
-            var (dlBytes, dlSec, dlErr) = await RunPhaseAsync("Download", 10, 40, 4, DownloadWorkerAsync, progress, ct);
+            var (dlBytes, dlSec, dlErr) = await RunPhaseAsync("Download", 10, 40, 6, DownloadWorkerAsync, progress, ct);
             if (dlBytes == 0)
             {
                 result.ErrorMessage = $"No download data was received. {dlErr ?? "Check connectivity to speed.cloudflare.com."}";
@@ -71,7 +73,7 @@ public class SpeedTestService
             result.DownloadSpeedMbps = dlBytes * 8.0 / (dlSec * 1_000_000.0);
 
             progress?.Report(new SpeedTestProgress { Phase = "Upload", Percent = 55, StatusText = "Preparing upload test..." });
-            var (ulBytes, ulSec, ulErr) = await RunPhaseAsync("Upload", 55, 40, 3, UploadWorkerAsync, progress, ct);
+            var (ulBytes, ulSec, ulErr) = await RunPhaseAsync("Upload", 55, 40, 4, UploadWorkerAsync, progress, ct);
             if (ulBytes == 0)
             {
                 result.ErrorMessage = $"Download completed ({result.DownloadSpeedMbps:F1} Mbps) but no upload data was accepted. {ulErr ?? string.Empty}".Trim();
@@ -121,11 +123,14 @@ public class SpeedTestService
         var tasks = Enumerable.Range(0, streams).Select(_ => worker(counter, phaseCts.Token)).ToList();
         var all = Task.WhenAll(tasks);
 
+        long warmBytes = -1;
+        double warmSec = 0;
         while (!all.IsCompleted)
         {
             await Task.WhenAny(all, Task.Delay(200, CancellationToken.None));
             userCt.ThrowIfCancellationRequested();
             long bytes = Interlocked.Read(ref counter.Bytes);
+            if (warmBytes < 0 && sw.ElapsedMilliseconds >= WarmUpMs) { warmBytes = bytes; warmSec = sw.Elapsed.TotalSeconds; }
             double mbps = bytes * 8.0 / (Math.Max(0.1, sw.Elapsed.TotalSeconds) * 1_000_000.0);
             progress?.Report(new SpeedTestProgress
             {
@@ -140,7 +145,12 @@ public class SpeedTestService
         await all; // workers handle their own errors
         sw.Stop();
         userCt.ThrowIfCancellationRequested();
-        return (Interlocked.Read(ref counter.Bytes), Math.Max(0.1, sw.Elapsed.TotalSeconds), counter.LastError);
+        long total = Interlocked.Read(ref counter.Bytes);
+        double seconds = Math.Max(0.1, sw.Elapsed.TotalSeconds);
+        // speed after the warm-up, when the transfer runs flat out; the whole phase if it ended too early to tell
+        if (warmBytes >= 0 && seconds - warmSec >= 1 && total > warmBytes)
+            return (total - warmBytes, seconds - warmSec, counter.LastError);
+        return (total, seconds, counter.LastError);
     }
 
     private async Task DownloadWorkerAsync(Counter counter, CancellationToken ct)

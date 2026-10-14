@@ -156,6 +156,9 @@ public sealed class HistoryViewModel : ViewModelBase
         Patterns = new PatternsViewModel(host, dispatcher);
     }
 
+    /// <summary>Where results of exports and deletions are shown (the page's own message line is out of sight when scrolled down).</summary>
+    public ToastViewModel? Toast { get; set; }
+
     /// <summary>"When is my connection worst?" across all recordings.</summary>
     public PatternsViewModel Patterns { get; }
 
@@ -176,8 +179,9 @@ public sealed class HistoryViewModel : ViewModelBase
     public SessionRow? CompareWith
     {
         get => _compareWith;
-        set { if (SetProperty(ref _compareWith, value)) _ = LoadComparisonAsync(value?.Id); }
+        set { if (SetProperty(ref _compareWith, value)) { OnPropertyChanged(nameof(HasCompareWith)); _ = LoadComparisonAsync(value?.Id); } }
     }
+    public bool HasCompareWith => _compareWith != null;
     public string CompareSummary { get => _compareSummary; private set => SetProperty(ref _compareSummary, value); }
     public bool HasComparison => CompareRows.Count > 0;
     public bool CanCompare => CompareChoices.Count > 0;
@@ -378,6 +382,7 @@ public sealed class HistoryViewModel : ViewModelBase
     {
         _compareWith = null;
         OnPropertyChanged(nameof(CompareWith));
+        OnPropertyChanged(nameof(HasCompareWith));
         CompareRows.Clear();
         CompareSummary = "";
         CompareChoices.Clear();
@@ -474,11 +479,11 @@ public sealed class HistoryViewModel : ViewModelBase
         try
         {
             File.WriteAllText(dlg.FileName, SessionReportBuilder.BuildMarkdown(_session, _stats), Encoding.UTF8);
-            Message = $"Report saved: {dlg.FileName}";
+            if (Toast != null) Toast.Saved("Report", dlg.FileName); else Message = $"Report saved: {dlg.FileName}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Message = $"The report could not be saved: {ex.Message}";
+            if (Toast != null) Toast.Error($"The report could not be saved. {ToastViewModel.Reason(ex)}"); else Message = $"The report could not be saved: {ex.Message}";
         }
     }
 
@@ -494,11 +499,11 @@ public sealed class HistoryViewModel : ViewModelBase
         try
         {
             File.WriteAllText(dlg.FileName, SessionReportBuilder.BuildSamplesCsv(_session), Encoding.UTF8);
-            Message = $"Probe data saved: {dlg.FileName}";
+            if (Toast != null) Toast.Saved("Probe data", dlg.FileName); else Message = $"Probe data saved: {dlg.FileName}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Message = $"The data could not be saved: {ex.Message}";
+            if (Toast != null) Toast.Error($"The probe data could not be saved. {ToastViewModel.Reason(ex)}"); else Message = $"The data could not be saved: {ex.Message}";
         }
     }
 
@@ -526,8 +531,10 @@ public sealed class HistoryViewModel : ViewModelBase
         try
         {
             string id = _session.Id;
+            string name = _session.Name;
             _host.Sessions.Delete(id);
             Message = "Recording deleted.";
+            Toast?.Show($"Deleted \"{name}\".");
             _selected = null;
             OnPropertyChanged(nameof(SelectedSession));
             ClearDetail();

@@ -7,6 +7,16 @@ using Size = System.Windows.Size;
 
 namespace NetPulse.App.Controls;
 
+/// <summary>Greyed-out example text inside an empty TextBox: <c>controls:Hint.Text="e.g. 9.9.9.9"</c>.</summary>
+public static class Hint
+{
+    public static readonly DependencyProperty TextProperty =
+        DependencyProperty.RegisterAttached("Text", typeof(string), typeof(Hint), new FrameworkPropertyMetadata(""));
+
+    public static string GetText(DependencyObject o) => (string)o.GetValue(TextProperty);
+    public static void SetText(DependencyObject o, string value) => o.SetValue(TextProperty, value);
+}
+
 /// <summary>
 /// Text inside a control template is hidden from screen readers and UI Automation, so each building block exposes
 /// itself as one text element whose name is its visible text.

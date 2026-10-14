@@ -27,8 +27,17 @@ public class BufferbloatProgress
 /// </summary>
 public class BufferbloatService
 {
-    private const long MinLoadBytes = 200_000;
-    private const int PhaseMs = 5000;
+    /// <summary>Less than this per phase is not a load at all (the provider failed or was blocked).</summary>
+    private const long MinLoadBytes = 2_000_000;
+
+    /// <summary>
+    /// Length of each load phase. Transfers need a few seconds to ramp up (TCP slow start), so pings from the first
+    /// <see cref="RampUpMs"/> are shown live but not graded: a short phase could otherwise grade a line that was never full.
+    /// </summary>
+    public int PhaseMs { get; init; } = 10_000;
+    public int RampUpMs { get; init; } = 2_500;
+    private const int DownloadStreams = 6;
+    private const int UploadStreams = 4;
 
     private readonly PingService _pingService;
     private static readonly HttpClient SharedHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -94,6 +103,7 @@ public class BufferbloatService
         progress?.Report(new BufferbloatProgress { Phase = "Download", Percent = 30, StatusText = "Saturating download queue while measuring latency..." });
         var (dlSamples, dlLoad) = await MeasureUnderLoadAsync(pingTarget, RunDownloadLoadAsync, "Download", 30, 35, result.BaselineLatencyMs, progress, ct);
         result.BytesDownloadedDuringLoad = dlLoad.Bytes;
+        result.DownloadLoadMbps = dlLoad.Bytes * 8 / (PhaseMs / 1000.0) / 1_000_000;
         result.DownloadSampleCount = dlSamples.Count;
         if (dlLoad.Bytes < MinLoadBytes || dlSamples.Count < 3)
         {
@@ -108,6 +118,7 @@ public class BufferbloatService
         progress?.Report(new BufferbloatProgress { Phase = "Upload", Percent = 65, StatusText = "Saturating upload queue while measuring latency..." });
         var (ulSamples, ulLoad) = await MeasureUnderLoadAsync(pingTarget, RunUploadLoadAsync, "Upload", 65, 30, result.BaselineLatencyMs, progress, ct);
         result.BytesUploadedDuringLoad = ulLoad.Bytes;
+        result.UploadLoadMbps = ulLoad.Bytes * 8 / (PhaseMs / 1000.0) / 1_000_000;
         result.UploadSampleCount = ulSamples.Count;
         if (ulLoad.Bytes < MinLoadBytes || ulSamples.Count < 3)
         {
@@ -158,7 +169,7 @@ public class BufferbloatService
                 var m = await _pingService.ProbeAsync(pingTarget, 1000, phaseCts.Token);
                 if (m.Success)
                 {
-                    samples.Add(m.RttMs);
+                    if (sw.ElapsedMilliseconds >= RampUpMs) samples.Add(m.RttMs);   // graded only once the load is running at full speed
                     progress?.Report(new BufferbloatProgress
                     {
                         Phase = phase,
@@ -191,38 +202,39 @@ public class BufferbloatService
         return r;
     }
 
-    private static void FormatBufferbloatExplanation(BufferbloatResult r)
+    public static void FormatBufferbloatExplanation(BufferbloatResult r)
     {
         double maxDelta = Math.Max(r.DownloadDeltaMs, r.UploadDeltaMs);
+        string load = $"Measured while NetPulse downloaded at about {r.DownloadLoadMbps:F0} Mbps and uploaded at about {r.UploadLoadMbps:F0} Mbps.";
         if (maxDelta <= 5)
         {
-            r.Summary = "Outstanding queue management. Virtually no latency increase detected under heavy load.";
-            r.Explanation = "When your connection is saturated with large downloads or uploads, your router handles queues efficiently without causing ping spikes.";
-            r.Recommendation = "Your network is ideal for competitive gaming, Discord calls, and 4K streaming simultaneously.";
+            r.Summary = "Ping stayed steady while the connection was busy.";
+            r.Explanation = $"{load} Your ping barely moved, so downloads at home should not make your games lag.";
+            r.Recommendation = "Nothing to change. Gaming, voice chat and streaming at the same time should be fine.";
         }
         else if (maxDelta <= 15)
         {
-            r.Summary = $"Great performance. Minimal latency increase under load (+{maxDelta:F0} ms).";
-            r.Explanation = "Slight buffering occurs during peak saturation, but it is well within acceptable real-time limits.";
-            r.Recommendation = "No configuration changes needed.";
+            r.Summary = $"Ping rose a little while the connection was busy (+{maxDelta:F0} ms).";
+            r.Explanation = $"{load} A rise this small is hard to notice in games.";
+            r.Recommendation = "Nothing to change.";
         }
         else if (maxDelta <= 30)
         {
-            r.Summary = $"Moderate queue build-up (+{maxDelta:F0} ms increase under load).";
-            r.Explanation = "You may notice brief audio stuttering or slight gaming lag spikes if someone on your network initiates a large download/upload.";
-            r.Recommendation = "If anyone frequently downloads games or backs up files while you game/stream, enabling SQM (Smart Queue Management) on your router is beneficial.";
+            r.Summary = $"Ping rose noticeably while the connection was busy (+{maxDelta:F0} ms).";
+            r.Explanation = $"{load} When someone at home downloads or uploads something big, you may feel short lag spikes or hear voice chat stutter.";
+            r.Recommendation = "If your router offers 'Smart Queue Management' (SQM, CAKE or fq_codel), turning it on usually fixes this. Otherwise, avoid big downloads while you play.";
         }
         else if (maxDelta <= 60)
         {
-            r.Summary = $"Noticeable bufferbloat (+{maxDelta:F0} ms increase under load).";
-            r.Explanation = "Router buffers are holding packets too long during bandwidth saturation, introducing noticeable latency.";
-            r.Recommendation = "Enable Smart Queue Management (CAKE or fq_codel) on your router to prioritize interactive traffic over bulk transfers.";
+            r.Summary = $"Ping rose a lot while the connection was busy (+{maxDelta:F0} ms): bufferbloat.";
+            r.Explanation = $"{load} Your router lets a long queue build up during big transfers, and your game's packets wait in it.";
+            r.Recommendation = "Turn on 'Smart Queue Management' (SQM, CAKE or fq_codel) in your router if it has it. Otherwise, keep big downloads for when you are not playing.";
         }
         else
         {
-            r.Summary = $"Severe bufferbloat detected (+{maxDelta:F0} ms latency increase under load).";
-            r.Explanation = "Your router's packet buffer grows excessively large during downloads/uploads, causing dramatic lag spikes, voice call dropouts, and stuttering video.";
-            r.Recommendation = "Enabling SQM (CAKE / fq_codel) or QoS on your home router is strongly recommended to maintain low latency during network activity.";
+            r.Summary = $"Ping rose very sharply while the connection was busy (+{maxDelta:F0} ms): severe bufferbloat.";
+            r.Explanation = $"{load} Any big download or upload at home will make games lag badly and voice calls drop out.";
+            r.Recommendation = "Turn on 'Smart Queue Management' (SQM, CAKE or fq_codel) or QoS in your router. If it has neither, a router that does is the real fix.";
         }
     }
 
@@ -238,7 +250,7 @@ public class BufferbloatService
 
     private async Task RunDownloadLoadAsync(LoadCounter counter, CancellationToken ct)
     {
-        var tasks = Enumerable.Range(0, 3).Select(async _ =>
+        var tasks = Enumerable.Range(0, DownloadStreams).Select(async _ =>
         {
             var buffer = new byte[81920];
             try
@@ -261,10 +273,10 @@ public class BufferbloatService
 
     private async Task RunUploadLoadAsync(LoadCounter counter, CancellationToken ct)
     {
-        byte[] payload = new byte[256 * 1024];
+        byte[] payload = new byte[1024 * 1024];
         Random.Shared.NextBytes(payload);
 
-        var tasks = Enumerable.Range(0, 2).Select(async _ =>
+        var tasks = Enumerable.Range(0, UploadStreams).Select(async _ =>
         {
             try
             {
