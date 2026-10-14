@@ -2,6 +2,22 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3); builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.6.0
+
+**New: "Ready to play?" checklist on the Overview** - one line per check, refreshed every few seconds: your router, packet loss, ping stability, ping compared with your normal, DNS, Wi-Fi signal (on Wi-Fi) and lag under load (your last Bufferbloat grade, with a shortcut to run the test if you never have). Each line says what was measured and the rule of thumb used. It is explicit that it covers your PC, home network and connection, not the game's servers. A single public server that ignores pings is no longer enough to mark the connection as lossy.
+
+**Game Monitor: an honest connection list** - learned from a real League of Legends recording, where the 35 sockets seen were web services, local traffic and one UDP socket:
+- a "What it probably is" column (Web / API service (HTTPS), UDP socket (server hidden), Local to this PC, Waiting for connections, Other internet service), with an explanation on hover. Roles stay "Unknown"; nothing is claimed to be the match server.
+- repeated reconnects to the same endpoint are grouped into one row with a count (switchable), and web/API rows are dimmed;
+- a clear notice while a game is running with UDP sockets: the match itself is not in the list, because Windows does not reveal where UDP traffic goes, and measuring a listed web service is not your in-game ping;
+- routine HTTPS reconnects no longer produce a "game connection(s) ended" finding.
+
+**New: compare two recordings** (History & reports) - pick another recording to compare with: typical ping, variation and loss per target side by side, the change, a Better/Worse/About the same verdict per target, and a one-line summary. Differences within normal noise count as the same. Useful for cable vs Wi-Fi or evening vs morning.
+
+**Also**
+- The last Bufferbloat result is remembered across restarts (it feeds the checklist and is shown on the Bufferbloat page).
+- Recording checkpoints are skipped when nothing new was recorded, so long recordings are not rewritten needlessly.
+
 ## 0.5.0
 
 **Visual overhaul** - same features, redesigned throughout.

@@ -158,12 +158,12 @@ public class GameDiagnosticAnalyzerTests
 
     private static TargetMetrics Endpoint(string host = "34.1.2.3") => Healthy("game:Icmp:" + host + ":443", MeasurementKind.GameProcessEndpoint, 40, host);
 
-    private static TrackedConnection Conn(string remote, bool active = true)
+    private static TrackedConnection Conn(string remote, bool active = true, int port = 443)
     {
         var c = new TrackedConnection
         {
             Id = "c|" + remote, Protocol = TransportProtocol.Tcp, Local = new IPEndPoint(IPAddress.Parse("192.168.1.2"), 5000),
-            Remote = new IPEndPoint(IPAddress.Parse(remote), 443), Scope = AddressScope.Public, FirstSeenUtc = DateTime.UtcNow, LastSeenUtc = DateTime.UtcNow, Pid = 1
+            Remote = new IPEndPoint(IPAddress.Parse(remote), port), Scope = AddressScope.Public, FirstSeenUtc = DateTime.UtcNow, LastSeenUtc = DateTime.UtcNow, Pid = 1
         };
         if (!active) c.EndedUtc = DateTime.UtcNow;
         return c;
@@ -233,13 +233,24 @@ public class GameDiagnosticAnalyzerTests
     [Fact]
     public void RecentlyEndedConnections_AreAnObservation_NotACause()
     {
-        var gone = Conn("34.9.9.9", active: false);
-        var change = new ConnectionChange(ConnectionChangeKind.Disappeared, gone, null, DateTime.UtcNow, "TCP connection to 34.9.9.9:443 is no longer observed.");
+        var gone = Conn("34.9.9.9", active: false, port: 5222);
+        var change = new ConnectionChange(ConnectionChangeKind.Disappeared, gone, null, DateTime.UtcNow, "TCP connection to 34.9.9.9:5222 is no longer observed.");
         var f = Run(new[] { Gw(), Ref("a"), Ref("b") }, changes: new[] { change });
 
         var c = Find(f, "connection-changes")!;
         Assert.Equal(FindingSeverity.Info, c.Severity);
         Assert.Contains("Normal", string.Join(" ", c.PossibleExplanations));
+    }
+
+    [Fact]
+    public void RoutineHttpsReconnects_DoNotProduceAFinding()
+    {
+        // League reconnects to its web services every two minutes; that churn says nothing about the match
+        var changes = new[] { "104.16.56.40", "44.240.251.182" }.Select(ip =>
+            new ConnectionChange(ConnectionChangeKind.Disappeared, Conn(ip, active: false), null, DateTime.UtcNow, $"TCP connection to {ip}:443 is no longer observed.")).ToArray();
+        var f = Run(new[] { Gw(), Ref("a"), Ref("b") }, changes: changes);
+
+        Assert.Null(Find(f, "connection-changes"));
     }
 
     [Fact]

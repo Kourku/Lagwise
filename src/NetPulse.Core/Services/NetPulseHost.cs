@@ -130,6 +130,50 @@ public sealed class NetPulseHost : IDisposable
         });
     }
 
+    // ---- last bufferbloat result: kept on disk so the "ready to play" checklist remembers it across restarts
+
+    private string BufferbloatFile => Path.Combine(DataDirectory, "last-bufferbloat.json");
+    private BufferbloatResult? _lastBufferbloat;
+    private bool _bufferbloatLoaded;
+
+    /// <summary>The most recent valid bufferbloat result (this run or an earlier one), or null.</summary>
+    public BufferbloatResult? LastBufferbloat
+    {
+        get
+        {
+            if (_bufferbloatLoaded) return _lastBufferbloat;
+            _bufferbloatLoaded = true;
+            try
+            {
+                if (File.Exists(BufferbloatFile))
+                    _lastBufferbloat = System.Text.Json.JsonSerializer.Deserialize<BufferbloatResult>(File.ReadAllText(BufferbloatFile));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                _lastBufferbloat = null; // unreadable: behave as never tested
+            }
+            return _lastBufferbloat;
+        }
+    }
+
+    /// <summary>Remembers a completed bufferbloat test. Invalid (failed) results are ignored.</summary>
+    public void RememberBufferbloat(BufferbloatResult result)
+    {
+        if (!result.IsValid) return;
+        _lastBufferbloat = result;
+        _bufferbloatLoaded = true;
+        try
+        {
+            Directory.CreateDirectory(DataDirectory);
+            File.WriteAllText(BufferbloatFile + ".tmp", System.Text.Json.JsonSerializer.Serialize(result));
+            File.Move(BufferbloatFile + ".tmp", BufferbloatFile, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // still remembered for this run
+        }
+    }
+
     /// <summary>True while any recording (plain or Game Monitor) is running.</summary>
     public bool IsRecording => Recorder.IsRecording;
 
@@ -201,25 +245,32 @@ public sealed class NetPulseHost : IDisposable
         }
     }
 
+    private int _checkpointedSamples = -1;
+
     private void Checkpoint()
     {
         lock (_sessionLock)
         {
-            if (_disposed) return;
-            TrySave(Recorder.Snapshot());
+            if (_disposed || !Recorder.IsRecording) { _checkpointedSamples = -1; return; }
+            // a long recording is several MB of JSON: do not rewrite it when nothing was recorded since the last checkpoint
+            int samples = Recorder.SampleCount;
+            if (samples == _checkpointedSamples) return;
+            if (TrySave(Recorder.Snapshot())) _checkpointedSamples = samples;
         }
     }
 
-    private void TrySave(MonitoringSession? snapshot)
+    private bool TrySave(MonitoringSession? snapshot)
     {
-        if (snapshot == null) return;
+        if (snapshot == null) return false;
         try
         {
             Sessions.Save(snapshot);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // checkpointing is best effort; the final save on Stop reports failures
+            return false;
         }
     }
 

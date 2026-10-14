@@ -39,7 +39,17 @@ public sealed class ConnectionRow : ViewModelBase
 
     public ConnectionRow(ConnectionView v) { Id = v.Id; Update(v); }
 
-    public string Id { get; }
+    /// <summary>Row identity: grouped rows are keyed by remote endpoint so a reconnect does not replace the row (or lose the selection).</summary>
+    public static string KeyOf(ConnectionView v) => v.HasRemote ? $"{v.Protocol}|{v.Remote}" : v.Id;
+
+    /// <summary>The connection the row currently stands for (the most recent one in a group); used when measuring.</summary>
+    public string Id { get; private set; }
+    public string Kind { get; private set; } = "";
+    public string KindExplanation { get; private set; } = "";
+    public bool IsWebService { get; private set; }
+    private int _occurrences = 1;
+    public int Occurrences { get => _occurrences; private set { if (SetProperty(ref _occurrences, value)) OnPropertyChanged(nameof(OccurrencesText)); } }
+    public string OccurrencesText => _occurrences > 1 ? $"{_occurrences}x" : "";
     public string Protocol { get; private set; } = "";
     public string Local { get; private set; } = "";
     public string Remote { get; private set; } = "";
@@ -57,6 +67,9 @@ public sealed class ConnectionRow : ViewModelBase
 
     public void Update(ConnectionView v)
     {
+        Id = v.Id;
+        Kind = v.KindLabel; KindExplanation = v.KindExplanation; IsWebService = v.Kind == ConnectionKind.WebService;
+        Occurrences = v.Occurrences;
         Protocol = v.Protocol; Local = v.Local; Remote = v.Remote; Scope = v.Scope; Role = v.Role; Pid = v.Pid;
         FirstSeen = v.FirstSeenUtc.ToLocalTime().ToString("HH:mm:ss"); Hint = v.MeasureHint; HasRemote = v.HasRemote;
         State = v.State;
@@ -169,6 +182,8 @@ public sealed class GameMonitorViewModel : ViewModelBase
     private string? _statusPageUrl;
     private bool _isMonitoring;
     private ConnectionRow? _selectedConnection;
+    private bool _groupRepeats = true;
+    private bool _matchTrafficHidden;
     private MeasurementRow? _selectedMeasured;
     private bool _isVisible;
     private string _findingsSignature = "";
@@ -303,6 +318,25 @@ public sealed class GameMonitorViewModel : ViewModelBase
     public string MeasurementNote =>
         "Reference measurements (your router, DNS and public endpoints) show the health of your connection in general. They are not game-server ping. "
         + "In-game latency is not measured by NetPulse.";
+
+    /// <summary>Show repeated reconnects to the same endpoint as one row (default), or every connection separately.</summary>
+    public bool GroupRepeats
+    {
+        get => _groupRepeats;
+        set
+        {
+            if (!SetProperty(ref _groupRepeats, value)) return;
+            Connections.Clear();
+            _connectionRows.Clear();
+            QueueRefresh();
+        }
+    }
+
+    /// <summary>The game is running with UDP sockets: its match traffic is almost certainly there, where Windows cannot show the server.</summary>
+    public bool MatchTrafficHidden { get => _matchTrafficHidden; private set => SetProperty(ref _matchTrafficHidden, value); }
+    public string MatchTrafficText =>
+        "Games normally send the match itself over UDP, and Windows only reports the local side of a UDP socket, so the match server's address is not visible to NetPulse. "
+        + "The internet connections listed are mostly the game's web services (logins, chat, telemetry). Measuring one of them is not the same as your in-game ping.";
 
     public ConnectionRow? SelectedConnection
     {
@@ -448,7 +482,7 @@ public sealed class GameMonitorViewModel : ViewModelBase
 
     private void Refresh()
     {
-        _snapshot = _monitor.Snapshot();
+        _snapshot = _monitor.Snapshot(_groupRepeats);
         var snap = _snapshot;
 
         // process status
@@ -498,9 +532,10 @@ public sealed class GameMonitorViewModel : ViewModelBase
         var seen = new HashSet<string>();
         foreach (var v in snap.Connections)
         {
-            seen.Add(v.Id);
-            if (_connectionRows.TryGetValue(v.Id, out var row)) row.Update(v);
-            else { row = new ConnectionRow(v); _connectionRows[v.Id] = row; Connections.Add(row); }
+            string key = _groupRepeats ? ConnectionRow.KeyOf(v) : v.Id;
+            if (!seen.Add(key)) continue;
+            if (_connectionRows.TryGetValue(key, out var row)) row.Update(v);
+            else { row = new ConnectionRow(v); _connectionRows[key] = row; Connections.Add(row); }
         }
         foreach (var gone in _connectionRows.Keys.Where(k => !seen.Contains(k)).ToList())
         {
@@ -510,8 +545,9 @@ public sealed class GameMonitorViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowConnectionsEmptyText));
 
         EndpointSummary = snap.IsMonitoring
-            ? $"{snap.DistinctRemoteEndpoints} remote endpoint(s) on the Internet, {snap.UdpSocketCount} UDP socket(s) in use (UDP remote peers are not visible to NetPulse)."
+            ? $"{snap.DistinctRemoteEndpoints} internet endpoint(s), of which {snap.WebServiceCount} web/API connection(s); {snap.UdpSocketCount} UDP socket(s) whose server Windows does not reveal."
             : "";
+        MatchTrafficHidden = snap.MatchTrafficHidden;
 
         ConnectionsEmptyText = EmptyText(snap);
 

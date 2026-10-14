@@ -162,6 +162,24 @@ public sealed class HistoryViewModel : ViewModelBase
     public ObservableCollection<ConnectionEvent> Events { get; } = new();
     public ObservableCollection<LegendItem> Legend { get; } = new();
     public ObservableCollection<SummaryCard> Cards { get; } = new();
+    public ObservableCollection<SessionRow> CompareChoices { get; } = new();
+    public ObservableCollection<CompareRow> CompareRows { get; } = new();
+
+    private SessionRow? _compareWith;
+    private string _compareSummary = "";
+    private CancellationTokenSource? _compareCts;
+    /// <summary>The other recording this one is compared with (the reference, "before").</summary>
+    public SessionRow? CompareWith
+    {
+        get => _compareWith;
+        set { if (SetProperty(ref _compareWith, value)) _ = LoadComparisonAsync(value?.Id); }
+    }
+    public string CompareSummary { get => _compareSummary; private set => SetProperty(ref _compareSummary, value); }
+    public bool HasComparison => CompareRows.Count > 0;
+    public bool CanCompare => CompareChoices.Count > 0;
+    public string CompareColumnA => _compareWith == null ? "Before" : "Other";
+    public RelayCommand ClearCompareCommand => _clearCompare ??= new RelayCommand(() => CompareWith = null, () => _compareWith != null);
+    private RelayCommand? _clearCompare;
 
     public RelayCommand RefreshCommand { get; }
     public RelayCommand ExportReportCommand { get; }
@@ -312,6 +330,59 @@ public sealed class HistoryViewModel : ViewModelBase
         }
     }
 
+    private async Task LoadComparisonAsync(string? otherId)
+    {
+        _compareCts?.Cancel();
+        var cts = _compareCts = new CancellationTokenSource();
+        CompareRows.Clear();
+        CompareSummary = "";
+        if (otherId == null || _stats == null || _session == null) { NotifyCompare(); return; }
+
+        var current = _stats;
+        string currentName = _session.Name;
+        try
+        {
+            var other = await Task.Run<(MonitoringSession Session, SessionStats Stats)?>(() =>
+            {
+                var s = _host.Sessions.Load(otherId);
+                return s == null ? null : (s, SessionAnalysis.Compute(s));
+            });
+            if (cts.IsCancellationRequested) return;
+            if (other == null) { CompareSummary = "That recording could not be opened."; NotifyCompare(); return; }
+
+            var result = SessionComparison.Compare(other.Value.Stats, current);
+            foreach (var row in result.Targets) CompareRows.Add(new CompareRow(row));
+            CompareSummary = result.Summary.Replace("Compared with the first recording, the second had", $"Compared with \"{other.Value.Session.Name}\", this recording had");
+            if (result.OnlyInA.Count + result.OnlyInB.Count > 0)
+                CompareSummary += $" Not compared (measured in only one of them): {string.Join(", ", result.OnlyInA.Concat(result.OnlyInB).Distinct())}.";
+        }
+        catch (Exception ex)
+        {
+            CompareSummary = $"The comparison could not be made: {ex.Message}";
+        }
+        NotifyCompare();
+    }
+
+    private void NotifyCompare()
+    {
+        OnPropertyChanged(nameof(HasComparison));
+        OnPropertyChanged(nameof(CompareColumnA));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void ResetCompareChoices()
+    {
+        _compareWith = null;
+        OnPropertyChanged(nameof(CompareWith));
+        CompareRows.Clear();
+        CompareSummary = "";
+        CompareChoices.Clear();
+        if (_session != null)
+            foreach (var r in Sessions.Where(r => r.Id != _session.Id)) CompareChoices.Add(r);
+        OnPropertyChanged(nameof(CanCompare));
+        NotifyCompare();
+    }
+
     private void ClearDetail()
     {
         _session = null;
@@ -319,6 +390,7 @@ public sealed class HistoryViewModel : ViewModelBase
         TargetStats.Clear(); LagMarkers.Clear(); Findings.Clear(); Events.Clear(); Legend.Clear(); Cards.Clear();
         Chart = null;
         DetailTitle = DetailSubtitle = LimitationsText = ConnectionsText = VersionNote = "";
+        ResetCompareChoices();
         NotifyDetail();
     }
 
@@ -372,6 +444,7 @@ public sealed class HistoryViewModel : ViewModelBase
             // Plain pings are comparable with each other; an HTTPS handshake or DNS lookup includes extra work, so they start switched off
             Legend.Add(new LegendItem(t.Id, t.Name, SessionChart.ColorFor(t.Id, order), RebuildChart, isOn: t.Protocol == NetworkProtocol.Icmp));
 
+        ResetCompareChoices();
         NotifyDetail();
         RebuildChart();
     }
@@ -464,3 +537,30 @@ public sealed class HistoryViewModel : ViewModelBase
 }
 
 public sealed record SummaryCard(string Label, string Value, string Caption);
+
+/// <summary>One target in a two-recording comparison, formatted for the table.</summary>
+public sealed class CompareRow
+{
+    public CompareRow(TargetComparison c)
+    {
+        Name = c.Name;
+        Kind = c.KindLabel;
+        MedianA = Ms(c.MedianA); MedianB = Ms(c.MedianB); MedianChange = Delta(c.MedianDelta, SessionComparison.MedianNoiseMs, "ms");
+        VariationA = Ms(c.VariationA); VariationB = Ms(c.VariationB); VariationChange = Delta(c.VariationDelta, SessionComparison.VariationNoiseMs, "ms");
+        LossA = $"{c.LossA:F1}%"; LossB = $"{c.LossB:F1}%"; LossChange = Delta(c.LossDelta, SessionComparison.LossNoisePercent, "pts");
+        // lower is better for all three numbers
+        double score = (c.MedianDelta ?? 0) / SessionComparison.MedianNoiseMs + (c.VariationDelta ?? 0) / SessionComparison.VariationNoiseMs + c.LossDelta / SessionComparison.LossNoisePercent;
+        Verdict = Math.Abs(score) < 1 ? "About the same" : score < 0 ? "Better" : "Worse";
+    }
+
+    public string Name { get; }
+    public string Kind { get; }
+    public string MedianA { get; } public string MedianB { get; } public string MedianChange { get; }
+    public string VariationA { get; } public string VariationB { get; } public string VariationChange { get; }
+    public string LossA { get; } public string LossB { get; } public string LossChange { get; }
+    public string Verdict { get; }
+
+    private static string Ms(double? v) => v.HasValue ? $"{v.Value:F1} ms" : "-";
+    private static string Delta(double? d, double noise, string unit) =>
+        !d.HasValue ? "-" : Math.Abs(d.Value) < noise ? "same" : $"{(d.Value > 0 ? "+" : "")}{d.Value:F1} {unit}";
+}

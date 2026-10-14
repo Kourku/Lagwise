@@ -145,6 +145,7 @@ public class MainViewModel : ViewModelBase
         _speedTestService = host.SpeedTest;
         _engine = host.Engine;
         _isBeginnerMode = host.Settings.IsBeginnerMode;
+        _latestBufferbloatResult = host.LastBufferbloat; // the last test survives restarts
 
         // Bind engine events
         _engine.MetricsUpdated += (s, metrics) => Application.Current.Dispatcher.InvokeAsync(() => UpdateMetrics(metrics));
@@ -546,10 +547,53 @@ public class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(LiveChartCaption));
     }
 
+    // ---- "Ready to play?" checklist (Overview) ----
+
+    public ObservableCollection<ReadinessRow> ReadinessItems { get; } = new();
+    private string _readinessHeadline = "Measuring...";
+    private string _readinessGlyph = "\uE895";
+    private Brush _readinessBrush = AnalyzingBrush;
+    private DateTime _lastReadiness;
+    public string ReadinessHeadline { get => _readinessHeadline; private set => SetProperty(ref _readinessHeadline, value); }
+    public string ReadinessGlyph { get => _readinessGlyph; private set => SetProperty(ref _readinessGlyph, value); }
+    public Brush ReadinessBrush { get => _readinessBrush; private set => SetProperty(ref _readinessBrush, value); }
+    public string ReadinessScope => ReadinessResult.Scope;
+    public RelayCommand OpenBufferbloatCommand => _openBufferbloat ??= new RelayCommand(() => CurrentTab = "Bufferbloat");
+    private RelayCommand? _openBufferbloat;
+
+    private void RefreshReadiness(bool force = false)
+    {
+        // a checklist that changes every second is unreadable; every few seconds is plenty
+        if (!force && DateTime.UtcNow - _lastReadiness < TimeSpan.FromSeconds(4)) return;
+        _lastReadiness = DateTime.UtcNow;
+
+        var r = ReadinessCheck.Evaluate(_engine.GetCurrentMetrics(), ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow);
+        ReadinessHeadline = r.Headline;
+        (ReadinessGlyph, ReadinessBrush) = StatusVisual(r.Overall);
+        for (int i = 0; i < r.Items.Count; i++)
+        {
+            var item = r.Items[i];
+            if (i < ReadinessItems.Count && ReadinessItems[i].Id == item.Id) ReadinessItems[i].Update(item);
+            else if (i < ReadinessItems.Count) ReadinessItems[i] = new ReadinessRow(item);
+            else ReadinessItems.Add(new ReadinessRow(item));
+        }
+        while (ReadinessItems.Count > r.Items.Count) ReadinessItems.RemoveAt(ReadinessItems.Count - 1);
+    }
+
+    internal static (string Glyph, Brush Brush) StatusVisual(CheckStatus status) => status switch
+    {
+        CheckStatus.Good => ("\uE73E", HealthyBrush),
+        CheckStatus.Fair => ("\uE7BA", DegradedBrush),
+        CheckStatus.Poor => ("\uEA39", CriticalBrush),
+        _ => ("\uE9CE", UnknownBrush)
+    };
+    private static readonly Brush UnknownBrush = Frozen(Color.FromRgb(102, 112, 133));
+
     private void UpdateMetrics(IReadOnlyList<TargetMetrics> metrics)
     {
         if (IsRecording) RefreshSessionStatus();
         UpdateFooterRecording();
+        RefreshReadiness();
         foreach (var m in metrics.Where(x => !x.IsGameEndpoint))
         {
             var existing = Targets.FirstOrDefault(t => t.TargetId == m.TargetId);
@@ -699,6 +743,8 @@ public class MainViewModel : ViewModelBase
         {
             var res = await _bufferbloatService.RunTestAsync("1.1.1.1", progress, _bufferbloatCts.Token);
             LatestBufferbloatResult = res;
+            _host.RememberBufferbloat(res);
+            RefreshReadiness(force: true);
             if (!res.IsValid)
             {
                 BufferbloatProgress = 0;

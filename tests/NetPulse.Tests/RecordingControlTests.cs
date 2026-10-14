@@ -138,4 +138,25 @@ public class RecordingControlTests : IDisposable
         Assert.False(_host.GameMonitor.IsMonitoring);
         Assert.True(_host.Recorder.IsRecording);
     }
+
+    [Fact]
+    public void LastBufferbloatResult_SurvivesARestart_AndFailedTestsAreNotRemembered()
+    {
+        string dir = _dir + "-bb";
+        try
+        {
+            using (var h = new NetPulseHost(dir, _procs, _conns))
+            {
+                Assert.Null(h.LastBufferbloat);
+                h.RememberBufferbloat(new NetPulse.Core.Models.BufferbloatResult { Grade = "B", DownloadDeltaMs = 22 });
+                h.RememberBufferbloat(new NetPulse.Core.Models.BufferbloatResult { IsValid = false, ErrorMessage = "provider down" });
+            }
+            using var again = new NetPulseHost(dir, _procs, _conns);
+            Assert.Equal("B", again.LastBufferbloat!.Grade);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
 }

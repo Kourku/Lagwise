@@ -167,12 +167,34 @@ public class GameMonitorTests : IDisposable
         _conns.Current.Add(Tcp("34.1.2.3", 443, 7000, local: 50999));
         Poll(2);
 
-        var snap = M.Snapshot();
+        var snap = M.Snapshot(groupRepeats: false);
         Assert.Equal(7000, snap.Process!.Primary!.Pid);
         Assert.Equal(1, snap.Connections.Count(c => c.IsActive));
         Assert.Equal(2, snap.Connections.Count);
+
+        // grouped (the default view): the reconnect to the same endpoint is one active row standing for both
+        var grouped = Assert.Single(M.Snapshot().Connections);
+        Assert.True(grouped.IsActive);
+        Assert.Equal(2, grouped.Occurrences);
+        Assert.Equal(ConnectionKind.WebService, grouped.Kind);
         var session = M.Stop(out _)!;
         Assert.Equal(2, _host.Sessions.Load(session.Id)!.GameProcesses.Count);
+    }
+
+    [Fact]
+    public void RunningGameWithUdpSockets_ReportsThatMatchTrafficIsHidden()
+    {
+        M.Select("lol", out _);
+        M.Start(out _);
+        _procs.Current.Add(Game());
+        _conns.Current.AddRange(new[] { Tcp("104.16.56.40", 443), Udp(49701) });
+        Poll(2);
+
+        var snap = M.Snapshot();
+        Assert.True(snap.MatchTrafficHidden);
+        Assert.Equal(1, snap.WebServiceCount);
+        Assert.Contains(snap.Connections, c => c.Kind == ConnectionKind.UdpSocket && c.KindLabel.Contains("hidden"));
+        Assert.All(snap.Connections, c => Assert.Equal("Unknown role", c.Role)); // a hint is never an identification
     }
 
     [Fact]

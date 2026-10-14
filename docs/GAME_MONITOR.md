@@ -1,6 +1,6 @@
 # Game Monitor: what exists and what has actually been verified
 
-Status as of NetPulse 0.4.0 (2026-10-12).
+Status as of NetPulse 0.6.0 (2026-10-14).
 
 ## Support status of the seven games
 
@@ -29,6 +29,13 @@ No profile lists a "verified endpoint": match servers are dynamic and none was v
   no administrator rights, no `netstat` parsing. Records local/remote endpoint, protocol, PID, state, first/last seen; deduplicates;
   reports appeared / state-changed / disappeared (a connection must be missing for two polls first).
 - **Endpoint role** is always *Unknown*. Nothing observable is reliable evidence that an address is the match server.
+  A separate, clearly worded hint ("What it probably is", `ConnectionKinds`) follows protocol, scope and port convention only:
+  TCP to public port 443/80/8443 is a web/API service, UDP sockets carry the (hidden) match traffic, loopback stays on the PC.
+  Repeated reconnects to the same endpoint are grouped into one row with a count.
+- **Real League recording (2026-10-10, 36 min):** the game process was detected for the whole match; its 35 sockets were
+  30 HTTPS connections (Cloudflare and AWS, reconnecting every two minutes), 4 loopback sockets (including the local game
+  API on port 2999) and one UDP socket open all match. The match server's address was therefore never visible, which the
+  UI now states while a game runs with UDP sockets.
 - **Measurement** of endpoints you choose, through the shared measurement engine: ICMP, or TCP connect for TCP endpoints. The app refuses
   methods that are not meaningful (UDP socket with no visible peer, loopback, LAN, multicast) and explains why. An endpoint that never
   answers is "not responding to this method (may filter probes)", never "offline". Game endpoints are excluded from the general
@@ -56,7 +63,7 @@ No profile lists a "verified endpoint": match servers are dynamic and none was v
 
 ## Verification performed
 
-**Automated (247 tests, all passing):** profile invariants; process detection with simulated processes (multiple processes, launchers,
+**Automated (264 tests, all passing):** profile invariants; process detection with simulated processes (multiple processes, launchers,
 anti-cheat, path mismatch, restarts, PID reuse); connection tracking with synthetic IPv4/IPv6/TCP/UDP snapshots (dedup, state change,
 flapping, short-lived, owner exit); the **real Windows APIs** against sockets created by the test process itself (IPv4 and IPv6 TCP and
 UDP); endpoint advice and ICMP-filtering handling; analyzer scenarios incl. contradictions and confidence; the full monitor workflow

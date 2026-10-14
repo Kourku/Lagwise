@@ -389,8 +389,10 @@ public static class GameDiagnosticAnalyzer
 
     private static void AddConnectionChangeFinding(List<GameFinding> findings, GameDiagnosticInput input, bool somethingDegraded)
     {
+        // Web/API connections (HTTPS) open and close all the time - games reconnect to them every minute or two - so their
+        // closing says nothing about the match. Only other public connections ending is worth a note.
         var ended = input.RecentChanges.Where(c => c.Kind == ConnectionChangeKind.Disappeared && c.Connection.HasRemote
-            && c.Connection.Scope == AddressScope.Public).ToList();
+            && c.Connection.Scope == AddressScope.Public && ConnectionKinds.Describe(c.Connection).Kind != ConnectionKind.WebService).ToList();
         if (ended.Count == 0) return;
 
         findings.Add(new GameFinding

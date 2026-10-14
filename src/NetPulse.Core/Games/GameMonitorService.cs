@@ -11,9 +11,11 @@ namespace NetPulse.Core.Games;
 
 public delegate MonitoringSession? StopSessionDelegate(out string? error);
 
+/// <param name="Occurrences">How many separate connections this row stands for (repeated reconnects to the same endpoint are grouped).</param>
 public sealed record ConnectionView(
     string Id, string Protocol, string Local, string Remote, string Scope, string Role, string State, int Pid,
-    DateTime FirstSeenUtc, DateTime LastSeenUtc, bool IsActive, bool HasRemote, string? MeasuredBy, string MeasureHint);
+    DateTime FirstSeenUtc, DateTime LastSeenUtc, bool IsActive, bool HasRemote, string? MeasuredBy, string MeasureHint,
+    ConnectionKind Kind = ConnectionKind.Other, string KindLabel = "", string KindExplanation = "", int Occurrences = 1);
 
 public sealed record MeasuredEndpointView(string TargetId, string Name, string Method, string Caveat, DateTime StartedUtc, bool ConnectionStillObserved);
 
@@ -27,6 +29,10 @@ public sealed class GameMonitorSnapshot
     /// <summary>Distinct remote address:port pairs currently observed with a public address.</summary>
     public int DistinctRemoteEndpoints { get; init; }
     public int UdpSocketCount { get; init; }
+    /// <summary>Active TCP connections to public web ports (HTTPS), i.e. probably not match traffic.</summary>
+    public int WebServiceCount { get; init; }
+    /// <summary>True when the game is running and owns UDP sockets: its match traffic is most likely there, out of Windows' sight.</summary>
+    public bool MatchTrafficHidden { get; init; }
     public IReadOnlyList<MeasuredEndpointView> Measured { get; init; } = Array.Empty<MeasuredEndpointView>();
     public IReadOnlyList<GameFinding> Findings { get; init; } = Array.Empty<GameFinding>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
@@ -431,23 +437,38 @@ public sealed class GameMonitorService : IDisposable
 
     // ------------------------------------------------------------------ read model
 
-    public GameMonitorSnapshot Snapshot()
+    /// <param name="groupRepeats">
+    /// Collapse repeated connections to the same remote endpoint into one row (games reconnect to web services every
+    /// minute or two, which otherwise floods the list). The row stands for its most recent connection.
+    /// </param>
+    public GameMonitorSnapshot Snapshot(bool groupRepeats = true)
     {
         lock (_lock)
         {
             var active = _tracker.All;
-            var views = active
-                .OrderByDescending(c => c.IsActive).ThenByDescending(c => c.HasRemote).ThenByDescending(c => c.LastSeenUtc)
-                .Take(300)
-                .Select(c =>
+            var groups = groupRepeats
+                ? active.GroupBy(c => c.Remote == null ? "socket:" + c.Id : $"{c.Protocol}|{c.Remote.Address}|{c.Remote.Port}")
+                : active.GroupBy(c => c.Id);
+
+            var views = groups
+                .Select(g =>
                 {
+                    var c = g.OrderByDescending(x => x.IsActive).ThenByDescending(x => x.LastSeenUtc).First();
+                    return (Rep: c, Count: g.Count(), First: g.Min(x => x.FirstSeenUtc), Last: g.Max(x => x.LastSeenUtc), Active: g.Any(x => x.IsActive));
+                })
+                .OrderByDescending(x => x.Active).ThenByDescending(x => x.Rep.HasRemote).ThenByDescending(x => x.Last)
+                .Take(300)
+                .Select(x =>
+                {
+                    var c = x.Rep;
                     var options = EndpointMeasurementAdvisor.Advise(c);
                     string hint = string.Join(" | ", options.Select(o => $"{(o.Method == EndpointMethod.Icmp ? "ICMP" : "TCP")}: {(o.IsAvailable ? "available" : "not meaningful - " + o.Explanation)}"));
                     string? measuredBy = c.Remote == null ? null : string.Join(", ", _measured.Where(m => m.Value.ConnectionId == c.Id || EndpointKey(m.Key) == $"{c.Remote.Address}:{c.Remote.Port}")
                         .Select(m => m.Value.Method == EndpointMethod.Icmp ? "ICMP" : "TCP"));
+                    var kind = ConnectionKinds.Describe(c);
                     return new ConnectionView(c.Id, c.Protocol.ToString().ToUpperInvariant(), c.LocalDisplay, c.RemoteDisplay, ScopeText(c.Scope), "Unknown role",
-                        c.State == ConnectionState.NotApplicable ? "n/a (UDP)" : c.State.ToString(), c.Pid, c.FirstSeenUtc, c.LastSeenUtc, c.IsActive, c.HasRemote,
-                        string.IsNullOrEmpty(measuredBy) ? null : measuredBy, hint);
+                        c.State == ConnectionState.NotApplicable ? "n/a (UDP)" : c.State.ToString(), c.Pid, x.First, x.Last, x.Active, c.HasRemote,
+                        string.IsNullOrEmpty(measuredBy) ? null : measuredBy, hint, kind.Kind, kind.Label, kind.Explanation, x.Count);
                 }).ToList();
 
             var activeRemote = active.Where(c => c.IsActive && c.Remote != null && c.Scope == AddressScope.Public)
@@ -462,6 +483,8 @@ public sealed class GameMonitorService : IDisposable
                 Connections = views,
                 DistinctRemoteEndpoints = activeRemote,
                 UdpSocketCount = active.Count(c => c.IsActive && c.Protocol == TransportProtocol.Udp),
+                WebServiceCount = active.Count(c => c.IsActive && ConnectionKinds.Describe(c).Kind == ConnectionKind.WebService),
+                MatchTrafficHidden = _monitoring && _watcher?.Current?.State == GameRunState.Running && active.Any(c => c.IsActive && c.Protocol == TransportProtocol.Udp),
                 Measured = _measured.Select(m => new MeasuredEndpointView(m.Key, m.Value.Name, m.Value.Method == EndpointMethod.Icmp ? "ICMP" : "TCP connect",
                     m.Value.Caveat, m.Value.StartedUtc, active.Any(c => c.IsActive && c.Id == m.Value.ConnectionId))).ToList(),
                 Findings = _findings,

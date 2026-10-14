@@ -69,6 +69,7 @@ try {
     Check 'Application stays responsive' ((Get-Process -Id $proc.Id).Responding) ''
     Check 'Game Monitor navigation entry exists' ($null -ne (Find-Like 'Game Monitor')) ''
     Check 'Overview shows the live ping graph' ($null -ne (Wait-For { Find-Like '^Live ping graph$' } 5)) ''
+    Check 'Overview shows the Ready to play checklist' (($null -ne (Find-Like '^Ready to play\?$')) -and ($null -ne (Wait-For { Find-Like '^Ping stability$' } 10))) ''
 
     Click-Element (Find-Like 'Game Monitor')
     Check 'Game Monitor tab shows its heading' ($null -ne (Wait-For { Find-Named 'Game Monitor' 'ControlType.Text' } 5)) ''

@@ -268,6 +268,49 @@
                                                Value="{Binding QuickGatewayLatency, StringFormat={}{0:F1}}" Caption="This PC to your router (the first step)" />
                         </UniformGrid>
 
+                        <!-- Ready to play? -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="40" Height="40" CornerRadius="20" Background="{Binding ReadinessBrush}" VerticalAlignment="Top" Margin="0,0,14,0">
+                                        <TextBlock Text="{Binding ReadinessGlyph}" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{StaticResource BgDarkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Ready to play?" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="{Binding ReadinessHeadline}" FontSize="13.5" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding ReadinessItems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="2,10">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="30" />
+                                                        <ColumnDefinition Width="230" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{Binding Brush}" Margin="0,2,0,0" VerticalAlignment="Top" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Top" />
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Text="{Binding Detail}" FontSize="13" LineHeight="18" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                                        <Button Content="Run the Bufferbloat test" Style="{StaticResource OutlineButton}" Padding="10,3" MinHeight="28" FontSize="12.5" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                                                Command="{Binding DataContext.OpenBufferbloatCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                Visibility="{Binding IsUntestedLoad, Converter={StaticResource BoolToVis}}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding ReadinessScope}" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" TextWrapping="Wrap" Margin="2,8,0,0" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- Live graph of the last few minutes -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                             <StackPanel>
@@ -531,15 +574,41 @@
                                 <TextBlock Text="Connections opened by the game" Style="{StaticResource CardTitle}" />
                                 <TextBlock Text="Every address is labelled 'Unknown role': a game also talks to login, matchmaking, telemetry, voice and download services, so none of these is assumed to be the match server."
                                            Style="{StaticResource CardSubtitle}" />
-                                <TextBlock Text="{Binding EndpointSummary}" Style="{StaticResource MessageText}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10" />
+                                <controls:Callout Kind="Warning" Title="The match itself is not in this list" Text="{Binding MatchTrafficText}" Margin="0,0,0,12"
+                                                  Visibility="{Binding MatchTrafficHidden, Converter={StaticResource BoolToVis}}" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding EndpointSummary}" Style="{StaticResource MessageText}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                    <CheckBox Grid.Column="1" Style="{StaticResource SwitchToggle}" IsChecked="{Binding GroupRepeats, Mode=TwoWay}" Content="Group repeated connections" FontSize="13"
+                                              ToolTip="Games reconnect to the same web services every minute or two. Grouped, each endpoint is one row with a count." Margin="16,0,0,0" />
+                                </Grid>
                                 <Grid>
                                     <DataGrid ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedConnection, Mode=TwoWay}" IsReadOnly="True"
                                               AutoGenerateColumns="False" SelectionMode="Single" MaxHeight="300" MinHeight="170">
+                                        <DataGrid.RowStyle>
+                                            <!-- web/API rows are quieter: they are very unlikely to be the match -->
+                                            <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsWebService}" Value="True"><Setter Property="Opacity" Value="0.6" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="False"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGrid.RowStyle>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="70" />
-                                            <DataGridTextColumn Header="Remote endpoint" Binding="{Binding Remote}" Width="200" />
-                                            <DataGridTextColumn Header="Where" Binding="{Binding Scope}" Width="120" />
-                                            <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="100" />
+                                            <DataGridTextColumn Header="Remote endpoint" Binding="{Binding Remote}" Width="190" />
+                                            <DataGridTemplateColumn Header="What it probably is" Width="190">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Kind}" ToolTip="{Binding KindExplanation}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Cursor="Help" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="Seen" Binding="{Binding OccurrencesText}" Width="55" />
+                                            <DataGridTextColumn Header="Where" Binding="{Binding Scope}" Width="110" />
                                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
                                             <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="80" />
                                             <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="80" />
@@ -1366,6 +1435,65 @@
                                             <DataGridTextColumn Header="Variation" Binding="{Binding Variation}" Width="95" />
                                             <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="130" />
                                             <DataGridTextColumn Header="Probes" Binding="{Binding Probes}" Width="85" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Compare with another recording -->
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Visibility="{Binding CanCompare, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Compare with another recording" Style="{StaticResource CardTitle}" />
+                                            <TextBlock Text="For questions like cable vs Wi-Fi, or evening vs morning. Lower is better for every number; changes within normal noise count as the same." Style="{StaticResource CardSubtitle}" Margin="0,3,0,0" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" Width="300" ItemsSource="{Binding CompareChoices}" SelectedItem="{Binding CompareWith, Mode=TwoWay}" VerticalAlignment="Center"
+                                                  AutomationProperties.Name="Compare with">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" FontSize="13.5" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                        <TextBlock Text="{Binding StartedText}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Button Grid.Column="2" Content="Clear" Style="{StaticResource GhostButton}" Command="{Binding ClearCompareCommand}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding CompareSummary}" Style="{StaticResource MessageText}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,10,0,10" />
+                                    <DataGrid ItemsSource="{Binding CompareRows}" IsReadOnly="True" MaxHeight="300" Visibility="{Binding HasComparison, Converter={StaticResource BoolToVis}}">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Target" Binding="{Binding Name}" Width="*" />
+                                            <DataGridTextColumn Header="Typical ping, other" Binding="{Binding MedianA}" Width="135" />
+                                            <DataGridTextColumn Header="this one" Binding="{Binding MedianB}" Width="90" />
+                                            <DataGridTextColumn Header="Change" Binding="{Binding MedianChange}" Width="85" />
+                                            <DataGridTextColumn Header="Variation, other" Binding="{Binding VariationA}" Width="115" />
+                                            <DataGridTextColumn Header="this one" Binding="{Binding VariationB}" Width="90" />
+                                            <DataGridTextColumn Header="Loss, other" Binding="{Binding LossA}" Width="90" />
+                                            <DataGridTextColumn Header="this one" Binding="{Binding LossB}" Width="80" />
+                                            <DataGridTemplateColumn Header="Overall" Width="120">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Verdict}" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Verdict}" Value="Better"><Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Verdict}" Value="Worse"><Setter Property="Foreground" Value="{StaticResource AccentRedBrush}" /></DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </StackPanel>
