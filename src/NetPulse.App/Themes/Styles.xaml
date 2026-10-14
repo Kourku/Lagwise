@@ -783,11 +783,16 @@
                                 <TextBlock Text="{TemplateBinding Value}" Style="{StaticResource BigNumber}" />
                                 <TextBlock Text="{TemplateBinding Unit}" FontSize="15" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="5,0,0,5" />
                             </StackPanel>
+                            <Border x:Name="badge" CornerRadius="10" Padding="8,1,9,2" BorderThickness="1" BorderBrush="{TemplateBinding BadgeBrush}" HorizontalAlignment="Left" Margin="0,2,0,6">
+                                <TextBlock Text="{TemplateBinding Badge}" FontSize="12" FontWeight="SemiBold" Foreground="{TemplateBinding BadgeBrush}" TextWrapping="NoWrap" />
+                            </Border>
                             <TextBlock Text="{TemplateBinding Caption}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="17" />
                         </StackPanel>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="Info" Value="{x:Null}"><Setter TargetName="info" Property="Visibility" Value="Collapsed" /></Trigger>
+                        <Trigger Property="Badge" Value=""><Setter TargetName="badge" Property="Visibility" Value="Collapsed" /></Trigger>
+                        <Trigger Property="Badge" Value="{x:Null}"><Setter TargetName="badge" Property="Visibility" Value="Collapsed" /></Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

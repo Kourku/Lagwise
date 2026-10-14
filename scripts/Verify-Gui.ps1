@@ -68,6 +68,11 @@ try {
     Start-Sleep -Seconds 4
     Check 'Application stays responsive' ((Get-Process -Id $proc.Id).Responding) ''
     Check 'Game Monitor navigation entry exists' ($null -ne (Find-Like 'Game Monitor')) ''
+    # first run: the "how much detail?" card is offered; choose Beginner
+    $choose = Wait-For { Find-Named 'Choose Beginner' 'ControlType.Button' } 5
+    Check 'First run offers the Beginner / Advanced choice' ($null -ne $choose) ''
+    if ($choose) { ($choose.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 600 }
+    Check 'Beginner hides the Advanced-only pages' (($null -eq (Find-Like '^Probe log$')) -and ($null -eq (Find-Like '^Route trace$'))) ''
     Check 'Overview shows the live ping graph' ($null -ne (Wait-For { Find-Like '^Live ping graph$' } 5)) ''
     # theme switch (title bar) applies and is saved; the mini overlay opens as its own window
     $toggle = Find-Named 'Switch theme' 'ControlType.Button'
@@ -112,7 +117,7 @@ try {
     [NpMouse]::keybd_event(0x78, 0, 2, 0); [NpMouse]::keybd_event(0x10, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
     Check 'The Mark lag shortcut adds a marker' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
     Check 'The footer shows what is being recorded' ($null -ne (Find-Like '^Recording League of Legends')) ''
-    Check 'Reference measurements are labelled as not game-server ping' ($null -ne (Find-Like 'REFERENCE MEASUREMENTS \(NOT GAME-SERVER PING\)')) ''
+    Check 'Beginner Game Monitor summarises the connections' ($null -ne (Find-Like '^What the game is connected to$')) ''
 
     Click-Element (Find-Named 'Stop & save' 'ControlType.Button')
     $saved = Wait-For { Find-Like '^Recording saved:' } 10
@@ -146,16 +151,32 @@ try {
     $combo2 = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ComboBox' -and $_.Current.Name -eq 'Test frequency' } | Select-Object -First 1
     Check 'Settings screen shows the test frequency selector' ($null -ne $combo2) ''
     if ($combo2) {
-        ($combo2.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)).Expand()
-        Start-Sleep -Milliseconds 700
-        $two = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ListItem' -and $_.Current.Name -match 'Every 2 s' } | Select-Object -First 1
-        Click-Element $two
+        # keyboard selection (the dropdown may sit below the visible part of the page): 1 s -> next option, 2 s
+        Add-Type -AssemblyName System.Windows.Forms
+        $combo2.SetFocus()
+        Start-Sleep -Milliseconds 300
+        [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
+        Start-Sleep -Milliseconds 600
         $save = Find-Named 'Save settings' 'ControlType.Button'
         Check 'Changing a setting enables Save' ($save.Current.IsEnabled) ''
         ($save.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
         Check 'Saving confirms the change is in effect' ($null -ne (Wait-For { Find-Like '^Settings saved' } 8)) ''
         Check 'The footer reflects the new probe interval' ($null -ne (Wait-For { Find-Like 'Probing every 2 s' } 5)) ''
     }
+
+    # ---- Advanced: extra pages and statistics appear, and the live probe log streams measurements ----
+    $adv = Find-Named 'Advanced' 'ControlType.Button'
+    if ($adv) { ($adv.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 800 }
+    $log = Wait-For { Find-Like '^Probe log$' } 5
+    Check 'Advanced adds the Probe log and Route trace pages' (($null -ne $log) -and ($null -ne (Find-Like '^Route trace$'))) ''
+    if ($log) {
+        Click-Element $log
+        Check 'The probe log streams raw measurements' ($null -ne (Wait-For { All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.DataItem' } | Select-Object -First 1 } 10)) ''
+    }
+    Click-Element (Find-Like '^Overview$')
+    Check 'Advanced Overview shows per-server statistics' ($null -ne (Wait-For { Find-Like '^Per-server statistics$' } 5)) ''
+    $beg = Find-Named 'Beginner' 'ControlType.Button'
+    if ($beg) { ($beg.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 600 }
 
     $settingsFile = Join-Path $DataDir 'settings.json'
     Check 'Settings were written to the data folder' ((Test-Path $settingsFile) -and ((Get-Content $settingsFile -Raw) -match '"LastGameId": "lol"' -and (Get-Content $settingsFile -Raw) -match '"MonitoringIntervalMs": 2000')) $settingsFile

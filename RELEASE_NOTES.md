@@ -2,6 +2,26 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3); builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.8.0
+
+**Beginner and Advanced are now two real modes**, not a few hidden columns.
+
+*Beginner* - the essentials, in plain words:
+- a shorter sidebar: Overview, Game Monitor, Bufferbloat and Speed tests, Event timeline, History & reports (a "4 more tools in Advanced" link shows what is held back);
+- each headline number carries a one-word rating: ping "Usual for you" / "Higher than usual" (judged against your own normal, never a fixed number), stability "Steady" / "Some wobble" / "Unsteady", loss "None" / "A little" / "Losing packets", router "Quick" / "Slower than ideal";
+- the Game Monitor shows one "What the game is connected to" summary (with the hidden-match-traffic notice) instead of raw socket tables.
+
+*Advanced* - everything, plus new depth:
+- Targets & probes, Route trace, Adapter & Wi-Fi and a new **Probe log**: every measurement as it happens (server, address, method, round-trip time or why there was no reply, HTTPS timing), filterable by server or "no reply only", pausable;
+- a **Per-server statistics** table on the Overview: now vs each server's usual latency, 95th percentile, variation, loss and state;
+- Targets & probes gains Usual, P95 and an HTTPS timing breakdown (DNS / TCP / TLS / first byte);
+- the full Game Monitor connection, measured-endpoint and reference tables.
+
+*Choosing*: a one-time welcome card asks how much detail you want; Settings has a Detail level section describing both; Help explains the difference. Leaving Advanced while on an Advanced-only page returns you to the Overview.
+
+**Also**
+- The colour of each target in Targets & probes is now judged against its own normal latency instead of a fixed 120 ms, and no longer allocates new brushes every second.
+
 ## 0.7.0
 
 **New: themes** - Dark, Light, or Match Windows (follows the Windows app colour setting, also when you change it while NetPulse runs), with five accent colours (Indigo, Teal, Violet, Orange, Rose). Pick them under Settings > Appearance, or flip dark/light with the sun/moon button in the title bar. Everything repaints instantly, including the graphs, gauges and window frame.

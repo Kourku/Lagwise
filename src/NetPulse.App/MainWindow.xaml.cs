@@ -12,7 +12,7 @@ namespace NetPulse.App;
 public partial class MainWindow : Window
 {
     // DataGrid columns that only make sense in Advanced mode, matched by header text.
-    private static readonly HashSet<string> AdvancedTargetColumns = new() { "Protocol", "Min / Max", "Jitter (RFC3550)", "PID", "Local endpoint" };
+    private static readonly HashSet<string> AdvancedTargetColumns = new() { "Protocol", "Min / Max", "Jitter (RFC3550)", "PID", "Local endpoint", "95th pct", "Max", "Probes" };
     private static readonly HashSet<string> AdvancedRouteColumns = new() { "Best (ms)", "Worst (ms)", "ASN / Organization", "Diagnostics" };
 
     private SystemTrayManager? _trayManager;

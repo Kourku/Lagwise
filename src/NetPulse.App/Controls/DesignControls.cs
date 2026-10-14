@@ -95,6 +95,12 @@ public class StatTile : Control
     public static readonly DependencyProperty GlyphProperty = DependencyProperty.Register(nameof(Glyph), typeof(string), typeof(StatTile), new PropertyMetadata(""));
     public static readonly DependencyProperty InfoProperty = DependencyProperty.Register(nameof(Info), typeof(string), typeof(StatTile), new PropertyMetadata(null));
     public static readonly DependencyProperty AccentProperty = DependencyProperty.Register(nameof(Accent), typeof(Brush), typeof(StatTile), new PropertyMetadata(null));
+    public static readonly DependencyProperty BadgeProperty = DependencyProperty.Register(nameof(Badge), typeof(string), typeof(StatTile), new PropertyMetadata(""));
+    public static readonly DependencyProperty BadgeBrushProperty = DependencyProperty.Register(nameof(BadgeBrush), typeof(Brush), typeof(StatTile), new PropertyMetadata(null));
+
+    /// <summary>One or two plain words rating the value ("Steady", "Higher than usual"); hidden when empty.</summary>
+    public string Badge { get => (string)GetValue(BadgeProperty); set => SetValue(BadgeProperty, value); }
+    public Brush? BadgeBrush { get => (Brush?)GetValue(BadgeBrushProperty); set => SetValue(BadgeBrushProperty, value); }
 
     public string Label { get => (string)GetValue(LabelProperty); set => SetValue(LabelProperty, value); }
     public string Value { get => (string)GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
@@ -106,7 +112,7 @@ public class StatTile : Control
     public Brush? Accent { get => (Brush?)GetValue(AccentProperty); set => SetValue(AccentProperty, value); }
 
     protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
-        new TextBlockLikePeer(this, () => TextBlockLikePeer.Join(Label, $"{Value} {Unit}".Trim(), Caption));
+        new TextBlockLikePeer(this, () => TextBlockLikePeer.Join(Label, $"{Value} {Unit}".Trim(), Badge, Caption));
 }
 
 /// <summary>

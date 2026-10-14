@@ -1,0 +1,28 @@
+using NetPulse.Core.Models;
+
+namespace NetPulse.App.ViewModels;
+
+/// <summary>One raw measurement as shown in the Advanced probe log.</summary>
+public sealed class ProbeLogRow
+{
+    public ProbeLogRow(Measurement m)
+    {
+        Time = m.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff");
+        Target = m.TargetName;
+        Address = string.IsNullOrEmpty(m.ResolvedIp) ? m.TargetHost : m.ResolvedIp;
+        Method = m.Protocol.ToString().ToUpperInvariant();
+        Ok = m.Success;
+        Result = m.Success ? $"{m.RttMs:F1} ms" : "no reply";
+        Detail = !m.Success ? m.ErrorMessage ?? ""
+            : m.HttpsBreakdown is { } b ? $"DNS {b.DnsLookupMs:F0} · TCP {b.TcpConnectMs:F0} · TLS {b.TlsHandshakeMs:F0} · first byte {b.TtfbMs:F0} ms"
+            : "";
+    }
+
+    public string Time { get; }
+    public string Target { get; }
+    public string Address { get; }
+    public string Method { get; }
+    public bool Ok { get; }
+    public string Result { get; }
+    public string Detail { get; }
+}

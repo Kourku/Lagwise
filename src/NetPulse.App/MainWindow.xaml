@@ -28,6 +28,7 @@
         <local:SeverityLabelConverter x:Key="SeverityLabel" />
         <local:SeverityBrushConverter x:Key="SeverityBrush" />
         <local:StringEqualsConverter x:Key="EqualsParam" />
+        <local:ZeroToVisibleConverter x:Key="ZeroToVis" />
         <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
 
         <!-- One step of the "what NetPulse measures" chain on the Overview -->
@@ -187,10 +188,10 @@
                             </Border>
                         </Grid>
                         <TextBlock Text="DIAGNOSE" Style="{StaticResource SectionLabel}" Foreground="{DynamicResource TextTertiaryBrush}" Margin="16,18,0,6" />
-                        <RadioButton Content="Targets &amp; probes" Tag="&#xEC05;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                        <RadioButton Content="Targets &amp; probes" Tag="&#xEC05;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Monitoring}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Monitoring" />
-                        <RadioButton Content="Route trace" Tag="&#xE774;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                        <RadioButton Content="Route trace" Tag="&#xE774;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=RoutePath}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="RoutePath" />
                         <RadioButton Content="Bufferbloat test" Tag="&#xE9D2;" GroupName="nav" Style="{StaticResource NavTabButton}"
@@ -199,9 +200,17 @@
                         <RadioButton Content="Speed test" Tag="&#xEC4A;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=SpeedTest}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="SpeedTest" />
-                        <RadioButton Content="Adapter &amp; Wi-Fi" Tag="&#xE839;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                        <RadioButton Content="Adapter &amp; Wi-Fi" Tag="&#xE839;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Adapter}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Adapter" />
+                        <RadioButton Content="Probe log" Tag="&#xE9D9;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
+                                     IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=ProbeLog}"
+                                     Command="{Binding SwitchTabCommand}" CommandParameter="ProbeLog" />
+                        <Button Style="{StaticResource GhostButton}" Command="{Binding SetModeCommand}" CommandParameter="Advanced" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="16,7" Margin="0,2,0,0" Visibility="{Binding IsBeginnerMode, Converter={StaticResource BoolToVis}}"
+                                ToolTip="Advanced adds Targets &amp; probes, Route trace, Adapter &amp; Wi-Fi and the live Probe log">
+                            <TextBlock FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE710;" /><Run Text="  4 more tools in Advanced" /></TextBlock>
+                        </Button>
                         <TextBlock Text="RECORDS" Style="{StaticResource SectionLabel}" Foreground="{DynamicResource TextTertiaryBrush}" Margin="16,18,0,6" />
                         <RadioButton Content="Event timeline" Tag="&#xE8FD;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Events}"
@@ -230,6 +239,47 @@
                                 </Style.Triggers>
                             </Style>
                         </StackPanel.Style>
+
+                        <!-- One-time welcome: choose how much detail -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" BorderBrush="{DynamicResource AccentBlueBrush}" BorderThickness="1.5"
+                                Visibility="{Binding ShowModeChooser, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Welcome to NetPulse. How much detail do you want?" Style="{StaticResource CardTitle}" FontSize="17" />
+                                <TextBlock Text="You can change this any time with the Beginner / Advanced switch at the top." Style="{StaticResource CardSubtitle}" />
+                                <UniformGrid Columns="2">
+                                    <Button Command="{Binding ChooseModeCommand}" CommandParameter="Beginner" Margin="0,0,8,0" Cursor="Hand" AutomationProperties.Name="Choose Beginner">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1.5" CornerRadius="10" Padding="16,14">
+                                                    <StackPanel>
+                                                        <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE76E;" Foreground="{DynamicResource AccentBlueBrush}" /><Run Text="  Beginner" /></TextBlock>
+                                                        <TextBlock Text="Plain-language verdicts, the 'Ready to play?' checklist, the Game Monitor and your recordings. Just what you need to know if your connection is OK." FontSize="13" LineHeight="18" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}" /></Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <Button Command="{Binding ChooseModeCommand}" CommandParameter="Advanced" Margin="8,0,0,0" Cursor="Hand" AutomationProperties.Name="Choose Advanced">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1.5" CornerRadius="10" Padding="16,14">
+                                                    <StackPanel>
+                                                        <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE9D9;" Foreground="{DynamicResource AccentBlueBrush}" /><Run Text="  Advanced" /></TextBlock>
+                                                        <TextBlock Text="Everything: per-server statistics, raw connection tables, route tracing, adapter details, HTTPS timings and a live log of every probe." FontSize="13" LineHeight="18" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}" /></Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Status hero: tinted by the overall verdict -->
                         <Border CornerRadius="14" Padding="22,20" Margin="0,0,0,16" BorderThickness="1" Background="{Binding StatusSoftBrush}" BorderBrush="{Binding StatusEdgeBrush}">
@@ -267,13 +317,13 @@
                         <!-- Headline numbers -->
                         <UniformGrid Columns="4" Margin="0,0,0,16">
                             <controls:StatTile Margin="0,0,8,0" Label="Reference ping" Glyph="&#xE774;" Unit="ms" Info="{Binding TipLatency}"
-                                               Value="{Binding QuickInternetLatency, StringFormat={}{0:F1}}" Caption="Typical ping to public servers (not a game server)" />
+                                               Value="{Binding QuickInternetLatency, StringFormat={}{0:F1}}" Caption="Typical ping to public servers (not a game server)" Badge="{Binding PingBadge}" BadgeBrush="{Binding PingBadgeBrush}" />
                             <controls:StatTile Margin="8,0,8,0" Label="Latency variation" Glyph="&#xE9D2;" Unit="ms" Info="{Binding TipVariation}" Accent="#A78BFA"
-                                               Value="{Binding QuickJitter, StringFormat={}{0:F1}}" Caption="How much ping swings, last 60 s" />
+                                               Value="{Binding QuickJitter, StringFormat={}{0:F1}}" Caption="How much ping swings, last 60 s" Badge="{Binding JitterBadge}" BadgeBrush="{Binding JitterBadgeBrush}" />
                             <controls:StatTile Margin="8,0,8,0" Label="Probe loss" Glyph="&#xE711;" Unit="%" Info="{Binding TipLoss}" Accent="#F472B6"
-                                               Value="{Binding QuickPacketLoss, StringFormat={}{0:F1}}" Caption="Test messages with no reply, last 60 s" />
+                                               Value="{Binding QuickPacketLoss, StringFormat={}{0:F1}}" Caption="Test messages with no reply, last 60 s" Badge="{Binding LossBadge}" BadgeBrush="{Binding LossBadgeBrush}" />
                             <controls:StatTile Margin="8,0,0,0" Label="Your router" Glyph="&#xE968;" Unit="ms" Info="{Binding TipRouter}" Accent="#2DD4BF"
-                                               Value="{Binding QuickGatewayLatency, StringFormat={}{0:F1}}" Caption="This PC to your router (the first step)" />
+                                               Value="{Binding QuickGatewayLatency, StringFormat={}{0:F1}}" Caption="This PC to your router (the first step)" Badge="{Binding RouterBadge}" BadgeBrush="{Binding RouterBadgeBrush}" />
                         </UniformGrid>
 
                         <!-- Ready to play? -->
@@ -456,6 +506,34 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Advanced: every server at a glance -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Per-server statistics" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="Now vs each server's own usual latency (learned over the history window), the 95th percentile, variation and loss in the recent window." Style="{StaticResource CardSubtitle}" />
+                                <DataGrid ItemsSource="{Binding Targets}" IsReadOnly="True" MaxHeight="320">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Server" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" Margin="0,0,8,0" />
+                                                        <TextBlock Text="{Binding TargetName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Now" Binding="{Binding LatencyDisplay}" Width="85" />
+                                        <DataGridTextColumn Header="Usual" Binding="{Binding BaselineDisplay}" Width="95" />
+                                        <DataGridTextColumn Header="P95" Binding="{Binding P95Display}" Width="85" />
+                                        <DataGridTextColumn Header="Variation" Binding="{Binding JitterDisplay}" Width="85" />
+                                        <DataGridTextColumn Header="Loss" Binding="{Binding LossDisplay}" Width="70" />
+                                        <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="140" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Advanced mode: full diagnostic evidence -->
                         <Border Style="{StaticResource CardPanel}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
@@ -466,7 +544,7 @@
 
                         <!-- Beginner mode: short pointer instead of raw evidence -->
                         <controls:Callout Kind="Info" Visibility="{Binding IsBeginnerMode, Converter={StaticResource BoolToVis}}"
-                                          Title="Want the numbers behind this verdict?" Text="Switch to Advanced (top right) to see the measured evidence, protocols, jitter and route detail." />
+                                          Title="Want the numbers behind this verdict?" Text="Switch to Advanced (top right) for per-server statistics, the measured evidence, route tracing and a live log of every probe." />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -576,8 +654,21 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Beginner: what the game is connected to, in one card -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsBeginnerMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="What the game is connected to" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="{Binding EndpointSummary}" Style="{StaticResource MessageText}" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,6,0,0" />
+                                <TextBlock Text="{Binding ConnectionsEmptyText}" Style="{StaticResource MessageText}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0"
+                                           Visibility="{Binding ShowConnectionsEmptyText, Converter={StaticResource BoolToVis}}" />
+                                <controls:Callout Kind="Warning" Title="The match itself is not in the list" Text="{Binding MatchTrafficText}" Margin="0,10,0,0"
+                                                  Visibility="{Binding MatchTrafficHidden, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="Advanced mode lists every connection, what it probably is, and lets you measure one yourself." Style="{StaticResource CaptionText}" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- Game connections -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <TextBlock Text="Connections opened by the game" Style="{StaticResource CardTitle}" />
                                 <TextBlock Text="Every address is labelled 'Unknown role': a game also talks to login, matchmaking, telemetry, voice and download services, so none of these is assumed to be the match server."
@@ -637,7 +728,7 @@
                         </Border>
 
                         <!-- Measured endpoints -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <TextBlock Text="Endpoints you chose to measure" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
                                 <Grid>
@@ -659,7 +750,7 @@
                         </Border>
 
                         <!-- Reference measurements -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <TextBlock Text="Reference measurements (not game-server ping)" Style="{StaticResource CardTitle}" />
                                 <TextBlock Text="{Binding MeasurementNote}" Style="{StaticResource CardSubtitle}" />
@@ -772,7 +863,8 @@
                             </DataGridTemplateColumn>
 
                             <!-- Rolling Avg -->
-                            <DataGridTextColumn Header="Average (15 min)" Binding="{Binding AvgDisplay}" Width="150" />
+                            <DataGridTextColumn Header="Usual" Binding="{Binding BaselineDisplay}" Width="95" />
+                            <DataGridTextColumn Header="P95" Binding="{Binding P95Display}" Width="85" />
 
                             <!-- Min / Max -->
                             <DataGridTemplateColumn Header="Min / Max" Width="100">
@@ -794,6 +886,14 @@
                             <DataGridTextColumn Header="Loss (last 60 s)" Binding="{Binding LossDisplay}" Width="150" />
 
                             <!-- Sparkline Chart -->
+                            <DataGridTemplateColumn Header="HTTPS timing" Width="260">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding HttpsTimingDisplay}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                                   ToolTip="Where the last HTTPS probe's time went: name lookup, TCP connect, TLS handshake, first byte of the response" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Recent history" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -1262,6 +1362,71 @@
                                          Visibility="{Binding HasNoEvents, Converter={StaticResource BoolToVis}}" />
                 </Grid>
 
+                <!-- TAB: PROBE LOG (Advanced) -->
+                <Grid>
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentTab}" Value="ProbeLog">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <controls:PageHeader Title="Probe log" Glyph="&#xE9D9;"
+                                         Subtitle="Every measurement as it happens: which server, which method, the round-trip time or why there was no reply. The raw data behind every number in NetPulse." />
+
+                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Padding="14,10" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Width="260" ItemsSource="{Binding ProbeLogTargets}" SelectedItem="{Binding ProbeLogTarget, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Probe log server filter" />
+                            <CheckBox Grid.Column="1" Style="{StaticResource SwitchToggle}" IsChecked="{Binding ProbeLogFailuresOnly, Mode=TwoWay}" Content="No reply only" FontSize="13.5" Margin="18,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding ProbeLogSummary}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="18,0,12,0" />
+                            <Button Grid.Column="3" Content="{Binding ProbeLogPauseText}" Command="{Binding ToggleProbeLogPauseCommand}" Style="{StaticResource OutlineButton}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding ProbeLog}" IsReadOnly="True" RowHeight="34" EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="110" />
+                            <DataGridTextColumn Header="Server" Binding="{Binding Target}" Width="220" />
+                            <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="140" />
+                            <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="80" />
+                            <DataGridTemplateColumn Header="Result" Width="100">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Result}" FontWeight="SemiBold" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Ok}" Value="False"><Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}" /></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Details" Binding="{Binding Detail}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <controls:EmptyState Grid.Row="2" Glyph="&#xE9D9;" Title="Waiting for probes" Text="Measurements appear here as they are made, about once a second per server."
+                                         Visibility="{Binding ProbeLog.Count, Converter={StaticResource ZeroToVis}}" />
+                </Grid>
+
                 <!-- TAB: HELP & GLOSSARY -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <ScrollViewer.Style>
@@ -1281,6 +1446,17 @@
                             <StackPanel>
                                 <TextBlock Text="What NetPulse does, and does not, measure" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
                                 <TextBlock Text="{Binding HelpMeasuresText}" FontSize="14" LineHeight="20" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Beginner and Advanced" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
+                                <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="21" Foreground="{DynamicResource TextPrimaryBrush}">
+                                    <Run FontWeight="SemiBold" Text="Beginner" /><Run Text=" keeps to plain-language verdicts: the connection status, the 'Ready to play?' checklist, headline numbers with a one-word rating, the Game Monitor summary, Bufferbloat and Speed tests, the event timeline and your recordings." />
+                                    <LineBreak /><LineBreak />
+                                    <Run FontWeight="SemiBold" Text="Advanced" /><Run Text=" adds per-server statistics (usual latency, 95th percentile, variation), the measured evidence behind each verdict, every connection the game opens with the option to measure it, route tracing, adapter and Wi-Fi details, HTTPS timing breakdowns, the live probe log, and how each glossary term is measured." />
+                                </TextBlock>
                             </StackPanel>
                         </Border>
 
@@ -1739,6 +1915,56 @@
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding OverlayOpacities}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding OverlayOpacityPercent, Mode=TwoWay}"
                                                   VerticalAlignment="Center" AutomationProperties.Name="Overlay background" />
                                     </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Detail level -->
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Detail level" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="Also switchable with Beginner / Advanced at the top of the window. Applies straight away." Style="{StaticResource CardSubtitle}" />
+                                    <UniformGrid Columns="2">
+                                        <Button Command="{Binding DataContext.SetModeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Beginner" Cursor="Hand"
+                                                Margin="0,0,8,0" AutomationProperties.Name="Beginner detail level">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="bd" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="2" CornerRadius="10" Padding="14,12">
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE76E;" Foreground="{DynamicResource AccentBlueBrush}" /><Run Text="  Beginner" /></TextBlock>
+                                                            <TextBlock Text="Plain-language verdicts and the essentials: status, Ready to play?, rated headline numbers, Game Monitor summary, tests and recordings." FontSize="12.5" LineHeight="17" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" /></Trigger>
+                                                        <DataTrigger Binding="{Binding DataContext.IsBeginnerMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}" />
+                                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                                                        </DataTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                        <Button Command="{Binding DataContext.SetModeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Advanced" Cursor="Hand"
+                                                Margin="8,0,0,0" AutomationProperties.Name="Advanced detail level">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="bd" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="2" CornerRadius="10" Padding="14,12">
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE9D9;" Foreground="{DynamicResource AccentBlueBrush}" /><Run Text="  Advanced" /></TextBlock>
+                                                            <TextBlock Text="Everything, plus per-server statistics, raw connection tables, route tracing, adapter details, HTTPS timings and the live probe log." FontSize="12.5" LineHeight="17" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" /></Trigger>
+                                                        <DataTrigger Binding="{Binding DataContext.IsBeginnerMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}" />
+                                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                                                        </DataTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </UniformGrid>
                                 </StackPanel>
                             </Border>
 

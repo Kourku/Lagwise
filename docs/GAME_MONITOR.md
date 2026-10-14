@@ -1,6 +1,6 @@
 # Game Monitor: what exists and what has actually been verified
 
-Status as of NetPulse 0.7.0 (2026-10-14).
+Status as of NetPulse 0.8.0 (2026-10-14).
 
 ## Support status of the seven games
 

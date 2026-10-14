@@ -215,6 +215,7 @@ public class MainViewModel : ViewModelBase
         _liveTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(3), System.Windows.Threading.DispatcherPriority.Background,
             (_, _) => { if (CurrentTab == "Dashboard" && Application.Current.MainWindow?.IsVisible == true) RefreshLiveChart(); }, Application.Current.Dispatcher);
         LiveLegend.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LiveChartOrder));
+        StartProbeLog();
 
         // Start the shared engine (idempotent: tray and window share one host)
         _host.Start();
@@ -231,6 +232,7 @@ public class MainViewModel : ViewModelBase
             if (value == "History") _ = History.RefreshAsync();   // pick up recordings saved since the tab was last open
             GameMonitor.IsVisible = value == "GameMonitor";
             if (value == "Dashboard") RefreshLiveChart();
+            if (value == "ProbeLog") RebuildProbeLog();
         }
     }
 
@@ -242,6 +244,11 @@ public class MainViewModel : ViewModelBase
             if (SetProperty(ref _isBeginnerMode, value))
             {
                 OnPropertyChanged(nameof(IsAdvancedMode));
+                OnPropertyChanged(nameof(ModeSummary));
+                // a page that only exists in Advanced cannot stay open in Beginner
+                if (value && AdvancedOnlyTabs.Contains(CurrentTab)) CurrentTab = "Dashboard";
+                _host.Settings.ModeChosen = true;
+                OnPropertyChanged(nameof(ShowModeChooser));
                 OnPropertyChanged(nameof(TipLatency));
                 OnPropertyChanged(nameof(TipVariation));
                 OnPropertyChanged(nameof(TipLoss));
@@ -253,6 +260,24 @@ public class MainViewModel : ViewModelBase
     }
 
     public bool IsAdvancedMode => !_isBeginnerMode;
+
+    /// <summary>Pages that only exist in Advanced mode (tools for digging into the measurements themselves).</summary>
+    public static readonly HashSet<string> AdvancedOnlyTabs = new() { "Monitoring", "RoutePath", "Adapter", "ProbeLog" };
+
+    public string ModeSummary => IsBeginnerMode
+        ? "Beginner: plain-language verdicts and the essentials. Switch to Advanced for per-server statistics, raw connection tables, route tracing, adapter details and the live probe log."
+        : "Advanced: every page and number, including per-server statistics, raw socket tables, route tracing, adapter details and the live probe log.";
+
+    /// <summary>The one-time "how much detail do you want?" card on the Overview.</summary>
+    public bool ShowModeChooser => !_host.Settings.ModeChosen;
+    private RelayCommand? _chooseMode;
+    public RelayCommand ChooseModeCommand => _chooseMode ??= new RelayCommand(p =>
+    {
+        bool advanced = string.Equals(p?.ToString(), "Advanced", StringComparison.OrdinalIgnoreCase);
+        _host.Settings.ModeChosen = true;
+        if (IsBeginnerMode == !advanced) { _host.SaveSettings(out _); OnPropertyChanged(nameof(ShowModeChooser)); }
+        else IsBeginnerMode = !advanced;
+    });
 
     public bool IsComparingPaths
     {
@@ -655,9 +680,126 @@ public class MainViewModel : ViewModelBase
             QuickJitter = NetPulse.Core.Statistics.StatisticalCalculator.CalculateMedian(basis.Select(i => i.Jitter).ToList());
             QuickPacketLoss = internet.Average(i => i.PacketLossPercent);
         }
+        UpdateBadges(metrics, gw);
     }
 
     private DiagnosticResult? _lastDiagnosis;
+
+    // ---- plain-word ratings on the headline tiles (Beginner) ----
+    private string _pingBadge = "", _jitterBadge = "", _lossBadge = "", _routerBadge = "";
+    private Brush _pingBadgeBrush = UnknownBrush, _jitterBadgeBrush = UnknownBrush, _lossBadgeBrush = UnknownBrush, _routerBadgeBrush = UnknownBrush;
+    public string PingBadge { get => _pingBadge; private set => SetProperty(ref _pingBadge, value); }
+    public string JitterBadge { get => _jitterBadge; private set => SetProperty(ref _jitterBadge, value); }
+    public string LossBadge { get => _lossBadge; private set => SetProperty(ref _lossBadge, value); }
+    public string RouterBadge { get => _routerBadge; private set => SetProperty(ref _routerBadge, value); }
+    public Brush PingBadgeBrush { get => _pingBadgeBrush; private set => SetProperty(ref _pingBadgeBrush, value); }
+    public Brush JitterBadgeBrush { get => _jitterBadgeBrush; private set => SetProperty(ref _jitterBadgeBrush, value); }
+    public Brush LossBadgeBrush { get => _lossBadgeBrush; private set => SetProperty(ref _lossBadgeBrush, value); }
+    public Brush RouterBadgeBrush { get => _routerBadgeBrush; private set => SetProperty(ref _routerBadgeBrush, value); }
+
+    /// <summary>
+    /// One or two words per headline number. Ping is judged against the servers' own normal (never a fixed number, since a
+    /// distant server is not "bad"); stability and loss use the same rules of thumb as the "Ready to play?" checklist.
+    /// </summary>
+    private void UpdateBadges(IReadOnlyList<TargetMetrics> metrics, TargetMetrics? gw)
+    {
+        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == NetworkProtocol.Icmp && m.RecentSampleCount >= ReadinessCheck.MinSamples).ToList();
+        if (refs.Count == 0)
+        {
+            (PingBadge, PingBadgeBrush) = ("Measuring", UnknownBrush);
+            (JitterBadge, JitterBadgeBrush) = ("Measuring", UnknownBrush);
+            (LossBadge, LossBadgeBrush) = ("Measuring", UnknownBrush);
+        }
+        else
+        {
+            int elevated = refs.Count(r => r.IsLatencyElevated);
+            (PingBadge, PingBadgeBrush) = refs.All(r => r.BaselineLatencyMs <= 0) ? ("Learning your normal", UnknownBrush)
+                : elevated >= 2 ? ("Higher than usual", DegradedBrush) : ("Usual for you", HealthyBrush);
+            (JitterBadge, JitterBadgeBrush) = QuickJitter <= 8 ? ("Steady", HealthyBrush) : QuickJitter <= 20 ? ("Some wobble", DegradedBrush) : ("Unsteady", CriticalBrush);
+            int lossy = refs.Count(r => r.PacketLossPercent >= 3);
+            (LossBadge, LossBadgeBrush) = lossy >= 2 ? ("Losing packets", CriticalBrush) : QuickPacketLoss < 0.5 ? ("None", HealthyBrush) : ("A little", lossy == 1 ? HealthyBrush : DegradedBrush);
+        }
+
+        if (gw == null || gw.RecentSampleCount < ReadinessCheck.MinSamples) (RouterBadge, RouterBadgeBrush) = ("Measuring", UnknownBrush);
+        else if (gw.PacketLossPercent >= 2) (RouterBadge, RouterBadgeBrush) = ("Losing packets", CriticalBrush);
+        else if (gw.MedianLatency > (ActiveNic.IsWifi ? 15 : 5) || gw.Jitter > (ActiveNic.IsWifi ? 10 : 3)) (RouterBadge, RouterBadgeBrush) = ("Slower than ideal", DegradedBrush);
+        else (RouterBadge, RouterBadgeBrush) = ("Quick", HealthyBrush);
+    }
+
+    // ---- live probe log (Advanced) ----
+
+    private const int ProbeLogCapacity = 500;
+    private readonly LinkedList<ProbeLogRow> _probeRing = new();
+    private readonly List<ProbeLogRow> _probePending = new();
+    private readonly object _probeLock = new();
+    private System.Windows.Threading.DispatcherTimer? _probeTimer;
+    private bool _probePaused, _probeFailuresOnly;
+    private string _probeTarget = AllTargets;
+    private const string AllTargets = "All targets";
+
+    public ObservableCollection<ProbeLogRow> ProbeLog { get; } = new();
+    public ObservableCollection<string> ProbeLogTargets { get; } = new() { AllTargets };
+    public bool ProbeLogPaused { get => _probePaused; set { if (SetProperty(ref _probePaused, value)) OnPropertyChanged(nameof(ProbeLogPauseText)); } }
+    public string ProbeLogPauseText => _probePaused ? "Resume" : "Pause";
+    public RelayCommand ToggleProbeLogPauseCommand => _toggleProbePause ??= new RelayCommand(() => ProbeLogPaused = !ProbeLogPaused);
+    private RelayCommand? _toggleProbePause;
+    public bool ProbeLogFailuresOnly { get => _probeFailuresOnly; set { if (SetProperty(ref _probeFailuresOnly, value)) RebuildProbeLog(); } }
+    public string ProbeLogTarget { get => _probeTarget; set { if (SetProperty(ref _probeTarget, value ?? AllTargets)) RebuildProbeLog(); } }
+    public string ProbeLogSummary { get => _probeSummary; private set => SetProperty(ref _probeSummary, value); }
+    private string _probeSummary = "";
+
+    private void StartProbeLog()
+    {
+        _engine.MeasurementProcessed += (_, m) =>
+        {
+            var row = new ProbeLogRow(m);
+            lock (_probeLock)
+            {
+                _probeRing.AddFirst(row);
+                if (_probeRing.Count > ProbeLogCapacity) _probeRing.RemoveLast();
+                _probePending.Add(row);
+                if (_probePending.Count > ProbeLogCapacity) _probePending.RemoveRange(0, _probePending.Count - ProbeLogCapacity);
+            }
+        };
+        // flush to the screen twice a second, and only while the page is open
+        _probeTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(500), System.Windows.Threading.DispatcherPriority.Background,
+            (_, _) => FlushProbeLog(), Application.Current.Dispatcher);
+    }
+
+    private bool Matches(ProbeLogRow r) => (!_probeFailuresOnly || !r.Ok) && (_probeTarget == AllTargets || r.Target == _probeTarget);
+
+    private void FlushProbeLog()
+    {
+        if (CurrentTab != "ProbeLog" || _probePaused) return;
+        List<ProbeLogRow> fresh;
+        lock (_probeLock) { fresh = _probePending.ToList(); _probePending.Clear(); }
+        foreach (var r in fresh)
+        {
+            if (!ProbeLogTargets.Contains(r.Target)) ProbeLogTargets.Add(r.Target);
+            if (Matches(r)) ProbeLog.Insert(0, r);
+        }
+        while (ProbeLog.Count > ProbeLogCapacity) ProbeLog.RemoveAt(ProbeLog.Count - 1);
+        UpdateProbeSummary();
+    }
+
+    private void RebuildProbeLog()
+    {
+        List<ProbeLogRow> all;
+        lock (_probeLock) { all = _probeRing.ToList(); _probePending.Clear(); }
+        ProbeLog.Clear();
+        foreach (var r in all)
+        {
+            if (!ProbeLogTargets.Contains(r.Target)) ProbeLogTargets.Add(r.Target);
+            if (Matches(r)) ProbeLog.Add(r);
+        }
+        UpdateProbeSummary();
+    }
+
+    private void UpdateProbeSummary()
+    {
+        int failed = ProbeLog.Count(r => !r.Ok);
+        ProbeLogSummary = ProbeLog.Count == 0 ? "" : $"Showing the latest {ProbeLog.Count} probes ({failed} without a reply). Newest first; NetPulse keeps the last {ProbeLogCapacity} in memory.";
+    }
 
     private void UpdateDiagnosis(DiagnosticResult diag)
     {

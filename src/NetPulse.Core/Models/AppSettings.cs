@@ -29,6 +29,8 @@ public class AppSettings
 
     // UI state
     public bool IsBeginnerMode { get; set; } = true;
+    /// <summary>False until the user has answered the "how much detail?" welcome card once.</summary>
+    public bool ModeChosen { get; set; } = false;
     /// <summary>Last game profile chosen in the Game Monitor.</summary>
     public string? LastGameId { get; set; }
 
