@@ -6,20 +6,32 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using System.Threading;
 using NetPulse.Core.Models;
 
 namespace NetPulse.Core.Services;
 
 public class NetworkDiscoveryService
 {
-    public event EventHandler<NetworkInterfaceInfo>? NetworkChanged;
+    /// <summary>Raised only for a meaningful change (see <see cref="NetworkChangeDescriber"/>), after Windows' burst of notifications settles.</summary>
+    public event EventHandler<NetworkChange>? NetworkChanged;
+    /// <summary>Raised after every refresh, changed or not (Wi-Fi signal and link rate move all the time).</summary>
+    public event EventHandler<NetworkInterfaceInfo>? InterfaceRefreshed;
+
+    /// <summary>How long to wait for Windows' address-change notifications to settle before looking.</summary>
+    public TimeSpan SettleDelay { get; set; } = TimeSpan.FromSeconds(1.5);
+
+    private readonly object _gate = new();
+    private NetworkInterfaceInfo? _last;
+    private Timer? _settle;
+    private Timer? _poll;
 
     public NetworkDiscoveryService()
     {
         try
         {
-            NetworkChange.NetworkAddressChanged += (s, e) => OnNetworkChanged();
-            NetworkChange.NetworkAvailabilityChanged += (s, e) => OnNetworkChanged();
+            System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (s, e) => OnNetworkChanged();
+            System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (s, e) => OnNetworkChanged();
         }
         catch
         {
@@ -29,10 +41,40 @@ public class NetworkDiscoveryService
 
     private void OnNetworkChanged()
     {
+        // Windows raises several notifications per real change; look once they have settled
+        lock (_gate)
+        {
+            _settle ??= new Timer(_ => Refresh());
+            _settle.Change(SettleDelay, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    /// <summary>Re-reads the Wi-Fi connection periodically, so access-point roaming and signal changes are noticed (Windows does not announce them).</summary>
+    public void StartPolling(TimeSpan interval)
+    {
+        lock (_gate)
+        {
+            _poll ??= new Timer(_ => { if (_last?.IsWifi == true) Refresh(); });
+            _poll.Change(interval, interval);
+        }
+    }
+
+    public void StopPolling()
+    {
+        lock (_gate) _poll?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>Reads the active connection now and raises <see cref="NetworkChanged"/> when it differs meaningfully from the previous reading.</summary>
+    public void Refresh()
+    {
         try
         {
             var info = GetActiveInterfaceInfo();
-            NetworkChanged?.Invoke(this, info);
+            NetworkInterfaceInfo? before;
+            lock (_gate) { before = _last; _last = info; }
+            InterfaceRefreshed?.Invoke(this, info);
+            var change = before == null ? null : NetworkChangeDescriber.Describe(before, info);
+            if (change != null) NetworkChanged?.Invoke(this, change);
         }
         catch
         {
@@ -40,7 +82,7 @@ public class NetworkDiscoveryService
         }
     }
 
-    public NetworkInterfaceInfo GetActiveInterfaceInfo()
+    public virtual NetworkInterfaceInfo GetActiveInterfaceInfo()
     {
         var result = new NetworkInterfaceInfo
         {
@@ -155,6 +197,7 @@ public class NetworkDiscoveryService
             result.Description = $"Error reading interfaces: {ex.Message}";
         }
 
+        lock (_gate) _last ??= result;   // the first reading is the baseline later changes are compared with
         return result;
     }
 

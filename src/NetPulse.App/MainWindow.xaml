@@ -333,6 +333,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <Border Width="40" Height="40" CornerRadius="20" Background="{Binding ReadinessBrush}" VerticalAlignment="Top" Margin="0,0,14,0">
                                         <TextBlock Text="{Binding ReadinessGlyph}" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{DynamicResource BgDarkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -341,6 +342,13 @@
                                         <TextBlock Text="Ready to play?" Style="{StaticResource CardTitle}" />
                                         <TextBlock Text="{Binding ReadinessHeadline}" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
+                                    <Button Grid.Column="2" Command="{Binding CopySummaryCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" MinHeight="32" FontSize="12.5" VerticalAlignment="Top" Margin="12,0,0,0"
+                                            AutomationProperties.Name="Copy summary" ToolTip="Copy a short text snapshot of your connection (no IP addresses or network names) to paste into a chat or a support ticket. Ctrl+Shift+C">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE8C8;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,7,0" />
+                                            <TextBlock Text="{Binding CopySummaryText}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                        </StackPanel>
+                                    </Button>
                                 </Grid>
                                 <ItemsControl ItemsSource="{Binding ReadinessItems}">
                                     <ItemsControl.ItemTemplate>
@@ -1460,6 +1468,32 @@
                             </StackPanel>
                         </Border>
 
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Keyboard shortcuts" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <Border Grid.Row="0" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+1 … Ctrl+9, Ctrl+0" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Open the 1st … 10th page of the sidebar" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="1" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+Shift+C" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Copy a short summary of your connection" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="2" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+E" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Export a diagnostic report" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="3" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+Shift+O" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Show or hide the mini overlay" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="4" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+T" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="Switch between light and dark" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="5" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+," FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="Settings" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="6" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="F1" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="This page" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Border Grid.Row="7" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="{Binding MarkLagKeyText}" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Text="Mark lag while recording; works while a game has focus (change it in Settings)" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Text="Glossary" Style="{StaticResource CardTitle}" FontSize="18" Margin="2,8,0,10" />
                         <ItemsControl ItemsSource="{Binding Glossary}">
                             <ItemsControl.ItemsPanel>
@@ -1535,6 +1569,45 @@
                                 </Grid>
                                 <TextBlock Text="{Binding Message}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource AccentBlueHoverBrush}" Margin="0,10,0,0" />
                                 <TextBlock Text="{Binding StorageText}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Time of day -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" DataContext="{Binding History.Patterns}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="When is my connection worst?" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Every recording pooled by hour of the day. Each server is compared with its own usual ping, so the bars show extra delay and probe loss, not distance." Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="{Binding ButtonText}" Command="{Binding AnalyzeCommand}" Style="{StaticResource OutlineButton}" VerticalAlignment="Top" Margin="12,0,0,0" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Bars}" Margin="0,10,0,0" Visibility="{Binding HasBars, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Time of day chart">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="2,0" ToolTip="{Binding Tip}" Background="Transparent">
+                                                <Grid Height="84">
+                                                    <Border x:Name="bar" Height="{Binding Height}" VerticalAlignment="Bottom" CornerRadius="3,3,1,1" Background="{DynamicResource AccentGreenBrush}" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0" />
+                                            </StackPanel>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Warn"><Setter TargetName="bar" Property="Background" Value="{DynamicResource AccentAmberBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Bad"><Setter TargetName="bar" Property="Background" Value="{DynamicResource AccentRedBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="None"><Setter TargetName="bar" Property="Background" Value="{DynamicResource BorderBrush}" /></DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding Summary}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="13.5" Margin="0,12,0,0" AutomationProperties.Name="Time of day summary" />
+                                <TextBlock Text="{Binding Progress}" Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
                             </StackPanel>
                         </Border>
 
@@ -1997,6 +2070,16 @@
                                         </StackPanel>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding HistoryWindows}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding HistoryWindowMinutes, Mode=TwoWay}" VerticalAlignment="Center" />
                                     </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Alerts -->
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Desktop alerts" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="A Windows notification when the connection drops and when it comes back, when your router stops answering, when packets are being lost, or when Windows switches network. At most one of each kind every 3 minutes; latency spikes and Wi-Fi roaming stay in the timeline. Windows hides notifications while a full-screen game has focus if Do not disturb / game mode is on." Style="{StaticResource CaptionText}" Margin="0,4,0,14" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding DesktopAlerts, Mode=TwoWay}" Content="Show desktop alerts" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AlertsOnlyInBackground, Mode=TwoWay}" IsEnabled="{Binding DesktopAlerts}" Content="Only while NetPulse is in the background" Margin="0,10,0,0" />
                                 </StackPanel>
                             </Border>
 

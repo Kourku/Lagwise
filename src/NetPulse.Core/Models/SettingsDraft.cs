@@ -82,6 +82,8 @@ public sealed class SettingsDraft
     public bool StartWithWindows { get; set; }
     public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
     public bool MarkLagSound { get; set; }
+    public bool DesktopAlerts { get; set; }
+    public bool AlertsOnlyInBackground { get; set; }
     public int RecordingRetentionDays { get; set; }
     public List<TargetDraft> Targets { get; set; } = new();
 
@@ -102,6 +104,8 @@ public sealed class SettingsDraft
         StartWithWindows = startWithWindows,
         MarkLagHotkey = s.MarkLagHotkey,
         MarkLagSound = s.MarkLagSound,
+        DesktopAlerts = s.DesktopAlerts,
+        AlertsOnlyInBackground = s.AlertsOnlyInBackground,
         RecordingRetentionDays = s.RecordingRetentionDays,
         Targets = s.Targets.Select(t => new TargetDraft
         {
@@ -144,6 +148,8 @@ public sealed class SettingsDraft
         settings.StartWithWindows = StartWithWindows;
         settings.MarkLagHotkey = MarkLagHotkey;
         settings.MarkLagSound = MarkLagSound;
+        settings.DesktopAlerts = DesktopAlerts;
+        settings.AlertsOnlyInBackground = AlertsOnlyInBackground;
         settings.RecordingRetentionDays = RecordingRetentionDays;
 
         var existing = settings.Targets.ToDictionary(t => t.Id);

@@ -87,6 +87,15 @@ try {
     if ($ovBtn) { ($ovBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 500 }
     Check 'Overview shows the Ready to play checklist' (($null -ne (Find-Like '^Ready to play\?$')) -and ($null -ne (Wait-For { Find-Like '^Ping stability$' } 10))) ''
 
+    # Copy summary: plain text on the clipboard, without IP addresses (the user's clipboard is restored afterwards)
+    $prevClip = $null; try { $prevClip = Get-Clipboard -Raw } catch { }
+    $copy = Find-Named 'Copy summary' 'ControlType.Button'
+    if ($copy) { ($copy.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 700 }
+    $clip = ''; try { $clip = [string](Get-Clipboard -Raw) } catch { }
+    # public reference servers may appear by name ("Cloudflare (1.1.1.1)"); the PC's own and its router's private addresses must not
+    Check 'Copy summary puts a connection summary on the clipboard' (($clip -match 'connection check') -and ($clip -match 'does not measure game-server ping') -and ($clip -notmatch '192\.168\.|(^|[^\d])10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.')) (($clip -split "`n")[0])
+    if ($prevClip) { try { Set-Clipboard -Value $prevClip } catch { } }
+
     Click-Element (Find-Like 'Game Monitor')
     Check 'Game Monitor tab shows its heading' ($null -ne (Wait-For { Find-Named 'Game Monitor' 'ControlType.Text' } 5)) ''
 
@@ -145,11 +154,23 @@ try {
     Check 'History shows how much space recordings use' ($null -ne (Find-Like '^1 recording, .* MB on this PC')) ''
     Check 'History writes its summary index' (Test-Path (Join-Path $DataDir 'sessions\index.json')) ''
 
+    # time-of-day patterns over all recordings
+    $analyse = Find-Named 'Analyse my recordings' 'ControlType.Button'
+    if ($analyse) { ($analyse.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke() }
+    Check 'History analyses recordings by time of day' (($null -ne (Wait-For { Find-Like '^1 recording, .* reference probes' } 15)) -and ($null -ne (Find-Like '^Time of day chart$'))) ''
+
+    # keyboard: Ctrl+1 opens the first page of the sidebar (the Overview)
+    [NpMouse]::keybd_event(0x11, 0, 0, 0); [NpMouse]::keybd_event(0x31, 0, 0, 0)
+    Start-Sleep -Milliseconds 80
+    [NpMouse]::keybd_event(0x31, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
+    Check 'Ctrl+1 opens the Overview' ($null -ne (Wait-For { Find-Like '^Ready to play\?$' } 5)) ''
+
 
     # ---- Settings: change a value, save, and confirm it was applied and written ----
     Click-Element (Find-Like '^Settings$')
     $combo2 = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ComboBox' -and $_.Current.Name -eq 'Test frequency' } | Select-Object -First 1
     Check 'Settings screen shows the test frequency selector' ($null -ne $combo2) ''
+    Check 'Settings offers desktop alerts' ($null -ne (Find-Like '^Show desktop alerts$')) ''
     if ($combo2) {
         # keyboard selection (the dropdown may sit below the visible part of the page): 1 s -> next option, 2 s
         Add-Type -AssemblyName System.Windows.Forms

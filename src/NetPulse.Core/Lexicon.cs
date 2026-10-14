@@ -82,6 +82,8 @@ public static class Lexicon
         ["DnsFailure"] = "DNS lookups failing",
         ["RouteChange"] = "Route changed",
         ["InterfaceChanged"] = "Network adapter changed",
+        ["NetworkChange"] = "Network changed",
+        ["WifiRoam"] = "Wi-Fi access point changed",
         ["Disconnected"] = "Connection lost",
         ["Restored"] = "Recovered",
         ["GameProcess"] = "Game",

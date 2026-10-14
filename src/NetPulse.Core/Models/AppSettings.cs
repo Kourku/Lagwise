@@ -41,6 +41,10 @@ public class AppSettings
     public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
     /// <summary>Play a short sound when lag is marked with the shortcut, so the player knows it worked without leaving the game.</summary>
     public bool MarkLagSound { get; set; } = true;
+    /// <summary>Show a Windows notification when the connection drops, comes back, loses packets or switches network (see AlertPolicy).</summary>
+    public bool DesktopAlerts { get; set; } = true;
+    /// <summary>Only alert while NetPulse is not the active window (the page already shows the problem).</summary>
+    public bool AlertsOnlyInBackground { get; set; } = true;
 
     // Appearance
     /// <summary>"Dark", "Light" or "System" (follow the Windows app theme).</summary>

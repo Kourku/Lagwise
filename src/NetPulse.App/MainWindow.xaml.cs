@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private System.Windows.Threading.DispatcherTimer? _trayTimer;
     private bool _toldAboutTray;
     private OverlayWindow? _overlay;
+    private readonly NetPulse.Core.Services.AlertPolicy _alerts = new(DateTime.UtcNow);
 
     public MainWindow()
     {
@@ -37,6 +38,7 @@ public partial class MainWindow : Window
             }
         };
         Loaded += MainWindow_Loaded;
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
     }
@@ -60,6 +62,7 @@ public partial class MainWindow : Window
             SyncOverlay(vm);
             NetPulse.App.Themes.ThemeManager.Changed += (_, _) => WindowStyling.Apply(this, NetPulse.App.Themes.ThemeManager.IsLight);
             ApplyAppearance();
+            App.Host.Events.EventLogged += (_, evt) => Dispatcher.InvokeAsync(() => MaybeAlert(evt));
 
             // tray hover text: a glance at the connection without opening the window
             _trayTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(5), System.Windows.Threading.DispatcherPriority.Background, (_, _) => UpdateTrayTooltip(vm), Dispatcher);
@@ -69,6 +72,32 @@ public partial class MainWindow : Window
             if (Environment.GetCommandLineArgs().Contains("--minimized", StringComparer.OrdinalIgnoreCase))
                 WindowState = WindowState.Minimized;
         }
+    }
+
+    /// <summary>Keyboard shortcuts (listed on the Help page).</summary>
+    private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        var mods = System.Windows.Input.Keyboard.Modifiers;
+        var key = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
+        const System.Windows.Input.ModifierKeys ctrl = System.Windows.Input.ModifierKeys.Control;
+
+        if (mods == ctrl && key >= System.Windows.Input.Key.D0 && key <= System.Windows.Input.Key.D9)
+        {
+            int n = key == System.Windows.Input.Key.D0 ? 9 : key - System.Windows.Input.Key.D1;
+            e.Handled = vm.GoToPage(n);
+        }
+        else if (mods == ctrl && key >= System.Windows.Input.Key.NumPad0 && key <= System.Windows.Input.Key.NumPad9)
+        {
+            int n = key == System.Windows.Input.Key.NumPad0 ? 9 : key - System.Windows.Input.Key.NumPad1;
+            e.Handled = vm.GoToPage(n);
+        }
+        else if (mods == ctrl && key == System.Windows.Input.Key.OemComma) { vm.CurrentTab = "Settings"; e.Handled = true; }
+        else if (mods == System.Windows.Input.ModifierKeys.None && key == System.Windows.Input.Key.F1) { vm.CurrentTab = "Help"; e.Handled = true; }
+        else if (mods == ctrl && key == System.Windows.Input.Key.E) { vm.ExportReportCommand.Execute(null); e.Handled = true; }
+        else if (mods == (ctrl | System.Windows.Input.ModifierKeys.Shift) && key == System.Windows.Input.Key.C) { vm.CopySummaryCommand.Execute(null); e.Handled = true; }
+        else if (mods == (ctrl | System.Windows.Input.ModifierKeys.Shift) && key == System.Windows.Input.Key.O) { vm.ToggleOverlayCommand.Execute(null); e.Handled = true; }
+        else if (mods == ctrl && key == System.Windows.Input.Key.T) { vm.Appearance.ToggleThemeCommand.Execute(null); e.Handled = true; }
     }
 
     private void SyncOverlay(MainViewModel vm)
@@ -114,6 +143,19 @@ public partial class MainWindow : Window
         // a short confirmation the player can hear in game; a different sound when nothing is being recorded
         if (ok) System.Media.SystemSounds.Asterisk.Play();
         else System.Media.SystemSounds.Hand.Play();
+    }
+
+    /// <summary>Desktop notification for the few events that deserve one (see AlertPolicy); clicking it opens the timeline.</summary>
+    private void MaybeAlert(NetPulse.Core.Models.ConnectionEvent evt)
+    {
+        var settings = App.Host.Settings;
+        if (!settings.DesktopAlerts || _trayManager == null) return;
+        // checked before the policy, so an alert never shown is never "closed" by a Back online alert either
+        if (settings.AlertsOnlyInBackground && IsVisible && IsActive && WindowState != WindowState.Minimized) return;
+        var alert = _alerts.Evaluate(evt);
+        if (alert == null) return;
+        _trayManager.ShowNotification(alert.Title, alert.Message,
+            alert.IsProblem ? System.Windows.Forms.ToolTipIcon.Warning : System.Windows.Forms.ToolTipIcon.Info, "Events");
     }
 
     private void UpdateTrayTooltip(MainViewModel vm)

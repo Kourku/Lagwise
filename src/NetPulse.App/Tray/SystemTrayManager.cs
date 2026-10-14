@@ -12,6 +12,8 @@ public class SystemTrayManager : IDisposable
     private readonly Window _mainWindow;
     private readonly MainViewModel _viewModel;
     private NotifyIcon? _notifyIcon;
+    /// <summary>Page to open when the most recent notification is clicked (null: just show the window).</summary>
+    private string? _balloonTab;
 
     public SystemTrayManager(Window mainWindow, MainViewModel viewModel)
     {
@@ -119,6 +121,11 @@ public class SystemTrayManager : IDisposable
 
         _notifyIcon.ContextMenuStrip = contextMenu;
         _notifyIcon.DoubleClick += (s, e) => RestoreWindow();
+        _notifyIcon.BalloonTipClicked += (s, e) =>
+        {
+            RestoreWindow();
+            if (_balloonTab != null) _viewModel.CurrentTab = _balloonTab;
+        };
     }
 
     public void RestoreWindow()
@@ -135,11 +142,12 @@ public class SystemTrayManager : IDisposable
         _notifyIcon.Text = text.Length > 127 ? text[..126] + "\u2026" : text;
     }
 
-    public void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)
+    public void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info, string? openTab = null)
     {
         if (_notifyIcon != null && _notifyIcon.Visible)
         {
-            _notifyIcon.ShowBalloonTip(3000, title, message, icon);
+            _balloonTab = openTab;
+            _notifyIcon.ShowBalloonTip(5000, title, message, icon);
         }
     }
 

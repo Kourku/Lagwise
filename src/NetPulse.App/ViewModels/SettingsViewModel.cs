@@ -133,6 +133,9 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool StartWithWindows { get => _startWithWindows; set => Set(ref _startWithWindows, value); }
     public string MarkLagHotkey { get => _hotkey; set => Set(ref _hotkey, value); }
     public bool MarkLagSound { get => _lagSound; set => Set(ref _lagSound, value); }
+    public bool DesktopAlerts { get => _alerts; set => Set(ref _alerts, value); }
+    public bool AlertsOnlyInBackground { get => _alertsBg; set => Set(ref _alertsBg, value); }
+    private bool _alerts, _alertsBg;
     public int RecordingRetentionDays { get => _retentionDays; set => Set(ref _retentionDays, value); }
     /// <summary>Set by the window when Windows refuses the shortcut (another program already uses it).</summary>
     public string HotkeyStatus { get => _hotkeyStatus; set => SetProperty(ref _hotkeyStatus, value); }
@@ -191,6 +194,8 @@ public sealed class SettingsViewModel : ViewModelBase
             StartWithWindows = d.StartWithWindows;
             MarkLagHotkey = HotkeyChoices.Contains(d.MarkLagHotkey) ? d.MarkLagHotkey : HotkeyChoices[0];
             MarkLagSound = d.MarkLagSound;
+            DesktopAlerts = d.DesktopAlerts;
+            AlertsOnlyInBackground = d.AlertsOnlyInBackground;
             RecordingRetentionDays = Nearest(RetentionChoices, d.RecordingRetentionDays);
             LatencySpikeText = d.LatencySpikeThresholdMs.ToString("0.#", CultureInfo.CurrentCulture);
             PacketLossText = d.PacketLossThresholdPercent.ToString("0.#", CultureInfo.CurrentCulture);
@@ -242,6 +247,8 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.StartWithWindows = StartWithWindows;
         _draft.MarkLagHotkey = MarkLagHotkey;
         _draft.MarkLagSound = MarkLagSound;
+        _draft.DesktopAlerts = DesktopAlerts;
+        _draft.AlertsOnlyInBackground = AlertsOnlyInBackground;
         _draft.RecordingRetentionDays = RecordingRetentionDays;
         _draft.LatencySpikeThresholdMs = spike;
         _draft.PacketLossThresholdPercent = loss;

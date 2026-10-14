@@ -200,6 +200,7 @@ public class MainViewModel : ViewModelBase
         Settings.Applied += (_, _) =>
         {
             OnPropertyChanged(nameof(ProbeIntervalText));
+            OnPropertyChanged(nameof(MarkLagKeyText));
             PruneRemovedTargets();
         };
         GameMonitor.PropertyChanged += (_, e) =>
@@ -263,6 +264,24 @@ public class MainViewModel : ViewModelBase
 
     /// <summary>Pages that only exist in Advanced mode (tools for digging into the measurements themselves).</summary>
     public static readonly HashSet<string> AdvancedOnlyTabs = new() { "Monitoring", "RoutePath", "Adapter", "ProbeLog" };
+
+    /// <summary>The Mark lag shortcut as set in Settings, for the Help page.</summary>
+    public string MarkLagKeyText => _host.Settings.MarkLagHotkey == HotkeyGesture.Off ? "(not set)" : _host.Settings.MarkLagHotkey;
+
+    /// <summary>Sidebar order, used by the Ctrl+1 ... Ctrl+0 shortcuts.</summary>
+    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Adapter", "ProbeLog", "Events", "History" };
+
+    /// <summary>The pages the sidebar currently shows, top to bottom (Beginner hides some).</summary>
+    public IReadOnlyList<string> VisiblePages => PageOrder.Where(p => !IsBeginnerMode || !AdvancedOnlyTabs.Contains(p)).ToList();
+
+    /// <summary>Ctrl+1 opens the first page of the sidebar, Ctrl+2 the second, and so on (Ctrl+0 is the tenth).</summary>
+    public bool GoToPage(int index)
+    {
+        var pages = VisiblePages;
+        if (index < 0 || index >= pages.Count) return false;
+        CurrentTab = pages[index];
+        return true;
+    }
 
     public string ModeSummary => IsBeginnerMode
         ? "Beginner: plain-language verdicts and the essentials. Switch to Advanced for per-server statistics, raw connection tables, route tracing, adapter details and the live probe log."
@@ -616,6 +635,37 @@ public class MainViewModel : ViewModelBase
     public string ReadinessScope => ReadinessResult.Scope;
     public RelayCommand OpenBufferbloatCommand => _openBufferbloat ??= new RelayCommand(() => CurrentTab = "Bufferbloat");
     private RelayCommand? _openBufferbloat;
+
+    // ---- "Copy summary": a short text snapshot for a chat or a support ticket ----
+
+    private string _copySummaryText = "Copy summary";
+    public string CopySummaryText { get => _copySummaryText; private set => SetProperty(ref _copySummaryText, value); }
+    public RelayCommand CopySummaryCommand => _copySummary ??= new RelayCommand(CopySummary);
+    private RelayCommand? _copySummary;
+
+    /// <summary>The text "Copy summary" puts on the clipboard (no IP addresses or network names).</summary>
+    public string BuildStatusSummary()
+    {
+        var metrics = _engine.GetCurrentMetrics();
+        var r = ReadinessCheck.Evaluate(metrics, ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow);
+        return StatusSummary.Build(r, metrics, ActiveNic, DateTime.Now, NetPulse.Core.AppInfo.Version);
+    }
+
+    private async void CopySummary()
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(BuildStatusSummary());
+            CopySummaryText = "Copied";
+        }
+        catch (Exception)
+        {
+            // another program can hold the clipboard open for a moment
+            CopySummaryText = "Clipboard busy, try again";
+        }
+        await Task.Delay(2500);
+        CopySummaryText = "Copy summary";
+    }
 
     private void RefreshReadiness(bool force = false)
     {

@@ -77,14 +77,14 @@ public class MeasurementEngine
         _diagnosticEngine = diagnosticEngine;
         _eventLogService = eventLogService;
 
-        _discoveryService.NetworkChanged += (s, nic) =>
+        _discoveryService.NetworkChanged += (s, change) =>
+        {
+            UpdateGatewayTarget(change.Info);
+            _eventLogService.LogEvent(change.Roamed ? "WifiRoam" : "NetworkChange", change.Severity, change.Description, change.Info.Name);
+        };
+        _discoveryService.InterfaceRefreshed += (s, nic) =>
         {
             CurrentNic = nic;
-            UpdateGatewayTarget(nic);
-            _eventLogService.LogEvent(
-                "InterfaceChanged",
-                "Info",
-                $"Network interface changed: {nic.Name} ({nic.InterfaceType}) IP: {nic.Ipv4Address}");
             NetworkInterfaceUpdated?.Invoke(this, nic);
         };
     }
@@ -102,6 +102,7 @@ public class MeasurementEngine
         NetworkInterfaceUpdated?.Invoke(this, CurrentNic);
 
         _monitoringTask = Task.Run(() => MonitoringLoopAsync(_cts.Token));
+        _discoveryService.StartPolling(TimeSpan.FromSeconds(20));
     }
 
     public void Stop()
@@ -109,6 +110,7 @@ public class MeasurementEngine
         if (!IsRunning) return;
 
         IsRunning = false;
+        _discoveryService.StopPolling();
         _cts?.Cancel();
         try
         {

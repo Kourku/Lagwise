@@ -2,6 +2,18 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3); builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.9.0
+
+**New**
+- **Desktop alerts.** A Windows notification when the connection drops and when it comes back ("Back online after 40 s"), when your router stops answering, when packets are being lost, and when Windows switches network (for example from cable to Wi-Fi). At most one of each kind every 3 minutes, nothing in the first 45 s after start, and by default only while NetPulse is in the background. Clicking an alert opens the event timeline. Latency spikes, route changes and Wi-Fi roaming stay in the timeline only. Settings > Desktop alerts.
+- **When is my connection worst?** (History). Pools every recording by hour of the day and shows a 24-hour bar chart of extra ping and probe loss, with a plain-language conclusion such as "worst around 21:00-22:00: ping about 18 ms above your usual". Each server is compared with its own usual ping, so distance never makes an hour look bad; an hour needs about 2 minutes of recording before it is rated, and hours covered by only one or two recordings are called out as possible one-offs.
+- **Copy summary** (Overview, `Ctrl+Shift+C`). A short text snapshot of the connection - verdict, connection type, router, reference servers, DNS and the checklist - to paste into Discord, a forum or a support ticket. It leaves out IP addresses, adapter names and Wi-Fi network names, and says it is not game-server ping.
+- **Keyboard shortcuts.** `Ctrl+1` ... `Ctrl+9`, `Ctrl+0` open the sidebar pages in order (Beginner and Advanced each have their own order), `Ctrl+E` export report, `Ctrl+Shift+O` mini overlay, `Ctrl+T` light/dark, `Ctrl+,` Settings, `F1` Help. Listed on the Help page.
+
+**Network change detection, rebuilt**
+- Windows announces address changes in bursts (and for IPv6 privacy addresses nobody cares about); every notification used to write an "adapter changed" line and start a Wi-Fi query. NetPulse now waits for the burst to settle, compares with the previous reading and only logs a real change, in words: "Switched from wired Ethernet to Wi-Fi", "Joined a different Wi-Fi network", "router 192.168.1.1 to 10.0.0.1", "The network connection went away".
+- **Wi-Fi roaming** is now noticed: the Wi-Fi connection is re-read every 20 s, and moving to a different access point is logged ("Roaming can cause a brief lag spike"). The Adapter page's signal strength stays current too.
+
 ## 0.8.0
 
 **Beginner and Advanced are now two real modes**, not a few hidden columns.

@@ -153,7 +153,11 @@ public sealed class HistoryViewModel : ViewModelBase
         ExportSamplesCommand = new RelayCommand(ExportSamples, () => _session != null);
         OpenFolderCommand = new RelayCommand(OpenFolder);
         DeleteCommand = new RelayCommand(Delete, () => _session != null);
+        Patterns = new PatternsViewModel(host, dispatcher);
     }
+
+    /// <summary>"When is my connection worst?" across all recordings.</summary>
+    public PatternsViewModel Patterns { get; }
 
     public ObservableCollection<SessionRow> Sessions { get; } = new();
     public ObservableCollection<TargetStatRow> TargetStats { get; } = new();
