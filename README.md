@@ -8,7 +8,9 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
-![NetPulse Overview](docs/screenshots/overview-0.5.png)
+![NetPulse 0.9 Overview in Beginner mode: connection status, rated headline numbers and the Ready to play checklist](docs/screenshots/overview-0.9.png)
+
+**[Download the latest portable build from the Releases page](../../releases/latest)**: extract and run, no install or admin rights needed.
 
 ---
 
@@ -16,7 +18,7 @@
 - [Executive Overview](#-executive-overview)
 - [The Core Diagnostic Problem](#-the-core-diagnostic-problem)
 - [Key Features](#-key-features)
-- [Progressive Disclosure UX](#-progressive-disclosure-ux)
+- [Beginner and Advanced](#-beginner-and-advanced)
 - [Multi-Layer Measurement Architecture](#-multi-layer-measurement-architecture)
 - [Hop-by-Hop Path Discovery & Continuous MTR](#-hop-by-hop-path-discovery--continuous-mtr)
 - [Bufferbloat & Loaded Latency Engine](#-bufferbloat--loaded-latency-engine)
@@ -83,34 +85,23 @@ NetPulse clearly distinguishes between:
 
 ---
 
-## 💡 Progressive Disclosure UX
+## 💡 Beginner and Advanced
 
-NetPulse serves both normal users and advanced network engineers without compromise:
+NetPulse serves both players who just want an answer and people who want every number. Switch at any time with **Beginner / Advanced** at the top of the window; a welcome card asks on first start.
 
-### Level 1: Simple Dashboard (Beginner Mode)
-- **Top Status Banner:** Instant color-coded verdict (`HEALTHY`, `LOCAL ROUTER ISSUE`, `ISP DEGRADED`, `DNS ISSUE`, `DISCONNECTED`).
-- **Plain-English Answers:**
-  - *Is my connection working?*
-  - *Is it performing normally?*
-  - *Where does the problem appear to be?*
-- **Core Cards:** Latency, Jitter, Packet Loss, and Local Router latency with qualitative badges ("Good", "Fair", "Degraded").
+### Beginner: the essentials, in plain words
+- **Connection status** with a plain-English verdict and a recommended next step.
+- **Headline numbers with a one-word rating**, judged against *your own* normal rather than fixed limits: ping "Usual for you" / "Higher than usual", stability "Steady" / "Some wobble" / "Unsteady", loss "None" / "A little" / "Losing packets", router "Quick" / "Slower than ideal".
+- **Ready to play?** checklist: router, packet loss, ping stability, compared with your normal, DNS, Wi-Fi signal and lag under load, each with a short reason. **Copy summary** puts a text version on the clipboard.
+- A shorter sidebar: Overview, Game Monitor (one "What the game is connected to" summary), Bufferbloat and Speed tests, Event timeline, History & reports.
+- `ℹ` buttons on every metric explain the term without jargon.
 
-### Level 2: Contextual Explanations
-- Information buttons (`ℹ`) on every metric explaining latency, jitter, packet loss, and bufferbloat in accessible terms without technical jargon.
-
-### Level 3: Evidence-Based Problem Reports
-- When issues arise, NetPulse generates human-readable diagnostics:
-  - **What we found:** Measured facts (e.g. "Your router is responding normally in 1.2ms; average Internet latency is fluctuating significantly").
-  - **What this probably means:** Evidence-based inference ("The issue appears to originate upstream on your ISP's network, not in your home").
-  - **What you can do:** Actionable next steps ("Provide the exported diagnostic report when contacting your ISP").
-
-### Level 4: Technical View (Advanced Mode)
-- Toggle switch right on the top navigation bar unlocks:
-  - Multi-target data grid with rolling sparkline history.
-  - Granular HTTPS timing breakdown (DNS, TCP Connect, TLS Handshake, TTFB).
-  - Hop-by-hop continuous MTR table.
-  - Route divergence path comparison.
-  - Raw CSV and JSON data export.
+### Advanced: everything, plus the evidence
+- **Per-server statistics** on the Overview: now vs usual latency, 95th percentile, variation, loss and state.
+- **Targets & probes** with an HTTPS timing breakdown (DNS, TCP connect, TLS handshake, first byte).
+- **Route trace** (continuous hop-by-hop MTR with ASN lookup and route comparison), **Adapter & Wi-Fi** details, and a live **Probe log** of every measurement, filterable and pausable.
+- The full Game Monitor connection tables, with the option to measure an endpoint the game opened.
+- The measured evidence behind each verdict, and how each glossary term is measured.
 
 ---
 
@@ -153,12 +144,14 @@ Bufferbloat is high latency caused by excessive buffering in consumer home route
 The application is completely self-contained. **No .NET SDK or runtime installation is required.**
 
 ### 1. Portable Version (Zero Install)
-1. Run `build.ps1`, then use `dist/NetPulse-<version>-Portable-win-x64.zip` (the verified portable build is also unpacked in `dist/portable/`; every verified build is kept under `dist/releases/<version>/` with its release notes and `build-info.json`).
+1. Download `NetPulse-<version>-Portable-win-x64.zip` from the [latest release](../../releases/latest). Each release lists its SHA-256 checksum.
 2. Extract the archive anywhere on your machine.
 3. Launch `NetPulse.exe`.
 
+Building it yourself: run `build.ps1`, then use `dist/NetPulse-<version>-Portable-win-x64.zip` (the verified portable build is also unpacked in `dist/portable/`; every verified build is kept under `dist/releases/<version>/` with its release notes and `build-info.json`).
+
 ### 2. Standalone Windows Installer (`NetPulse-Setup.exe`)
-1. Run `dist/releases/<version>/installer/NetPulse-Setup.exe`.
+1. Build it with `build.ps1` (the installer is not attached to the GitHub releases), then run `dist/releases/<version>/installer/NetPulse-Setup.exe`.
 2. Click **Install**.
 3. NetPulse installs to `%LocalAppData%\Programs\NetPulse` without requiring administrator privileges, creates Desktop and Start Menu shortcuts, and registers with Windows Add/Remove Programs.
 4. To uninstall, run `NetPulse-Setup.exe --uninstall` or use Windows **Installed Apps**.
