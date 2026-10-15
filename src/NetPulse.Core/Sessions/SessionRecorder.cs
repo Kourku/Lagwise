@@ -93,6 +93,16 @@ public class SessionRecorder
         }
     }
 
+    /// <summary>Adds one second of adapter traffic (capped like samples: a day of seconds is plenty).</summary>
+    public void RecordThroughput(DateTime t, double rxBps, double txBps)
+    {
+        lock (_lock)
+        {
+            if (_session == null || _session.Throughput.Count >= 86_400) return;
+            _session.Throughput.Add(new ThroughputSample { T = t, Rx = Math.Round(rxBps), Tx = Math.Round(txBps) });
+        }
+    }
+
     public void RecordMeasurement(Measurement m)
     {
         lock (_lock)

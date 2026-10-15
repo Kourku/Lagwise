@@ -39,6 +39,16 @@ public class SessionSample
     public string? Error { get; set; }
 }
 
+/// <summary>One second of traffic on the adapter Windows uses for the internet, while recording.</summary>
+public class ThroughputSample
+{
+    public DateTime T { get; set; }
+    /// <summary>Download, bits per second.</summary>
+    public double Rx { get; set; }
+    /// <summary>Upload, bits per second.</summary>
+    public double Tx { get; set; }
+}
+
 /// <summary>A period during which NetPulse itself was not measuring (sleep, stalled engine). Not a network failure.</summary>
 public class MonitoringGap
 {
@@ -115,6 +125,8 @@ public class MonitoringSession
     public List<MonitoringGap> Gaps { get; set; } = new();
     public List<DisconnectRecord> Disconnects { get; set; } = new();
     public List<LagMarker> LagMarkers { get; set; } = new();
+    /// <summary>Traffic on this PC during the recording (empty for recordings made before 0.13).</summary>
+    public List<ThroughputSample> Throughput { get; set; } = new();
 
     // ---- Game monitoring context (empty for plain network sessions) ----
     public string? GameDisplayName { get; set; }

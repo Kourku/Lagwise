@@ -162,6 +162,15 @@ try {
     Check 'The recording opens with its summary and graph sections' (($null -ne (Wait-For { Find-Named 'Graph' 'ControlType.Text' } 15)) -and ($null -ne (Find-Like '^Moments you marked as laggy$'))) ''
     Check 'The recording offers its report and CSV export' ($null -ne (Wait-For { Find-Named 'Export probe data (CSV)' 'ControlType.Button' | Where-Object { $_.Current.IsEnabled } } 5)) ''
     Check 'The recording graph is drawn' ($null -ne (Find-Like '^Recording graph$')) ''
+    # the recording kept this PC's traffic: its "Network activity" view draws it
+    $graphView = Find-Named 'Graph view' 'ControlType.ComboBox'
+    if ($graphView) {
+        Add-Type -AssemblyName System.Windows.Forms
+        $graphView.SetFocus(); Start-Sleep -Milliseconds 300
+        [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{DOWN}{DOWN}'); Start-Sleep -Milliseconds 800
+    }
+    Check 'A recording shows its network activity view' ($null -ne (Wait-For { Find-Like '^Recording network activity graph$' } 5)) ''
+    if ($graphView) { $graphView.SetFocus(); [System.Windows.Forms.SendKeys]::SendWait('{UP}{UP}{UP}'); Start-Sleep -Milliseconds 500 }
     Check 'Lag marked with the shortcut is listed in the report' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
     Check 'History shows how much space recordings use' ($null -ne (Find-Like '^1 recording, .* MB on this PC')) ''
     Check 'History writes its summary index' (Test-Path (Join-Path $DataDir 'sessions\index.json')) ''
@@ -180,6 +189,7 @@ try {
     # Network activity: live adapter throughput with its graph
     Click-Element (Find-Like '^Network activity$')
     Check 'Network activity shows live speeds and the graph' (($null -ne (Wait-For { Find-Like '^Network activity graph$' } 5)) -and ($null -ne (Find-Like '^Download now$'))) ''
+    Check 'Network activity lists the programs online' ($null -ne (Wait-For { Find-Like '^Programs online$' } 8)) ''
 
 
     # ---- Settings: change a value, save, and confirm it was applied and written ----

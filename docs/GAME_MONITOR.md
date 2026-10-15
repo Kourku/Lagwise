@@ -1,6 +1,6 @@
 # Game Monitor: what exists and what has actually been verified
 
-Status as of NetPulse 0.12.0 (2026-10-14).
+Status as of NetPulse 0.13.0 (2026-10-14).
 
 ## Support status of the seven games
 
@@ -63,7 +63,7 @@ No profile lists a "verified endpoint": match servers are dynamic and none was v
 
 ## Verification performed
 
-**Automated (312 tests, all passing):** profile invariants; process detection with simulated processes (multiple processes, launchers,
+**Automated (320 tests, all passing):** profile invariants; process detection with simulated processes (multiple processes, launchers,
 anti-cheat, path mismatch, restarts, PID reuse); connection tracking with synthetic IPv4/IPv6/TCP/UDP snapshots (dedup, state change,
 flapping, short-lived, owner exit); the **real Windows APIs** against sockets created by the test process itself (IPv4 and IPv6 TCP and
 UDP); endpoint advice and ICMP-filtering handling; analyzer scenarios incl. contradictions and confidence; the full monitor workflow

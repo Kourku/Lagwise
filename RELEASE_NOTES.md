@@ -2,6 +2,29 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.13.0
+
+**Network activity, refined**
+- **Ping on the traffic graph.** Your reference ping (one value per second, from the plain-ping reference servers) is drawn as a pink line on its own axis on the right. If it climbs whenever a download runs, that is bufferbloat, happening live. Toggle it with **Ping**.
+- **Mirror mode.** Download above the middle line, upload below, on one shared scale, so the two never hide each other. Toggle it with **Mirror**.
+- **Pause.** Freezes the graph and numbers for a closer look; NetPulse keeps measuring in the background.
+- **Programs online now.**
+  - Lists the programs on this PC with internet connections open, checked every few seconds, with how many connections and addresses each one has.
+  - Programs that often download or upload a lot are marked: game launchers and stores, cloud sync, Windows Update and services, torrent clients, browsers, streaming. Game clients are recognised from the game profiles, for example "League of Legends (client)".
+  - Windows reports which program owns each connection but not how much data each one moves (that needs administrator rights), so this shows who is talking to the internet, not exactly who is using the bandwidth. The page says so.
+- **Heavy-traffic timeline entries name the likely programs.** For example: "...Programs online at the time that often download or upload a lot: Steam (12 connections), OneDrive (3)."
+- **The heavy-traffic limit is a setting.** Settings > Events offers Off, 5, 15 (default), 30 or 100 Mbps, to suit slow and fast connections.
+
+**Recordings keep the traffic**
+- Every recording now stores this PC's download and upload for each second. History has a new **Network activity** graph view: traffic, the recorded ping on the right axis, and amber dashes where you marked lag. Lag that lines up with a traffic peak was probably caused by it. Recordings made before 0.13 say they have no traffic data.
+
+**Mini overlay**
+- Shows this PC's live download and upload under the ping. Turn it off in Settings > Appearance.
+
+**Also**
+- The ping axis uses whole steps (5 / 10 / 20 ms ...).
+- History's graph picker has an accessible name ("Graph view") for screen readers.
+
 ## 0.12.0
 
 **New: Network activity page** (both modes, `Ctrl+3`)

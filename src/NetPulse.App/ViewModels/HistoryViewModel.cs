@@ -195,7 +195,49 @@ public sealed class HistoryViewModel : ViewModelBase
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand DeleteCommand { get; }
 
-    public IReadOnlyList<string> ModeLabels { get; } = new[] { "Latency", "Variation", "Probe loss" };
+    public IReadOnlyList<string> ModeLabels { get; } = new[] { "Latency", "Variation", "Probe loss", "Network activity" };
+
+    // ---- "Network activity" view of a recording (traffic on this PC, recorded since 0.13)
+    public const int ActivityMode = 3;
+    public bool IsActivityMode => ModeIndex == ActivityMode;
+    public bool IsLatencyMode => ModeIndex != ActivityMode;
+    private IReadOnlyList<ActivityPoint> _trafficPoints = Array.Empty<ActivityPoint>();
+    private IReadOnlyList<PingPoint> _trafficPings = Array.Empty<PingPoint>();
+    private IReadOnlyList<DateTime> _trafficMarkers = Array.Empty<DateTime>();
+    private double _trafficWindow = 60;
+    public IReadOnlyList<ActivityPoint> TrafficPoints { get => _trafficPoints; private set => SetProperty(ref _trafficPoints, value); }
+    public IReadOnlyList<PingPoint> TrafficPings { get => _trafficPings; private set => SetProperty(ref _trafficPings, value); }
+    public IReadOnlyList<DateTime> TrafficMarkers { get => _trafficMarkers; private set => SetProperty(ref _trafficMarkers, value); }
+    public double TrafficWindowSeconds { get => _trafficWindow; private set => SetProperty(ref _trafficWindow, value); }
+    public bool HasTraffic => _trafficPoints.Count >= 2;
+    public string TrafficSummary { get; private set; } = "";
+
+    private void BuildTraffic(MonitoringSession s)
+    {
+        TrafficPoints = s.Throughput.Select(t => new ActivityPoint(t.T, t.Rx, t.Tx, 0, 0)).ToList();
+        var refs = s.Targets.Where(t => t.Kind == MeasurementKind.ReferenceEndpoint && t.Protocol == NetworkProtocol.Icmp).Select(t => t.Id).ToHashSet();
+        TrafficPings = s.Samples.Where(x => x.Ok && x.RttMs.HasValue && refs.Contains(x.TargetId))
+            .GroupBy(x => new DateTime(x.T.Ticks - x.T.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc))
+            .OrderBy(g => g.Key)
+            .Select(g => new PingPoint(g.Key.AddMilliseconds(500), NetPulse.Core.Statistics.StatisticalCalculator.CalculateMedian(g.Select(x => x.RttMs!.Value).ToList())))
+            .ToList();
+        TrafficMarkers = s.LagMarkers.Select(m => m.T).ToList();
+        var first = s.Throughput.FirstOrDefault()?.T ?? s.StartedUtc;
+        var last = s.Throughput.LastOrDefault()?.T ?? s.EndedUtc ?? s.StartedUtc;
+        TrafficWindowSeconds = Math.Max(30, (last - first).TotalSeconds);
+        if (s.Throughput.Count < 2)
+            TrafficSummary = "This recording has no traffic data: recordings keep this PC's network activity since NetPulse 0.13.";
+        else
+        {
+            double peakRx = s.Throughput.Max(t => t.Rx), peakTx = s.Throughput.Max(t => t.Tx);
+            double avgRx = s.Throughput.Average(t => t.Rx), avgTx = s.Throughput.Average(t => t.Tx);
+            TrafficSummary = $"Traffic on this PC during the recording: download peak {AdapterActivityMonitor.FormatBps(peakRx)}, average {AdapterActivityMonitor.FormatBps(avgRx)}; " +
+                             $"upload peak {AdapterActivityMonitor.FormatBps(peakTx)}, average {AdapterActivityMonitor.FormatBps(avgTx)}. " +
+                             "The pink line is the reference ping and amber dashes are the moments you marked as laggy: lag that lines up with a traffic peak was probably caused by it.";
+        }
+        OnPropertyChanged(nameof(HasTraffic));
+        OnPropertyChanged(nameof(TrafficSummary));
+    }
     public string SessionsFolder => _sessionsFolderText;
     private string _storageText = "";
     /// <summary>"3 recordings, 4.2 MB on this PC" plus the retention rule.</summary>
@@ -238,13 +280,14 @@ public sealed class HistoryViewModel : ViewModelBase
     {
         0 => "Slowest reply in each time slice, so short spikes stay visible. Amber dashes mark where you pressed Mark lag; grey bands are times NetPulse was not measuring; red bands are connection losses.",
         1 => "How much consecutive replies differed in each time slice. Steady lines are good: big swings feel like stutter even when the average ping is fine.",
-        _ => "Share of test messages with no reply in each time slice. Short bursts on one target can just be that server ignoring pings."
+        2 => "Share of test messages with no reply in each time slice. Short bursts on one target can just be that server ignoring pings.",
+        _ => "Download and upload of this PC during the recording, with the reference ping on the right axis. Other devices at home are not included."
     };
 
     public int ModeIndex
     {
         get => _modeIndex;
-        set { if (SetProperty(ref _modeIndex, value)) { OnPropertyChanged(nameof(ChartCaption)); RebuildChart(); } }
+        set { if (SetProperty(ref _modeIndex, value)) { OnPropertyChanged(nameof(ChartCaption)); OnPropertyChanged(nameof(IsActivityMode)); OnPropertyChanged(nameof(IsLatencyMode)); RebuildChart(); } }
     }
 
     // ------------------------------------------------------------------ loading
@@ -463,6 +506,7 @@ public sealed class HistoryViewModel : ViewModelBase
         if (_session == null) { Chart = null; return; }
         var on = Legend.Where(l => l.IsOn).Select(l => l.TargetId).ToHashSet();
         Chart = SessionChartBuilder.Build(_session, (ChartMode)Math.Clamp(ModeIndex, 0, 2), on);
+        BuildTraffic(_session);
     }
 
     // ------------------------------------------------------------------ actions

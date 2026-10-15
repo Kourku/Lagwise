@@ -218,3 +218,21 @@ public sealed class AdapterActivityMonitor
         _ => $"{bytes} B"
     };
 }
+
+/// <summary>The reference ping as one value per second, for drawing over the traffic graph.</summary>
+public static class ReferencePing
+{
+    /// <summary>
+    /// Typical (median) round trip of the plain-ping reference servers in each second since <paramref name="fromUtc"/>.
+    /// Only ICMP reference targets count: the router, DNS lookups and HTTPS handshakes measure other things.
+    /// </summary>
+    public static IReadOnlyList<(DateTime T, double Ms)> PerSecond(IEnumerable<Models.Measurement> history, IReadOnlySet<string> referenceIds, DateTime fromUtc)
+    {
+        return history
+            .Where(m => m.Success && m.Timestamp >= fromUtc && m.Protocol == Models.NetworkProtocol.Icmp && referenceIds.Contains(m.TargetId))
+            .GroupBy(m => new DateTime(m.Timestamp.Ticks - m.Timestamp.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc))
+            .OrderBy(g => g.Key)
+            .Select(g => (g.Key.AddMilliseconds(500), Statistics.StatisticalCalculator.CalculateMedian(g.Select(m => m.RttMs).ToList())))
+            .ToList();
+    }
+}

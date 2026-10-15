@@ -67,6 +67,13 @@
                     <TextBlock Style="{StaticResource OverlayValue}"><Run Text="{Binding QuickPacketLoss, StringFormat={}{0:F1}, Mode=OneWay}" /><Run Text=" %" FontSize="11.5" FontWeight="Normal" Foreground="{DynamicResource TextSecondaryBrush}" /></TextBlock>
                 </StackPanel>
             </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding ShowOverlayTraffic, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Download and upload of this PC right now (Network activity page)">
+                <TextBlock Text="&#xE74B;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource AccentBlueBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding OverlayDown}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="4,0,14,0" Typography.NumeralAlignment="Tabular" />
+                <TextBlock Text="&#xE74A;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource AccentAmberBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding OverlayUp}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="4,0,0,0" Typography.NumeralAlignment="Tabular" />
+            </StackPanel>
             <TextBlock Text="{Binding OverlayHint}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
         </StackPanel>
     </Grid>

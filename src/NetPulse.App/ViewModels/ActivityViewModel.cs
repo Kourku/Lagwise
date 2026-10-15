@@ -2,13 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Threading;
+using NetPulse.App.Controls;
 using NetPulse.Core.Services;
 
 namespace NetPulse.App.ViewModels;
 
 public sealed record AdapterOption(string Id, string Label);
 public sealed record WindowOption(string Label, int Seconds);
+
+/// <summary>A row of "Programs online now".</summary>
+public sealed record ProgramRow(string Name, string Kind, string Connections, bool CanUseALot);
 
 /// <summary>
 /// Network activity page: throughput of one network adapter, second by second, like Task Manager's Performance tab.
@@ -24,6 +29,10 @@ public sealed class ActivityViewModel : ViewModelBase
     private string? _selectedId;
     private int _windowSeconds = 60;
     private IReadOnlyList<ActivityPoint> _points = Array.Empty<ActivityPoint>();
+    private IReadOnlyList<PingPoint> _pings = Array.Empty<PingPoint>();
+    private bool _paused, _mirrored, _showPing = true, _programsBusy;
+    private DateTime _programsAt;
+    private string _programsSummary = "Looking for programs with internet connections...";
 
     public ActivityViewModel(NetPulseHost host, Dispatcher dispatcher, Func<string?> activeAdapterId)
     {
@@ -60,6 +69,20 @@ public sealed class ActivityViewModel : ViewModelBase
     }
 
     public IReadOnlyList<ActivityPoint> Points { get => _points; private set => SetProperty(ref _points, value); }
+    public IReadOnlyList<PingPoint> PingPoints { get => _pings; private set => SetProperty(ref _pings, value); }
+
+    /// <summary>Freezes the graph and numbers for a closer look; the host keeps sampling, so nothing is lost.</summary>
+    public bool IsPaused { get => _paused; set { if (SetProperty(ref _paused, value)) { OnPropertyChanged(nameof(PauseText)); if (!value) Refresh(); } } }
+    public string PauseText => _paused ? "Resume" : "Pause";
+    public RelayCommand TogglePauseCommand => _togglePause ??= new RelayCommand(() => IsPaused = !IsPaused);
+    private RelayCommand? _togglePause;
+    /// <summary>Download above the middle line, upload below.</summary>
+    public bool Mirrored { get => _mirrored; set => SetProperty(ref _mirrored, value); }
+    /// <summary>Reference ping drawn over the traffic: shows bufferbloat as it happens.</summary>
+    public bool ShowPing { get => _showPing; set { if (SetProperty(ref _showPing, value)) Refresh(); } }
+
+    public ObservableCollection<ProgramRow> Programs { get; } = new();
+    public string ProgramsSummary { get => _programsSummary; private set => SetProperty(ref _programsSummary, value); }
 
     // ---- readouts (value and unit apart, for the big numbers)
     public string DownValue { get; private set; } = "0";
@@ -82,6 +105,8 @@ public sealed class ActivityViewModel : ViewModelBase
 
     private void Refresh()
     {
+        RefreshProgramsSoon();
+        if (_paused) return;
         var all = _host.Activity.Snapshot();
         SyncAdapters(all);
         var a = all.FirstOrDefault(x => string.Equals(x.Id, _selectedId, StringComparison.OrdinalIgnoreCase));
@@ -91,6 +116,7 @@ public sealed class ActivityViewModel : ViewModelBase
         var now = a.Latest?.T ?? DateTime.UtcNow;
         var window = TimeSpan.FromSeconds(_windowSeconds);
         Points = a.History;
+        PingPoints = _showPing ? PingSeries(now.AddSeconds(-_windowSeconds - 2)) : Array.Empty<PingPoint>();
         (DownValue, DownUnit) = Split(a.Latest?.RxBps ?? 0);
         (UpValue, UpUnit) = Split(a.Latest?.TxBps ?? 0);
         string span = _windowSeconds >= 120 ? $"{_windowSeconds / 60} min" : $"{_windowSeconds} s";
@@ -111,6 +137,42 @@ public sealed class ActivityViewModel : ViewModelBase
             : "Windows does not report a link speed for this adapter.";
         AdapterText = $"{a.Name} · {a.Description}";
         NotifyAll();
+    }
+
+    /// <summary>Typical ping to the plain-ping reference servers, one value per second.</summary>
+    private IReadOnlyList<PingPoint> PingSeries(DateTime fromUtc)
+    {
+        var refs = _host.Engine.GetCurrentMetrics()
+            .Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == Core.Models.NetworkProtocol.Icmp)
+            .Select(m => m.TargetId).ToHashSet();
+        return ReferencePing.PerSecond(_host.Engine.GetAllHistory(), refs, fromUtc).Select(p => new PingPoint(p.T, p.Ms)).ToList();
+    }
+
+    /// <summary>Reads the socket table every few seconds, off the UI thread (it enumerates every process).</summary>
+    private void RefreshProgramsSoon()
+    {
+        if (_programsBusy || DateTime.UtcNow - _programsAt < TimeSpan.FromSeconds(5)) return;
+        _programsBusy = true;
+        _programsAt = DateTime.UtcNow;
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        Task.Run(() => _host.ProgramsOnline()).ContinueWith(t =>
+        {
+            dispatcher.InvokeAsync(() =>
+            {
+                _programsBusy = false;
+                var list = t.IsCompletedSuccessfully ? t.Result : Array.Empty<OnlineProgram>();
+                Programs.Clear();
+                foreach (var p in list.Take(12))
+                    Programs.Add(new ProgramRow(p.DisplayName, p.KindLabel,
+                        $"{p.InternetConnections} connection{(p.InternetConnections == 1 ? "" : "s")} to {p.RemoteHosts} address{(p.RemoteHosts == 1 ? "" : "es")}", p.CanUseALot));
+                int heavy = list.Count(p => p.CanUseALot);
+                ProgramsSummary = list.Count == 0
+                    ? "No program has an internet connection open right now (apart from NetPulse)."
+                    : $"{list.Count} program{(list.Count == 1 ? "" : "s")} with internet connections open" +
+                      (heavy > 0 ? $"; {heavy} of them often download or upload a lot (marked)." : ".") +
+                      (list.Count > 12 ? " Showing the first 12." : "");
+            });
+        });
     }
 
     /// <summary>Keeps the adapter list in step; selects the adapter Windows routes internet traffic through, or the first one.</summary>

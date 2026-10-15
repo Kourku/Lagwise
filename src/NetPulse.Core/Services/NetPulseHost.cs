@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using NetPulse.Core.Games;
 using NetPulse.Core.Models;
@@ -121,13 +122,27 @@ public sealed class NetPulseHost : IDisposable
 
         Activity = new AdapterActivityMonitor
         {
+            HeavyTrafficBps = Settings.HeavyTrafficMbps > 0 ? Settings.HeavyTrafficMbps * 1_000_000.0 : double.PositiveInfinity,
             // NetPulse's own speed and bufferbloat tests are heavy traffic on purpose; so are their last few seconds
             SuppressHeavyTraffic = () => Volatile.Read(ref _loadTests) > 0 || DateTime.UtcNow - _loadTestEndedUtc < TimeSpan.FromSeconds(5)
         };
-        Activity.HeavyTrafficDetected += (_, h) => Events.LogEvent("HeavyTraffic", GameMonitor.IsMonitoring ? "Warning" : "Info",
-            $"Heavy traffic on this PC ({h.Adapter}): up to {AdapterActivityMonitor.FormatBps(h.RxBps)} down and {AdapterActivityMonitor.FormatBps(h.TxBps)} up for {h.Duration.TotalSeconds:F0} s. " +
-            "Downloads, updates and uploads compete with games for your connection. Other devices at home are not included.",
-            h.Adapter, h.RxBps / 1e6);
+        Activity.HeavyTrafficDetected += (_, h) =>
+        {
+            // name the programs that could be behind it; Windows does not say which program moved the bytes
+            string who = OnlinePrograms.HeavyCandidatesText(ProgramsOnline());
+            Events.LogEvent("HeavyTraffic", GameMonitor.IsMonitoring ? "Warning" : "Info",
+                $"Heavy traffic on this PC ({h.Adapter}): up to {AdapterActivityMonitor.FormatBps(h.RxBps)} down and {AdapterActivityMonitor.FormatBps(h.TxBps)} up for {h.Duration.TotalSeconds:F0} s. " +
+                (who.Length > 0 ? $"Programs online at the time that often download or upload a lot: {who}. " : "") +
+                "Downloads, updates and uploads compete with games for your connection. Other devices at home are not included.",
+                h.Adapter, h.RxBps / 1e6);
+        };
+        // while recording, keep each second of traffic on the internet adapter with the recording
+        Activity.Sampled += (_, _) =>
+        {
+            if (!Recorder.IsRecording) return;
+            var a = InternetAdapterActivity();
+            if (a?.Latest is { } p) Recorder.RecordThroughput(p.T, p.RxBps, p.TxBps);
+        };
     }
 
     private DateTime _lastBaselineSample;
@@ -160,6 +175,35 @@ public sealed class NetPulseHost : IDisposable
                 // retention is best effort
             }
         });
+    }
+
+    /// <summary>Applies the heavy-traffic threshold from Settings (0 = off).</summary>
+    public void ApplyActivitySettings() =>
+        Activity.HeavyTrafficBps = Settings.HeavyTrafficMbps > 0 ? Settings.HeavyTrafficMbps * 1_000_000.0 : double.PositiveInfinity;
+
+    /// <summary>The adapter Windows uses for the internet (the engine's active interface), or the busiest-capable one.</summary>
+    public AdapterActivity? InternetAdapterActivity()
+    {
+        var all = Activity.Snapshot();
+        string? id = Engine.CurrentNic?.Id;
+        return all.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
+    }
+
+    private static readonly IReadOnlyDictionary<string, (string Name, ProgramKind Kind)> GameProcessNames = OnlinePrograms.FromProfiles(GameProfiles.All);
+    private readonly WindowsConnectionSource _programSockets = new();
+
+    /// <summary>Programs on this PC with internet connections right now (connections only: Windows does not report bytes per program).</summary>
+    public IReadOnlyList<OnlineProgram> ProgramsOnline()
+    {
+        try
+        {
+            var snapshot = _programSockets.Capture();
+            return OnlinePrograms.Summarize(snapshot.Connections, OnlinePrograms.ProcessName, GameProcessNames, Environment.ProcessId);
+        }
+        catch (Exception)
+        {
+            return Array.Empty<OnlineProgram>();
+        }
     }
 
     /// <summary>Marks a speed or bufferbloat test as running, so its traffic is not reported as heavy traffic. Dispose when it ends.</summary>

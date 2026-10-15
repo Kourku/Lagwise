@@ -41,6 +41,10 @@ public class AppSettings
     public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
     /// <summary>Play a short sound when lag is marked with the shortcut, so the player knows it worked without leaving the game.</summary>
     public bool MarkLagSound { get; set; } = true;
+    /// <summary>Traffic on this PC above this many Mbps for 10 s is noted in the timeline; 0 turns it off.</summary>
+    public int HeavyTrafficMbps { get; set; } = 15;
+    /// <summary>Show live download / upload in the mini overlay.</summary>
+    public bool OverlayShowActivity { get; set; } = true;
     /// <summary>Show a Windows notification when the connection drops, comes back, loses packets or switches network (see AlertPolicy).</summary>
     public bool DesktopAlerts { get; set; } = true;
     /// <summary>Only alert while NetPulse is not the active window (the page already shows the problem).</summary>
@@ -76,6 +80,7 @@ public class AppSettings
         RecentWindowSeconds = System.Math.Clamp(RecentWindowSeconds, 10, 600);
         EventDedupSeconds = System.Math.Clamp(EventDedupSeconds, 0, 600);
         PacketLossNotifyThreshold = System.Math.Clamp(PacketLossNotifyThreshold, 0.1, 100);
+        HeavyTrafficMbps = System.Math.Clamp(HeavyTrafficMbps, 0, 10_000);
         LatencySpikeNotifyThreshold = System.Math.Clamp(LatencySpikeNotifyThreshold, 5, 10_000);
         RecordingRetentionDays = System.Math.Clamp(RecordingRetentionDays, 0, 3650);
         if (Theme is not ("Dark" or "Light" or "System")) Theme = "Dark";

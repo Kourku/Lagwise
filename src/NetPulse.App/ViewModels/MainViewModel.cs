@@ -193,8 +193,21 @@ public class MainViewModel : ViewModelBase
         GameMonitor = new GameMonitorViewModel(host, Application.Current.Dispatcher);
         History = new HistoryViewModel(host, Application.Current.Dispatcher) { Toast = Toast };
         Activity = new ActivityViewModel(host, Application.Current.Dispatcher, () => _activeNic?.Id);
+        // the overlay's traffic line follows the adapter Windows uses for the internet, once a second, only while shown
+        host.Activity.Sampled += (_, _) =>
+        {
+            if (!_host.Settings.OverlayVisible || !_host.Settings.OverlayShowActivity) return;
+            var a = _host.InternetAdapterActivity();
+            if (a?.Latest is not { } p) return;
+            Application.Current?.Dispatcher.InvokeAsync(() =>
+            {
+                OverlayDown = AdapterActivityMonitor.FormatBps(p.RxBps);
+                OverlayUp = AdapterActivityMonitor.FormatBps(p.TxBps);
+            });
+        };
         Settings = new SettingsViewModel(host);
         Appearance = new AppearanceViewModel(host);
+        Appearance.Applied += (_, _) => OnPropertyChanged(nameof(ShowOverlayTraffic));
         // brushes taken from the palette in code (status tints, grade ring) are re-read after a theme switch
         NetPulse.App.Themes.ThemeManager.Changed += (_, _) =>
         {
@@ -355,6 +368,11 @@ public class MainViewModel : ViewModelBase
 
     /// <summary>Raised when the overlay should be shown or hidden (the window owns the overlay window itself).</summary>
     public event EventHandler? OverlayVisibilityChanged;
+    private string _overlayDown = "-", _overlayUp = "-";
+    public string OverlayDown { get => _overlayDown; private set => SetProperty(ref _overlayDown, value); }
+    public string OverlayUp { get => _overlayUp; private set => SetProperty(ref _overlayUp, value); }
+    public bool ShowOverlayTraffic => _host.Settings.OverlayShowActivity;
+
     public bool IsOverlayVisible
     {
         get => _host.Settings.OverlayVisible;

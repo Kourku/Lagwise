@@ -82,6 +82,8 @@ public sealed class SettingsDraft
     public bool StartWithWindows { get; set; }
     public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
     public bool MarkLagSound { get; set; }
+    public int HeavyTrafficMbps { get; set; }
+    public bool OverlayShowActivity { get; set; }
     public bool DesktopAlerts { get; set; }
     public bool AlertsOnlyInBackground { get; set; }
     public int RecordingRetentionDays { get; set; }
@@ -104,6 +106,8 @@ public sealed class SettingsDraft
         StartWithWindows = startWithWindows,
         MarkLagHotkey = s.MarkLagHotkey,
         MarkLagSound = s.MarkLagSound,
+        HeavyTrafficMbps = s.HeavyTrafficMbps,
+        OverlayShowActivity = s.OverlayShowActivity,
         DesktopAlerts = s.DesktopAlerts,
         AlertsOnlyInBackground = s.AlertsOnlyInBackground,
         RecordingRetentionDays = s.RecordingRetentionDays,
@@ -148,6 +152,8 @@ public sealed class SettingsDraft
         settings.StartWithWindows = StartWithWindows;
         settings.MarkLagHotkey = MarkLagHotkey;
         settings.MarkLagSound = MarkLagSound;
+        settings.HeavyTrafficMbps = HeavyTrafficMbps;
+        settings.OverlayShowActivity = OverlayShowActivity;
         settings.DesktopAlerts = DesktopAlerts;
         settings.AlertsOnlyInBackground = AlertsOnlyInBackground;
         settings.RecordingRetentionDays = RecordingRetentionDays;

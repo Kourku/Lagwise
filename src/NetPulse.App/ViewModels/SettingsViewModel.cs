@@ -137,6 +137,13 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool AlertsOnlyInBackground { get => _alertsBg; set => Set(ref _alertsBg, value); }
     private bool _alerts, _alertsBg;
     public int RecordingRetentionDays { get => _retentionDays; set => Set(ref _retentionDays, value); }
+    public int HeavyTrafficMbps { get => _heavyMbps; set => Set(ref _heavyMbps, value); }
+    private int _heavyMbps;
+    public IReadOnlyList<Choice> HeavyTrafficChoices { get; } = new Choice[]
+    {
+        new("Off", 0), new("Above 5 Mbps (slow connections)", 5), new("Above 15 Mbps - recommended", 15),
+        new("Above 30 Mbps", 30), new("Above 100 Mbps (fast connections)", 100)
+    };
     /// <summary>Set by the window when Windows refuses the shortcut (another program already uses it).</summary>
     public string HotkeyStatus { get => _hotkeyStatus; set => SetProperty(ref _hotkeyStatus, value); }
     private string _hotkeyStatus = "";
@@ -213,6 +220,7 @@ public sealed class SettingsViewModel : ViewModelBase
             DesktopAlerts = d.DesktopAlerts;
             AlertsOnlyInBackground = d.AlertsOnlyInBackground;
             RecordingRetentionDays = Nearest(RetentionChoices, d.RecordingRetentionDays);
+            HeavyTrafficMbps = Nearest(HeavyTrafficChoices, d.HeavyTrafficMbps);
             LatencySpikeText = d.LatencySpikeThresholdMs.ToString("0.#", CultureInfo.CurrentCulture);
             PacketLossText = d.PacketLossThresholdPercent.ToString("0.#", CultureInfo.CurrentCulture);
 
@@ -267,6 +275,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.DesktopAlerts = DesktopAlerts;
         _draft.AlertsOnlyInBackground = AlertsOnlyInBackground;
         _draft.RecordingRetentionDays = RecordingRetentionDays;
+        _draft.HeavyTrafficMbps = HeavyTrafficMbps;
         _draft.LatencySpikeThresholdMs = spike;
         _draft.PacketLossThresholdPercent = loss;
         _draft.Targets = Targets.Select(r => r.Draft).ToList();
@@ -294,6 +303,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.ApplyTo(_host.Settings);
         _host.Engine.SyncTargets();
         _host.ApplyRetention();
+        _host.ApplyActivitySettings();
 
         if (!_host.SaveSettings(out var error))
         {

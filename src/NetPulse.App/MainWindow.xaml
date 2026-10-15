@@ -849,9 +849,25 @@
                         <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <ComboBox ItemsSource="{Binding Adapters}" DisplayMemberPath="Label" SelectedValuePath="Id" SelectedValue="{Binding SelectedAdapterId, Mode=TwoWay}"
-                                      Width="460" HorizontalAlignment="Left" AutomationProperties.Name="Network adapter" />
-                            <ComboBox Grid.Column="1" Width="180" ItemsSource="{Binding Windows}" DisplayMemberPath="Label" SelectedValuePath="Seconds" SelectedValue="{Binding WindowSeconds, Mode=TwoWay}"
-                                      Margin="12,0,0,0" AutomationProperties.Name="Time window" />
+                                      Width="420" HorizontalAlignment="Left" AutomationProperties.Name="Network adapter" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                <ComboBox Width="160" ItemsSource="{Binding Windows}" DisplayMemberPath="Label" SelectedValuePath="Seconds" SelectedValue="{Binding WindowSeconds, Mode=TwoWay}"
+                                          AutomationProperties.Name="Time window" />
+                                <Button Command="{Binding TogglePauseCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" Margin="8,0,0,0" MinWidth="92" AutomationProperties.Name="Pause graph"
+                                        ToolTip="Freeze the graph and numbers for a closer look. NetPulse keeps measuring in the background.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,7,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#xE769;" />
+                                                    <Style.Triggers><DataTrigger Binding="{Binding IsPaused}" Value="True"><Setter Property="Text" Value="&#xE768;" /></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding PauseText}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
 
                         <!-- live speeds and chart -->
@@ -886,14 +902,27 @@
                                 </StackPanel>
                                     </Grid>
                                 </Grid>
-                                <controls:ThroughputChart Height="260" Points="{Binding Points}" WindowSeconds="{Binding WindowSeconds}" AutomationProperties.Name="Network activity graph" />
-                                <StackPanel Orientation="Horizontal" Margin="64,8,0,0">
-                                    <Border Width="12" Height="4" CornerRadius="2" Background="{DynamicResource AccentBlueBrush}" VerticalAlignment="Center" />
-                                    <TextBlock Text="Download" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
-                                    <Border Width="12" Height="4" CornerRadius="2" Background="{DynamicResource AccentAmberBrush}" VerticalAlignment="Center" />
-                                    <TextBlock Text="Upload" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
-                                    <TextBlock Text="Hover the graph for exact values." Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextTertiaryBrush}" />
-                                </StackPanel>
+                                <controls:ThroughputChart Height="280" Points="{Binding Points}" WindowSeconds="{Binding WindowSeconds}" Mirrored="{Binding Mirrored}" PingPoints="{Binding PingPoints}"
+                                                          AutomationProperties.Name="Network activity graph" />
+                                <Grid Margin="66,10,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <WrapPanel VerticalAlignment="Center">
+                                        <Border Width="12" Height="4" CornerRadius="2" Background="{DynamicResource AccentBlueBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="Download" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
+                                        <Border Width="12" Height="4" CornerRadius="2" Background="{DynamicResource AccentAmberBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="Upload" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
+                                        <StackPanel Orientation="Horizontal" Visibility="{Binding ShowPing, Converter={StaticResource BoolToVis}}">
+                                            <Border Width="12" Height="3" CornerRadius="1.5" Background="#F472B6" VerticalAlignment="Center" />
+                                            <TextBlock Text="Reference ping (right axis)" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
+                                        </StackPanel>
+                                    </WrapPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding ShowPing, Mode=TwoWay}" Content="Ping" FontSize="13"
+                                                  ToolTip="Draw your reference ping over the traffic. If it climbs whenever a download runs, that is bufferbloat, happening live." />
+                                        <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding Mirrored, Mode=TwoWay}" Content="Mirror" FontSize="13" Margin="16,0,0,0"
+                                                  ToolTip="Download above the middle line, upload below, so they never hide each other." />
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
@@ -915,8 +944,35 @@
                             <controls:StatTile Margin="8,0,0,0" Label="Errors and drops" Glyph="&#xE7BA;" Value="{Binding ErrorsText}" Caption="{Binding ErrorsCaption}" />
                         </UniformGrid>
 
+                        <!-- programs online -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="Programs online now" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="Programs on this PC with internet connections open, checked every few seconds. Windows reports which program owns each connection, but not how much data each one moves, so this shows who is talking to the internet, not exactly who is using the bandwidth. Programs that often download or upload a lot are marked." Style="{StaticResource CaptionText}" Margin="0,4,0,12" />
+                                <ItemsControl ItemsSource="{Binding Programs}" AutomationProperties.Name="Programs online">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="260" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                    <Ellipse x:Name="dot" Width="8" Height="8" Fill="{DynamicResource BorderStrongBrush}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Name}" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Kind}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="8,0" />
+                                                    <TextBlock Grid.Column="3" Text="{Binding Connections}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding CanUseALot}" Value="True"><Setter TargetName="dot" Property="Fill" Value="{DynamicResource AccentAmberBrush}" /></DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding ProgramsSummary}" Style="{StaticResource CaptionText}" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
+
                         <controls:Callout Kind="Info" Title="Why this matters for games"
-                                          Text="A game needs very little bandwidth (often well under 1 Mbps), but it needs it on time. A big download, a game update or a cloud backup on this PC fills the queue in your router and your game's packets wait behind it. When this PC moves more than 15 Mbps for 10 seconds or longer, NetPulse notes it in the event timeline (not during its own speed tests), so a lag spike you marked can be matched with it. Other devices at home do not show up here; the Bufferbloat test shows how your router copes with them." Margin="0,0,0,16" />
+                                          Text="A game needs very little bandwidth (often well under 1 Mbps), but it needs it on time. A big download, a game update or a cloud backup on this PC fills the queue in your router and your game's packets wait behind it. When this PC moves more than the heavy-traffic limit in Settings (15 Mbps by default) for 10 seconds or longer, NetPulse notes it in the event timeline with the programs that were online, and recordings keep every second of traffic, so a lag spike you marked can be matched with it. Other devices at home do not show up here; the Bufferbloat test shows how your router copes with them." Margin="0,0,0,16" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -1756,10 +1812,16 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="Graph" Style="{StaticResource CardTitle}" VerticalAlignment="Center" />
-                                        <ComboBox Grid.Column="1" Width="170" ItemsSource="{Binding ModeLabels}" SelectedIndex="{Binding ModeIndex, Mode=TwoWay}" />
+                                        <ComboBox Grid.Column="1" Width="170" ItemsSource="{Binding ModeLabels}" SelectedIndex="{Binding ModeIndex, Mode=TwoWay}" AutomationProperties.Name="Graph view" />
                                     </Grid>
-                                    <controls:SessionChart Height="270" Data="{Binding Chart}" TargetOrder="{Binding ChartTargetOrder}" AutomationProperties.Name="Recording graph" />
-                                    <ItemsControl ItemsSource="{Binding Legend}" Margin="0,10,0,0">
+                                    <controls:SessionChart Height="270" Data="{Binding Chart}" TargetOrder="{Binding ChartTargetOrder}" AutomationProperties.Name="Recording graph"
+                                                           Visibility="{Binding IsLatencyMode, Converter={StaticResource BoolToVis}}" />
+                                    <StackPanel Visibility="{Binding IsActivityMode, Converter={StaticResource BoolToVis}}">
+                                        <controls:ThroughputChart Height="270" Points="{Binding TrafficPoints}" WindowSeconds="{Binding TrafficWindowSeconds}" PingPoints="{Binding TrafficPings}"
+                                                                  Markers="{Binding TrafficMarkers}" AutomationProperties.Name="Recording network activity graph" />
+                                        <TextBlock Text="{Binding TrafficSummary}" Style="{StaticResource CaptionText}" Margin="0,10,0,0" />
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Legend}" Margin="0,10,0,0" Visibility="{Binding IsLatencyMode, Converter={StaticResource BoolToVis}}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
@@ -2096,6 +2158,8 @@
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding OverlayOpacities}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding OverlayOpacityPercent, Mode=TwoWay}"
                                                   VerticalAlignment="Center" AutomationProperties.Name="Overlay background" />
                                     </Grid>
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding OverlayShowActivity, Mode=TwoWay}" Margin="0,14,0,0"
+                                              Content="Show this PC's download and upload in the mini overlay" />
                                 </StackPanel>
                             </Border>
 
@@ -2220,6 +2284,15 @@
                                             <TextBlock Text="The same problem on the same server is written once, with a count, instead of filling the timeline." Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DedupChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding EventDedupSeconds, Mode=TwoWay}" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="300" /></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Heavy traffic on this PC" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Note it in the timeline when this PC downloads or uploads faster than this for 10 seconds, with the programs that were online. NetPulse's own tests never count." Style="{StaticResource CaptionText}" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding HeavyTrafficChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding HeavyTrafficMbps, Mode=TwoWay}" VerticalAlignment="Center"
+                                                  AutomationProperties.Name="Heavy traffic limit" />
                                     </Grid>
                                 </StackPanel>
                             </Border>

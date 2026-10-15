@@ -85,6 +85,20 @@ public sealed class AppearanceViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Show this PC's live download / upload in the mini overlay.</summary>
+    public bool OverlayShowActivity
+    {
+        get => _host.Settings.OverlayShowActivity;
+        set
+        {
+            if (_host.Settings.OverlayShowActivity == value) return;
+            _host.Settings.OverlayShowActivity = value;
+            _host.SaveSettings(out _);
+            OnPropertyChanged();
+            Applied?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     public RelayCommand SelectThemeCommand { get; }
     public RelayCommand SelectAccentCommand { get; }
     /// <summary>Title-bar button: flips between dark and light.</summary>
