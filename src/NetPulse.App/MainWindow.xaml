@@ -188,6 +188,9 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
+                        <RadioButton Content="Network activity" Tag="&#xE968;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                                     IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Activity}"
+                                     Command="{Binding SwitchTabCommand}" CommandParameter="Activity" />
                         <TextBlock Text="DIAGNOSE" Style="{StaticResource SectionLabel}" Foreground="{DynamicResource TextTertiaryBrush}" Margin="16,18,0,6" />
                         <RadioButton Content="Targets &amp; probes" Tag="&#xEC05;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Monitoring}"
@@ -823,6 +826,97 @@
                                 <TextBlock Text="Game start/exit, connection changes, your lag markers, monitoring gaps and network events appear here while monitoring." FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- TAB: NETWORK ACTIVITY -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Activity}">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.CurrentTab, RelativeSource={RelativeSource AncestorType=Window}}" Value="Activity">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+
+                    <StackPanel Margin="0,0,10,0">
+                        <controls:PageHeader Title="Network activity" Glyph="&#xE968;"
+                                             Subtitle="Everything this PC sends and receives on its network adapter, second by second, like the Performance tab of Task Manager. It includes games, downloads, updates and streaming; other devices at home are not included." />
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <ComboBox ItemsSource="{Binding Adapters}" DisplayMemberPath="Label" SelectedValuePath="Id" SelectedValue="{Binding SelectedAdapterId, Mode=TwoWay}"
+                                      Width="460" HorizontalAlignment="Left" AutomationProperties.Name="Network adapter" />
+                            <ComboBox Grid.Column="1" Width="180" ItemsSource="{Binding Windows}" DisplayMemberPath="Label" SelectedValuePath="Seconds" SelectedValue="{Binding WindowSeconds, Mode=TwoWay}"
+                                      Margin="12,0,0,0" AutomationProperties.Name="Time window" />
+                        </Grid>
+
+                        <!-- live speeds and chart -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="30" Height="30" CornerRadius="15" Background="{DynamicResource AccentBlueBrush}" Opacity="0.18" />
+                                        <TextBlock Text="&#xE74B;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentBlueBrush}" Margin="-30,0,0,0" Width="30" TextAlignment="Center" VerticalAlignment="Center" />
+                                        <TextBlock Text="Download" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding DownValue}" Style="{StaticResource BigNumber}" FontSize="40" Foreground="{DynamicResource AccentBlueBrush}" AutomationProperties.Name="Download now" />
+                                        <TextBlock Text="{Binding DownUnit}" FontSize="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="6,0,0,8" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding DownStats}" Style="{StaticResource CaptionText}" />
+                                </StackPanel>
+                                    <Grid Grid.Column="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="30" Height="30" CornerRadius="15" Background="{DynamicResource AccentAmberBrush}" Opacity="0.18" />
+                                        <TextBlock Text="&#xE74A;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentAmberBrush}" Margin="-30,0,0,0" Width="30" TextAlignment="Center" VerticalAlignment="Center" />
+                                        <TextBlock Text="Upload" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding UpValue}" Style="{StaticResource BigNumber}" FontSize="40" Foreground="{DynamicResource AccentAmberBrush}" AutomationProperties.Name="Upload now" />
+                                        <TextBlock Text="{Binding UpUnit}" FontSize="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="6,0,0,8" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding UpStats}" Style="{StaticResource CaptionText}" />
+                                </StackPanel>
+                                    </Grid>
+                                </Grid>
+                                <controls:ThroughputChart Height="260" Points="{Binding Points}" WindowSeconds="{Binding WindowSeconds}" AutomationProperties.Name="Network activity graph" />
+                                <StackPanel Orientation="Horizontal" Margin="64,8,0,0">
+                                    <Border Width="12" Height="4" CornerRadius="2" Background="{DynamicResource AccentBlueBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="Download" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
+                                    <Border Width="12" Height="4" CornerRadius="2" Background="{DynamicResource AccentAmberBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="Upload" Style="{StaticResource CaptionText}" Margin="6,0,18,0" />
+                                    <TextBlock Text="Hover the graph for exact values." Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- link use -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="How busy the link is" Style="{StaticResource CardTitle}" />
+                                <ProgressBar Height="8" Value="{Binding Utilization, Mode=OneWay}" Maximum="1" Margin="0,12,0,8" />
+                                <TextBlock Text="{Binding UtilizationText}" Style="{StaticResource CaptionText}" FontSize="13" />
+                                <TextBlock Text="{Binding AdapterText}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- totals and counters -->
+                        <UniformGrid Columns="4" Margin="0,0,0,16">
+                            <controls:StatTile Margin="0,0,8,0" Label="Received" Glyph="&#xE74B;" Value="{Binding ReceivedTotal}" Caption="{Binding TotalsCaption}" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Sent" Glyph="&#xE74A;" Value="{Binding SentTotal}" Caption="{Binding TotalsCaption}" Accent="#F59E0B" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Packets per second" Glyph="&#xE9D9;" Value="{Binding PacketsText}" Caption="{Binding PacketsCaption}" />
+                            <controls:StatTile Margin="8,0,0,0" Label="Errors and drops" Glyph="&#xE7BA;" Value="{Binding ErrorsText}" Caption="{Binding ErrorsCaption}" />
+                        </UniformGrid>
+
+                        <controls:Callout Kind="Info" Title="Why this matters for games"
+                                          Text="A game needs very little bandwidth (often well under 1 Mbps), but it needs it on time. A big download, a game update or a cloud backup on this PC fills the queue in your router and your game's packets wait behind it. When this PC moves more than 15 Mbps for 10 seconds or longer, NetPulse notes it in the event timeline (not during its own speed tests), so a lag spike you marked can be matched with it. Other devices at home do not show up here; the Bufferbloat test shows how your router copes with them." Margin="0,0,0,16" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -1482,7 +1576,7 @@
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                     <Border Grid.Row="0" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+1 … Ctrl+9, Ctrl+0" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Open the 1st … 10th page of the sidebar" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Open the 1st … 10th page of the sidebar; Ctrl+H opens History" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     <Border Grid.Row="1" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+Shift+C" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="Copy a short summary of your connection" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     <Border Grid.Row="2" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+E" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
@@ -1905,7 +1999,7 @@
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="0,0,10,12">
-                            <controls:PageHeader Title="Settings" Glyph="&#xE713;" Subtitle="Changes take effect as soon as you save. Nothing here is sent anywhere; settings are stored on this PC." />
+                            <controls:PageHeader Title="Settings" Glyph="&#xE713;" Subtitle="Appearance and Detail level apply as soon as you pick them. For everything else, a Save bar appears at the bottom once you change something. Settings stay on this PC." />
 
                             <!-- Appearance (applies immediately, outside the Save/Discard draft) -->
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" DataContext="{Binding DataContext.Appearance, RelativeSource={RelativeSource AncestorType=Window}}">
@@ -2244,7 +2338,8 @@
                     </ScrollViewer>
 
                     <!-- Save bar -->
-                    <Border Grid.Row="1" Background="{DynamicResource BgSidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18,12" Margin="0,4,10,0">
+                    <Border Grid.Row="1" Background="{DynamicResource BgSidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18,12" Margin="0,4,10,0"
+                            Visibility="{Binding ShowSaveBar, Converter={StaticResource BoolToVis}}">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center">

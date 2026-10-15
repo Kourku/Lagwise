@@ -93,6 +93,7 @@ public partial class MainWindow : Window
             e.Handled = vm.GoToPage(n);
         }
         else if (mods == ctrl && key == System.Windows.Input.Key.OemComma) { vm.CurrentTab = "Settings"; e.Handled = true; }
+        else if (mods == ctrl && key == System.Windows.Input.Key.H) { vm.CurrentTab = "History"; e.Handled = true; }
         else if (mods == System.Windows.Input.ModifierKeys.None && key == System.Windows.Input.Key.F1) { vm.CurrentTab = "Help"; e.Handled = true; }
         else if (mods == ctrl && key == System.Windows.Input.Key.E) { vm.ExportReportCommand.Execute(null); e.Handled = true; }
         else if (mods == (ctrl | System.Windows.Input.ModifierKeys.Shift) && key == System.Windows.Input.Key.C) { vm.CopySummaryCommand.Execute(null); e.Handled = true; }

@@ -120,6 +120,8 @@ public class MainViewModel : ViewModelBase
 
     private readonly NetPulseHost _host;
     public GameMonitorViewModel GameMonitor { get; }
+    /// <summary>Network activity page: adapter throughput, like Task Manager.</summary>
+    public ActivityViewModel Activity { get; }
     /// <summary>Short results at the bottom of the window ("Report saved", "Could not save ...").</summary>
     public ToastViewModel Toast { get; } = new();
     public SettingsViewModel Settings { get; }
@@ -190,6 +192,7 @@ public class MainViewModel : ViewModelBase
         InitializeSessionCommands();
         GameMonitor = new GameMonitorViewModel(host, Application.Current.Dispatcher);
         History = new HistoryViewModel(host, Application.Current.Dispatcher) { Toast = Toast };
+        Activity = new ActivityViewModel(host, Application.Current.Dispatcher, () => _activeNic?.Id);
         Settings = new SettingsViewModel(host);
         Appearance = new AppearanceViewModel(host);
         // brushes taken from the palette in code (status tints, grade ring) are re-read after a theme switch
@@ -234,6 +237,7 @@ public class MainViewModel : ViewModelBase
             if (!SetProperty(ref _currentTab, value)) return;
             if (value == "History") _ = History.RefreshAsync();   // pick up recordings saved since the tab was last open
             GameMonitor.IsVisible = value == "GameMonitor";
+            Activity.IsVisible = value == "Activity";
             if (value == "Dashboard") RefreshLiveChart();
             if (value == "ProbeLog") RebuildProbeLog();
         }
@@ -271,7 +275,7 @@ public class MainViewModel : ViewModelBase
     public string MarkLagKeyText => _host.Settings.MarkLagHotkey == HotkeyGesture.Off ? "(not set)" : _host.Settings.MarkLagHotkey;
 
     /// <summary>Sidebar order, used by the Ctrl+1 ... Ctrl+0 shortcuts.</summary>
-    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Adapter", "ProbeLog", "Events", "History" };
+    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Activity", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Adapter", "ProbeLog", "Events", "History" };
 
     /// <summary>The pages the sidebar currently shows, top to bottom (Beginner hides some).</summary>
     public IReadOnlyList<string> VisiblePages => PageOrder.Where(p => !IsBeginnerMode || !AdvancedOnlyTabs.Contains(p)).ToList();
@@ -980,6 +984,7 @@ public class MainViewModel : ViewModelBase
     {
         if (IsBufferbloatRunning) return;
         IsBufferbloatRunning = true;
+        using var loadScope = _host.BeginLoadTest();   // this traffic is NetPulse's own, not "heavy traffic on this PC"
         _bufferbloatCts = new CancellationTokenSource();
         CommandManager.InvalidateRequerySuggested();
         BufferbloatProgress = 5;
@@ -1043,6 +1048,7 @@ public class MainViewModel : ViewModelBase
         if (confirm != MessageBoxResult.Yes) return;
 
         IsSpeedTestRunning = true;
+        using var loadScope = _host.BeginLoadTest();   // this traffic is NetPulse's own, not "heavy traffic on this PC"
         _speedTestCts = new CancellationTokenSource();
         CommandManager.InvalidateRequerySuggested();
         SpeedTestProgress = 5;

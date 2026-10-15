@@ -84,6 +84,7 @@ public static class Lexicon
         ["InterfaceChanged"] = "Network adapter changed",
         ["NetworkChange"] = "Network changed",
         ["WifiRoam"] = "Wi-Fi access point changed",
+        ["HeavyTraffic"] = "Heavy traffic on this PC",
         ["Disconnected"] = "Connection lost",
         ["Restored"] = "Recovered",
         ["GameProcess"] = "Game",

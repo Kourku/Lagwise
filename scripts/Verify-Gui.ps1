@@ -177,12 +177,17 @@ try {
     [NpMouse]::keybd_event(0x31, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
     Check 'Ctrl+1 opens the Overview' ($null -ne (Wait-For { Find-Like '^Ready to play\?$' } 5)) ''
 
+    # Network activity: live adapter throughput with its graph
+    Click-Element (Find-Like '^Network activity$')
+    Check 'Network activity shows live speeds and the graph' (($null -ne (Wait-For { Find-Like '^Network activity graph$' } 5)) -and ($null -ne (Find-Like '^Download now$'))) ''
+
 
     # ---- Settings: change a value, save, and confirm it was applied and written ----
     Click-Element (Find-Like '^Settings$')
     $combo2 = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ComboBox' -and $_.Current.Name -eq 'Test frequency' } | Select-Object -First 1
     Check 'Settings screen shows the test frequency selector' ($null -ne $combo2) ''
     Check 'Settings offers desktop alerts' ($null -ne (Find-Like '^Show desktop alerts$')) ''
+    Check 'The Save bar stays hidden until something changes' ($null -eq (Find-Named 'Save settings' 'ControlType.Button')) ''
     if ($combo2) {
         # keyboard selection (the dropdown may sit below the visible part of the page): 1 s -> next option, 2 s
         Add-Type -AssemblyName System.Windows.Forms

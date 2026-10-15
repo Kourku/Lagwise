@@ -154,10 +154,26 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool IsDirty
     {
         get => _isDirty;
-        private set { if (SetProperty(ref _isDirty, value)) CommandManager.InvalidateRequerySuggested(); }
+        private set { if (SetProperty(ref _isDirty, value)) { CommandManager.InvalidateRequerySuggested(); OnPropertyChanged(nameof(ShowSaveBar)); } }
     }
 
-    public string StatusText { get => _statusText; private set => SetProperty(ref _statusText, value); }
+    public string StatusText { get => _statusText; private set { if (SetProperty(ref _statusText, value)) OnPropertyChanged(nameof(ShowSaveBar)); } }
+
+    /// <summary>
+    /// The Save / Discard bar only appears while something is waiting to be saved, and briefly afterwards to confirm.
+    /// Appearance and Detail level apply instantly and never need it; a permanently visible, greyed-out bar looked broken.
+    /// </summary>
+    public bool ShowSaveBar => IsDirty || _statusText.Length > 0;
+    private System.Windows.Threading.DispatcherTimer? _statusTimer;
+
+    /// <summary>Clears a confirmation after a few seconds, which also hides the bar again. Errors stay until the next change.</summary>
+    private void ClearStatusSoon()
+    {
+        _statusTimer?.Stop();
+        _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _statusTimer.Tick += (_, _) => { _statusTimer?.Stop(); if (!IsDirty && !StatusIsError) StatusText = ""; };
+        _statusTimer.Start();
+    }
     public bool StatusIsError { get => _statusIsError; private set => SetProperty(ref _statusIsError, value); }
     public string DirtyText => IsDirty ? "You have unsaved changes." : "All changes are saved.";
 
@@ -219,6 +235,7 @@ public sealed class SettingsViewModel : ViewModelBase
         Load(SettingsDraft.FromSettings(_host.Settings, _host.WindowsIntegration?.IsStartWithWindowsEnabled() ?? false));
         StatusIsError = false;
         StatusText = "Changes discarded.";
+        ClearStatusSoon();
     }
 
     private void LoadDefaults()
@@ -289,6 +306,7 @@ public sealed class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(DirtyText));
         StatusIsError = startupNote != null;
         StatusText = "Settings saved. They are already in effect." + startupNote;
+        ClearStatusSoon();
         Applied?.Invoke(this, EventArgs.Empty);
     }
 

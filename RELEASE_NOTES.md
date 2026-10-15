@@ -2,6 +2,23 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.12.0
+
+**New: Network activity page** (both modes, `Ctrl+3`)
+- Live download and upload of this PC's network adapter, read once a second from the same counters Task Manager uses:
+  - a large chart with gradient-filled download and upload areas, an auto-scaled speed axis and a hover read-out (time, speeds, packets per second);
+  - a 1, 5 or 15-minute window;
+  - current, peak and average speed for each direction, and data received and sent since NetPulse started;
+  - how much of the adapter's link speed is in use;
+  - packets per second, and errors and dropped packets counted by the driver.
+
+  You can pick the adapter when the PC has more than one; the one Windows uses for the internet is chosen by default.
+- **Heavy traffic is noted in the timeline.** When this PC moves more than 15 Mbps for 10 seconds or longer, the timeline gets a "Heavy traffic on this PC" entry: a Warning while the Game Monitor is recording, otherwise Info. A lag spike you marked can then be matched with a download, update or backup. NetPulse's own Speed and Bufferbloat tests are not counted, and other devices at home are not seen.
+- `Ctrl+H` opens History, since the sidebar now has more pages than number keys.
+
+**Fixed**
+- **Settings: the Save and Discard buttons looked broken.** They were always visible and greyed out, including while changing Appearance or Detail level, which apply instantly and never need saving. The bar now appears only when something is waiting to be saved, and for a few seconds after saving to confirm. The page header says which sections apply instantly.
+
 ## 0.11.0
 
 Another polish and bug-fix release.

@@ -26,12 +26,18 @@ public sealed class NetPulseHost : IDisposable
     private static readonly TimeSpan CheckpointInterval = TimeSpan.FromSeconds(30);
 
     private readonly Timer _checkpointTimer;
+    private Timer? _activityTimer;
+    private int _loadTests;
+    private DateTime _loadTestEndedUtc;
     private readonly object _sessionLock = new();
     private bool _disposed;
 
     public string DataDirectory { get; }
     public SettingsService SettingsService { get; }
     public AppSettings Settings => SettingsService.Current;
+
+    /// <summary>Network adapter activity (throughput, packets, errors), sampled once a second while running.</summary>
+    public AdapterActivityMonitor Activity { get; }
 
     public NetworkDiscoveryService Discovery { get; }
     public PingService Ping { get; }
@@ -112,6 +118,16 @@ public sealed class NetPulseHost : IDisposable
             profiles: profiles);
 
         _checkpointTimer = new Timer(_ => Checkpoint(), null, CheckpointInterval, CheckpointInterval);
+
+        Activity = new AdapterActivityMonitor
+        {
+            // NetPulse's own speed and bufferbloat tests are heavy traffic on purpose; so are their last few seconds
+            SuppressHeavyTraffic = () => Volatile.Read(ref _loadTests) > 0 || DateTime.UtcNow - _loadTestEndedUtc < TimeSpan.FromSeconds(5)
+        };
+        Activity.HeavyTrafficDetected += (_, h) => Events.LogEvent("HeavyTraffic", GameMonitor.IsMonitoring ? "Warning" : "Info",
+            $"Heavy traffic on this PC ({h.Adapter}): up to {AdapterActivityMonitor.FormatBps(h.RxBps)} down and {AdapterActivityMonitor.FormatBps(h.TxBps)} up for {h.Duration.TotalSeconds:F0} s. " +
+            "Downloads, updates and uploads compete with games for your connection. Other devices at home are not included.",
+            h.Adapter, h.RxBps / 1e6);
     }
 
     private DateTime _lastBaselineSample;
@@ -121,6 +137,7 @@ public sealed class NetPulseHost : IDisposable
 
     public void Start()
     {
+        _activityTimer ??= new Timer(_ => Activity.Sample(DateTime.UtcNow), null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
         Engine.Start();
         ApplyRetention();
     }
@@ -143,6 +160,26 @@ public sealed class NetPulseHost : IDisposable
                 // retention is best effort
             }
         });
+    }
+
+    /// <summary>Marks a speed or bufferbloat test as running, so its traffic is not reported as heavy traffic. Dispose when it ends.</summary>
+    public IDisposable BeginLoadTest()
+    {
+        Interlocked.Increment(ref _loadTests);
+        return new LoadTestScope(this);
+    }
+
+    private sealed class LoadTestScope : IDisposable
+    {
+        private NetPulseHost? _host;
+        public LoadTestScope(NetPulseHost host) => _host = host;
+        public void Dispose()
+        {
+            var h = Interlocked.Exchange(ref _host, null);
+            if (h == null) return;
+            h._loadTestEndedUtc = DateTime.UtcNow;
+            Interlocked.Decrement(ref h._loadTests);
+        }
     }
 
     // ---- last bufferbloat result: kept on disk so the "ready to play" checklist remembers it across restarts
@@ -298,6 +335,7 @@ public sealed class NetPulseHost : IDisposable
         }
 
         _checkpointTimer.Dispose();
+        _activityTimer?.Dispose();
         GameMonitor.Dispose(); // stops and saves a game session first, so nothing recorded is lost
         Mtr.Stop();
         Engine.Stop();
