@@ -274,6 +274,9 @@
                         <RadioButton Content="Site check" Tag="&#xEC27;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Sites}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Sites" />
+                        <RadioButton Content="Security check" Tag="&#xEA18;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                                     IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Security}"
+                                     Command="{Binding SwitchTabCommand}" CommandParameter="Security" />
                         <RadioButton Content="Adapter &amp; Wi-Fi" Tag="&#xE839;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Adapter}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Adapter" />
@@ -1708,6 +1711,74 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <!-- TAB: SECURITY CHECK -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentTab}" Value="Security">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+
+                    <StackPanel DataContext="{Binding Security}">
+                        <controls:PageHeader Title="Security check" Glyph="&#xEA18;"
+                                             Subtitle="Is this PC and its connection safe? What Windows reports about your firewall, network and Wi-Fi, and, when you press Check, whether your DNS and your secure connections can be trusted." />
+
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <controls:StatusMark Level="{Binding Level}" Width="40" Height="40" GlyphSize="19" VerticalAlignment="Top" Margin="0,0,16,0" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Headline}" FontFamily="{StaticResource DisplayFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Security verdict" />
+                                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0"><Run Text="{Binding CheckedText, Mode=OneWay}" /><Run Text=" " /><Run Text="{Binding ProgressText, Mode=OneWay}" /></TextBlock>
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Command="{Binding CheckCommand}" Padding="16,8" VerticalAlignment="Top" Margin="16,0,0,0" AutomationProperties.Name="Run the security check">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xEA18;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Check" /></StackPanel>
+                                    </Button>
+                                </Grid>
+                                <ProgressBar Height="4" IsIndeterminate="True" Margin="0,12,0,0" Visibility="{Binding IsChecking, Converter={StaticResource BoolToVis}}" />
+                                <ItemsControl ItemsSource="{Binding Items}" Margin="0,16,0,0" AutomationProperties.Name="Security items" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,11">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="32" />
+                                                        <ColumnDefinition Width="230" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <controls:StatusMark Level="{Binding Level}" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,12,0" />
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Text="{Binding Detail}" FontSize="13.5" LineHeight="19" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                                        <TextBlock FontSize="13" LineHeight="18" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,5,0,0"
+                                                                   Visibility="{Binding HasAdvice, Converter={StaticResource BoolToVis}}"><Run Text="&#xEA80;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentAmberBrush}" /><Run Text="  " /><Run Text="{Binding Advice, Mode=OneWay}" /></TextBlock>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <controls:Callout Kind="Info" Title="What a check sends" Margin="0,0,0,16"
+                                          Text="Opening this page sends nothing: the firewall, network type, Wi-Fi protection and the programs open to the network are read from Windows. Check also looks up one made-up name (with your DNS and with Cloudflare's public DNS), opens a secure connection to Google, Cloudflare and Wikipedia without sending anything over it, and asks your router once whether it offers UPnP. No administrator rights are needed and nothing is changed." />
+                        <controls:Callout Kind="Info" Title="NetPulse's own safety" Margin="0,0,0,16"
+                                          Text="NetPulse never asks for administrator rights, never captures your traffic, has no telemetry and no automatic updates, and keeps everything in %LOCALAPPDATA%\NetPulse. It starts Windows tools only by their full path and opens only web addresses in your browser. Exported reports leave out home-network and IPv6 addresses unless you choose otherwise. Each release lists the SHA-256 checksum of its download: compare it with Get-FileHash in PowerShell before running a copy you received from someone else." />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- TAB 6: ADAPTER & WI-FI -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ScrollViewer.Style>
@@ -2880,6 +2951,9 @@
                                     <TextBlock Text="Where your data is kept" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
                                     <TextBlock Text="{Binding DataFolder}" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource AccentBlueHoverBrush}" Margin="0,2,0,2" />
                                     <TextBlock Text="Settings, recordings, test results, the connection diary and site icons live here, never beside the program. NetPulse does not collect analytics or telemetry and never uploads a recording." Style="{StaticResource CaptionText}" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding ReportsIncludeAddresses, Mode=TwoWay}" Margin="0,14,0,0"
+                                              Content="Include home-network and IPv6 addresses in exported reports" />
+                                    <TextBlock Text="Off: they read [hidden], so a report can be posted on a forum safely. Turn it on when your provider's support asks for them. Public servers and route hops are always shown." Style="{StaticResource CaptionText}" Margin="46,2,0,0" />
                                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                         <Button Content="Open data folder" Command="{Binding OpenDataFolderCommand}" Style="{StaticResource OutlineButton}" />
                                         <Button Content="Load default settings" Command="{Binding DefaultsCommand}" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" />

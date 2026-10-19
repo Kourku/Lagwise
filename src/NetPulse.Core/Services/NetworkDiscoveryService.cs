@@ -203,53 +203,29 @@ public class NetworkDiscoveryService
 
     private static void PopulateWifiDetails(NetworkInterfaceInfo info)
     {
-        try
+        // full path, and stopped after a few seconds: a hung or stopped WLAN service must never block the readings
+        string? output = NetPulse.Core.SystemTools.Capture(NetPulse.Core.SystemTools.Netsh, "wlan show interfaces", TimeSpan.FromSeconds(4));
+        if (output != null) ParseWlanInterfaces(output, info);
+    }
+
+    /// <summary>Reads the fields NetPulse shows from <c>netsh wlan show interfaces</c> (English labels; security also in a few other languages).</summary>
+    public static void ParseWlanInterfaces(string output, NetworkInterfaceInfo info)
+    {
+        static string? Field(string text, string labels)
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "netsh",
-                Arguments = "wlan show interfaces",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(psi);
-            if (process == null) return;
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(1000);
-
-            var ssidMatch = Regex.Match(output, @"^\s*SSID\s*:\s*(.+)$", RegexOptions.Multiline);
-            if (ssidMatch.Success) info.WifiSsid = ssidMatch.Groups[1].Value.Trim();
-
-            var signalMatch = Regex.Match(output, @"^\s*Signal\s*:\s*(\d+)%", RegexOptions.Multiline);
-            if (signalMatch.Success && int.TryParse(signalMatch.Groups[1].Value, out int sig))
-            {
-                info.WifiSignalPercent = sig;
-            }
-
-            var radioMatch = Regex.Match(output, @"^\s*Radio type\s*:\s*(.+)$", RegexOptions.Multiline);
-            if (radioMatch.Success) info.WifiRadioType = radioMatch.Groups[1].Value.Trim();
-
-            var channelMatch = Regex.Match(output, @"^\s*Channel\s*:\s*(\d+)", RegexOptions.Multiline);
-            if (channelMatch.Success && int.TryParse(channelMatch.Groups[1].Value, out int ch))
-            {
-                info.WifiChannel = ch;
-            }
-
-            var bssidMatch = Regex.Match(output, @"^\s*BSSID\s*:\s*(.+)$", RegexOptions.Multiline);
-            if (bssidMatch.Success) info.WifiBssid = bssidMatch.Groups[1].Value.Trim();
-
-            var rxMatch = Regex.Match(output, @"^\s*Receive rate \(Mbps\)\s*:\s*(.+)$", RegexOptions.Multiline);
-            if (rxMatch.Success) info.WifiReceiveRate = rxMatch.Groups[1].Value.Trim();
-
-            var txMatch = Regex.Match(output, @"^\s*Transmit rate \(Mbps\)\s*:\s*(.+)$", RegexOptions.Multiline);
-            if (txMatch.Success) info.WifiTransmitRate = txMatch.Groups[1].Value.Trim();
+            var m = Regex.Match(text, $@"^\s*(?:{labels})\s*:\s*(.+)$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            return m.Success ? m.Groups[1].Value.Trim() : null;
         }
-        catch
-        {
-            // netsh wlan might not be available if WLAN service is stopped
-        }
+
+        info.WifiSsid = Field(output, "SSID") ?? info.WifiSsid;
+        if (Field(output, "Signal") is { } signal && int.TryParse(signal.TrimEnd('%', ' '), out int sig)) info.WifiSignalPercent = sig;
+        info.WifiRadioType = Field(output, "Radio type") ?? info.WifiRadioType;
+        if (Field(output, "Channel") is { } channel && int.TryParse(channel, out int ch)) info.WifiChannel = ch;
+        info.WifiBssid = Field(output, "BSSID") ?? info.WifiBssid;
+        info.WifiReceiveRate = Field(output, @"Receive rate \(Mbps\)") ?? info.WifiReceiveRate;
+        info.WifiTransmitRate = Field(output, @"Transmit rate \(Mbps\)") ?? info.WifiTransmitRate;
+        info.WifiAuthentication = Field(output, "Authentication|Authentification|Authentifizierung|Autenticaci.n|Autenticazione") ?? info.WifiAuthentication;
+        info.WifiCipher = Field(output, "Cipher|Chiffrement|Verschl.sselung|Cifrado|Crittografia") ?? info.WifiCipher;
     }
 
     private static string FormatSpeed(long speedBps)

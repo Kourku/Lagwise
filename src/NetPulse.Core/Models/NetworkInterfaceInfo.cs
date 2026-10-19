@@ -27,4 +27,8 @@ public class NetworkInterfaceInfo
     public string? WifiBssid { get; set; }
     public string? WifiReceiveRate { get; set; }
     public string? WifiTransmitRate { get; set; }
+    /// <summary>How the Wi-Fi network is protected, as Windows reports it ("WPA2-Personal", "WPA3-Personal", "Open").</summary>
+    public string? WifiAuthentication { get; set; }
+    /// <summary>The encryption in use ("CCMP" is AES, "GCMP", "TKIP" is old, "None").</summary>
+    public string? WifiCipher { get; set; }
 }

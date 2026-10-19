@@ -149,8 +149,12 @@ public class LogoMark : FrameworkElement
 public class StatusMark : Control
 {
     public static readonly DependencyProperty LevelProperty = DependencyProperty.Register(nameof(Level), typeof(string), typeof(StatusMark), new PropertyMetadata("Unknown"));
+    public static readonly DependencyProperty GlyphSizeProperty = DependencyProperty.Register(nameof(GlyphSize), typeof(double), typeof(StatusMark), new PropertyMetadata(9.0));
 
-    /// <summary>"Good", "Fair", "Poor", "Unknown" or "Busy".</summary>
+    /// <summary>Size of the symbol; raise it with the mark's size.</summary>
+    public double GlyphSize { get => (double)GetValue(GlyphSizeProperty); set => SetValue(GlyphSizeProperty, value); }
+
+    /// <summary>"Good", "Fair", "Poor", "Info", "Unknown" or "Busy".</summary>
     public string Level { get => (string)GetValue(LevelProperty); set => SetValue(LevelProperty, value); }
 
     protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new TextBlockLikePeer(this, () => Level switch
@@ -159,6 +163,7 @@ public class StatusMark : Control
         "Fair" => "Worth a look",
         "Poor" => "Problem",
         "Busy" => "Checking",
+        "Info" => "For your information",
         _ => "Unknown"
     });
 }

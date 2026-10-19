@@ -2,6 +2,35 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.16.0
+
+A security release: a new Security check, and NetPulse itself hardened.
+
+**New: Security check** (both modes)
+- Is this PC and its connection safe? Read from Windows as soon as the page opens, without administrator rights and without sending anything:
+  - **Windows Firewall:** on or off for each kind of network, and for the one you are on.
+  - **Network type:** Public (other devices cannot find this PC) or Private (fine at home, a problem on an open Wi-Fi).
+  - **Wi-Fi protection:** open, WEP, WPA/TKIP (old, breakable), WPA2 or WPA3 (English and some other Windows languages).
+  - **Programs open to the network:** the programs waiting for connections from other devices; remote access (Remote Desktop, VNC, Telnet, FTP, SSH, TeamViewer) is flagged, and is a problem with the firewall off.
+- With **Check**, a few harmless connections add:
+  - **Honest name lookups:** does your DNS give an address for a name that does not exist (sending typos to advertising)?
+  - **Real servers for well-known sites:** do Google, Cloudflare and Wikipedia prove who they are at the addresses your DNS gives?
+  - **Secure connections:** does a program or network open your HTTPS connections? A certificate authority installed on this PC (antivirus scanning, a company proxy, or something unwanted) is named.
+  - **UPnP on your router:** can programs open ports on it without asking?
+- Each line says what it means and what to do. Information lines never make the verdict worse. A worrying result is noted in the event timeline.
+
+**Hardening**
+- **Windows tools are started by their full path.** netsh, Explorer and cmd used to be started by name, and Windows looks in the program's own folder first: a program called netsh.exe placed next to a portable NetPulse (in Downloads, say) would have run instead. The uninstaller had the same issue with cmd.exe, and now also refuses a folder name with characters that could change its command line.
+- **Only web addresses are opened in the browser** (http and https); folders are opened in Explorer by full path.
+- **Icons from the internet** are refused above 256 KB or 512 pixels before the image decoder sees them.
+- **A hung netsh can no longer block the network readings:** it is stopped after 4 seconds.
+- **Exported reports leave out home-network and IPv6 addresses** by default (they read `[hidden]`), so a report can be posted on a forum safely. Settings > Privacy and data includes them when your provider's support asks. Public servers and route hops stay.
+- **[SECURITY.md](SECURITY.md):** what NetPulse never does, everything it sends and when, what it keeps, how it is built to be safe, how to check a download's SHA-256, and how to report a vulnerability privately.
+
+**Also**
+- Status marks can be drawn larger (the Security check's verdict) and have an "i" for information.
+- Help explains the Security check.
+
 ## 0.15.0
 
 **New: Site check** (both modes, `Ctrl+K`)

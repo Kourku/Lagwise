@@ -137,6 +137,8 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool AlertsOnlyInBackground { get => _alertsBg; set => Set(ref _alertsBg, value); }
     private bool _gameStartCheck;
     public bool GameStartCheck { get => _gameStartCheck; set => Set(ref _gameStartCheck, value); }
+    private bool _reportAddresses;
+    public bool ReportsIncludeAddresses { get => _reportAddresses; set => Set(ref _reportAddresses, value); }
     private bool _alerts, _alertsBg;
     public int RecordingRetentionDays { get => _retentionDays; set => Set(ref _retentionDays, value); }
     public int HeavyTrafficMbps { get => _heavyMbps; set => Set(ref _heavyMbps, value); }
@@ -222,6 +224,7 @@ public sealed class SettingsViewModel : ViewModelBase
             DesktopAlerts = d.DesktopAlerts;
             AlertsOnlyInBackground = d.AlertsOnlyInBackground;
             GameStartCheck = d.GameStartCheck;
+            ReportsIncludeAddresses = d.ReportsIncludeAddresses;
             RecordingRetentionDays = Nearest(RetentionChoices, d.RecordingRetentionDays);
             HeavyTrafficMbps = Nearest(HeavyTrafficChoices, d.HeavyTrafficMbps);
             LatencySpikeText = d.LatencySpikeThresholdMs.ToString("0.#", CultureInfo.CurrentCulture);
@@ -278,6 +281,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.DesktopAlerts = DesktopAlerts;
         _draft.AlertsOnlyInBackground = AlertsOnlyInBackground;
         _draft.GameStartCheck = GameStartCheck;
+        _draft.ReportsIncludeAddresses = ReportsIncludeAddresses;
         _draft.RecordingRetentionDays = RecordingRetentionDays;
         _draft.HeavyTrafficMbps = HeavyTrafficMbps;
         _draft.LatencySpikeThresholdMs = spike;
@@ -368,7 +372,7 @@ public sealed class SettingsViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(_host.DataDirectory);
-            Process.Start(new ProcessStartInfo(_host.DataDirectory) { UseShellExecute = true });
+            SafeOpen.Folder(_host.DataDirectory);
         }
         catch (Exception ex)
         {

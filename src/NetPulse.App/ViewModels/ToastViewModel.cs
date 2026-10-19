@@ -76,7 +76,7 @@ public sealed class ToastViewModel : ViewModelBase
     {
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+            SafeOpen.SelectFile(path);
         }
         catch (Exception ex)
         {

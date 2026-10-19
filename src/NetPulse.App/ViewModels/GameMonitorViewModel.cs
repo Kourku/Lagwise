@@ -442,7 +442,7 @@ public sealed class GameMonitorViewModel : ViewModelBase
         try
         {
             // opens in the user's browser on explicit request; NetPulse itself does not contact this page
-            Process.Start(new ProcessStartInfo(_statusPageUrl) { UseShellExecute = true });
+            SafeOpen.WebPage(_statusPageUrl);
         }
         catch (Exception ex)
         {
@@ -455,7 +455,7 @@ public sealed class GameMonitorViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(_host.Sessions.Directory);
-            Process.Start(new ProcessStartInfo(_host.Sessions.Directory) { UseShellExecute = true });
+            SafeOpen.Folder(_host.Sessions.Directory);
         }
         catch (Exception ex)
         {

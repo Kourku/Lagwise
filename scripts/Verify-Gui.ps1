@@ -209,6 +209,13 @@ try {
     $verdict = Wait-For { Find-Like '^(Up|Slow|Unreachable|Blocked by your DNS|Blocked on the way|Blocked on this PC|Intercepted|Legal block|Problem at the site|Name not found|No internet)$' } 30
     Check 'A site check reaches a verdict' ($null -ne $verdict) $(if ($verdict) { $verdict.Current.Name })
 
+    # Security check: the local part shows at once; the network part runs on Check
+    Click-Element (Find-Like '^Security check$')
+    Check 'The security check reads this PC at once' (($null -ne (Wait-For { Find-Like '^Security verdict$' } 8)) -and ($null -ne (Find-Like '^Windows Firewall$'))) ''
+    $sec = Find-Named 'Run the security check' 'ControlType.Button'
+    if ($sec) { ($sec.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke() }
+    Check 'The security check finishes its network part' ($null -ne (Wait-For { Find-Like '^Checked \d\d:\d\d\.' } 45)) ''
+
     # Connection diary, and its 24-hour strip on the Overview
     Click-Element (Find-Like '^Connection diary$')
     Check 'The connection diary shows its hour-by-hour chart' (($null -ne (Wait-For { Find-Like '^Connection diary chart$' } 5)) -and ($null -ne (Find-Like '^Diary summary$'))) ''

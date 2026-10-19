@@ -296,8 +296,12 @@ public sealed class SiteCheckViewModel : ViewModelBase
     {
         try
         {
+            // downloaded from the internet: refuse anything larger than an icon before the image decoder sees it
+            if (new FileInfo(path).Length > SiteCheckService.MaxIconBytes) return null;
             var decoder = BitmapDecoder.Create(new Uri(path), BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.OnLoad);
-            var frame = decoder.Frames.OrderBy(f => Math.Abs(f.PixelWidth - 32)).ThenByDescending(f => f.PixelWidth).First();
+            var frame = decoder.Frames.Where(f => f.PixelWidth <= 512 && f.PixelHeight <= 512)
+                .OrderBy(f => Math.Abs(f.PixelWidth - 32)).ThenByDescending(f => f.PixelWidth).FirstOrDefault();
+            if (frame == null) return null;
             frame.Freeze();
             return frame;
         }

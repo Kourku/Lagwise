@@ -532,7 +532,10 @@ public sealed class HistoryViewModel : ViewModelBase
         if (dlg.ShowDialog() != true) return;
         try
         {
-            File.WriteAllText(dlg.FileName, SessionReportBuilder.BuildMarkdown(_session, _stats), Encoding.UTF8);
+            string report = SessionReportBuilder.BuildMarkdown(_session, _stats);
+            if (!_host.Settings.ReportsIncludeAddresses)
+                report = ReportPrivacy.HideAddresses(report) + "\n\n*Addresses on your home network and IPv6 addresses read [hidden]; Settings > Privacy and data can include them.*\n";
+            File.WriteAllText(dlg.FileName, report, Encoding.UTF8);
             if (Toast != null) Toast.Saved("Report", dlg.FileName); else Message = $"Report saved: {dlg.FileName}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -566,7 +569,7 @@ public sealed class HistoryViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(_host.Sessions.Directory);
-            Process.Start(new ProcessStartInfo(_host.Sessions.Directory) { UseShellExecute = true });
+            SafeOpen.Folder(_host.Sessions.Directory);
         }
         catch (Exception ex)
         {

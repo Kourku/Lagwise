@@ -50,6 +50,8 @@ public class AppSettings
     public bool DesktopAlerts { get; set; } = true;
     /// <summary>Only alert while NetPulse is not the active window (the page already shows the problem).</summary>
     public bool AlertsOnlyInBackground { get; set; } = true;
+    /// <summary>Exported reports keep home-network and IPv6 addresses (a provider's support may ask for them). Off: they read [hidden].</summary>
+    public bool ReportsIncludeAddresses { get; set; } = false;
     /// <summary>When the selected game starts, show the "Ready to play?" result as a desktop notification.</summary>
     public bool GameStartCheck { get; set; } = true;
     /// <summary>Show a small graph of the last minute of reference ping in the mini overlay.</summary>

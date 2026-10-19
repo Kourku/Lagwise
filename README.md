@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)]()
 [![Runtime](https://img.shields.io/badge/.NET-10.0%20(Self--Contained)-512BD4.svg)]()
-[![Tests](https://img.shields.io/badge/tests-392%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-423%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
@@ -80,6 +80,7 @@ NetPulse clearly distinguishes between:
 - **History & reports:** every recording with an interactive graph (hover for exact values), per-target statistics, what was measured around each lag marker (including whether this PC was busy downloading at that moment), and Markdown/CSV export.
 - **When is my connection worst?** History pools every recording by hour of the day, comparing each server with its own usual ping.
 - **Site check:** is a site down, or blocked between you and it? YouTube, X, Reddit, Twitch, Discord and ten more popular sites (and any you add) are checked the way a browser opens them: your DNS against public DNS over HTTPS, the connection, the secure handshake and the answer. It tells "blocked by your DNS" from "blocked on the way" (filtering by name), interception, a legal block (451) and a problem at the site, and reads the site's official status page where one is public. No account, cookie or key is used and bot checks are never solved; nothing is contacted unless you check.
+- **Security check:** is this PC and its connection safe? Windows Firewall, Public or Private network, Wi-Fi protection (open, WEP, WPA2, WPA3), programs open to the network (remote access flagged), whether your DNS answers for names that do not exist or sends you to the wrong servers, whether something opens your secure connections (antivirus or company HTTPS inspection), and UPnP on the router. Read-only, no administrator rights. See [SECURITY.md](SECURITY.md) for what NetPulse itself sends and keeps.
 - **Connection diary:** hour by hour, every day NetPulse runs (recording or not), a heatmap of the last 7, 14 or 30 days, every drop with where the break was (beyond your router, or the router silent too), and a "Last 24 hours" strip on the Overview. Kept on this PC for 31 days and included in the exported report.
 - **Network activity:** live download and upload of this PC's network adapter, like Task Manager's Performance tab but with a 1 / 5 / 15-minute graph, peaks and averages, data used, link use, packets and errors. Your ping can be drawn over the traffic (bufferbloat, live), "Programs online now" shows which programs are talking to the internet, recordings keep every second of traffic, and sustained heavy traffic is noted in the timeline with the programs that were online.
 - **Live ping graph** of the last minutes on the Overview, and **Copy summary**: a short text snapshot (no IP addresses or network names) to paste into a chat or support ticket.

@@ -124,7 +124,25 @@ Each site is opened the way a browser opens it, and the first step that fails te
 
 When the address from your DNS fails but the address from public DNS works, your DNS sends you to the wrong server (often a block page). When no site in a check answers, the connection itself is down. From one PC, a site that is down and a site whose address is blocked look the same: the verdict says so, and the status page, where public, tells them apart.
 
-## 7. Diagnostic Evidence Attribution Matrix
+## 7. Security Check (since 0.16)
+
+Read from Windows, without administrator rights, as soon as the page opens:
+
+- **Windows Firewall:** the firewall's own API (`HNetCfg.FwPolicy2`): which network types are active and whether the firewall is on for each. Off for the active type is a problem; off for another type is worth a look.
+- **Network type:** Public (other devices cannot find this PC) is the safe default; Private is fine at home and a problem on an open Wi-Fi.
+- **Wi-Fi protection:** `netsh wlan show interfaces` (by full path): open and WEP/WPA/TKIP are problems, WPA2 (AES) and WPA3 are fine.
+- **Programs open to the network:** TCP listening sockets not limited to this PC, with their programs. Windows' own services are left out; remote-access ports (RDP 3389, VNC, Telnet, FTP, SSH, WinRM, TeamViewer) are worth a look, and a problem with the firewall off.
+
+When **Check** is pressed:
+
+- **Honest name lookups:** a made-up `.com` name is looked up with your DNS and with Cloudflare's public DNS. Your DNS answering with an address while public DNS says the name does not exist is NXDOMAIN redirection.
+- **Real servers for well-known sites:** www.google.com, www.cloudflare.com and www.wikipedia.org are resolved with your DNS and a TLS handshake is made to that address (nothing is sent over it). A certificate that Windows does not accept means the address is not the site's, or the connection is intercepted.
+- **Secure connections:** for the valid handshakes, the root of the certificate chain must be one Windows distributes itself (the "Third-Party Root Certification Authorities" store, filled from Microsoft's root program, or Microsoft's own roots). A root found only among "Trusted Root Certification Authorities" was added on this PC: antivirus HTTPS scanning, a company proxy, or something unwanted.
+- **UPnP:** one SSDP search for an Internet Gateway Device on the local network (3 seconds). An answer means programs can open ports on the router; no answer is reported as unknown, because a Public network's firewall hides the reply.
+
+Information lines (UPnP on, a Private network at home, programs listening) and unknown ones never make the verdict worse.
+
+## 8. Diagnostic Evidence Attribution Matrix
 
 | Gateway Health | Internet Targets | DNS Resolver | Bufferbloat Delta | Diagnostic Classification |
 |---|---|---|---|---|

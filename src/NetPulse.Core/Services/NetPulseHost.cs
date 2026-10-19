@@ -66,6 +66,8 @@ public sealed class NetPulseHost : IDisposable
     public ConnectionDiary Diary { get; }
     /// <summary>Is a site down, or blocked between this PC and it? Contacts sites only when asked.</summary>
     public Sites.SiteCheckService SiteChecks { get; }
+    /// <summary>Is this PC and its connection safe? The local part sends nothing; the network part runs when asked.</summary>
+    public Security.SecurityCheckService Security { get; }
 
     /// <param name="processSource">Override for tests; defaults to the real Windows process list.</param>
     /// <param name="connectionSource">Override for tests; defaults to the Windows TCP/UDP socket tables.</param>
@@ -105,6 +107,11 @@ public sealed class NetPulseHost : IDisposable
 
         Diary = new ConnectionDiary(Path.Combine(DataDirectory, "diary.json"));
         SiteChecks = new Sites.SiteCheckService(internetDown: () => Engine.IsInternetDown);
+        Security = new Security.SecurityCheckService(() =>
+        {
+            var nic = Engine.CurrentNic;
+            return new Security.SecurityCheckService.NetworkInterfaceInfoView(nic.IsWifi, nic.WifiAuthentication, nic.WifiCipher);
+        });
 
         Engine.MeasurementProcessed += (_, m) =>
         {

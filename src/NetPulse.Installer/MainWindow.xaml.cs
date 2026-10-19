@@ -221,12 +221,14 @@ public partial class MainWindow : Window
 
         // Self-deletion cmd script: removes only the application files this installer created, and the folder if that leaves it empty.
         // User data (settings, recordings) lives in %LOCALAPPDATA%\NetPulse and is intentionally left alone.
-        if (looksLikeInstall)
+        // the folder name goes into a command line: refuse quotes and the characters cmd.exe treats specially
+        bool safeName = installDir.IndexOfAny(new[] { '"', '&', '|', '<', '>', '^', '%', '!', '\r', '\n' }) < 0 && Path.IsPathFullyQualified(installDir);
+        if (looksLikeInstall && safeName)
         {
             string cmdScript = $"/c timeout /t 2 /nobreak > NUL & del /f /q \"{installDir}\\NetPulse.exe\" \"{installDir}\\app.ico\" \"{installDir}\\NetPulse-Setup.exe\" & rmdir \"{installDir}\"";
             Process.Start(new ProcessStartInfo
             {
-                FileName = "cmd.exe",
+                FileName = Path.Combine(Environment.SystemDirectory, "cmd.exe"),   // never by name: a cmd.exe beside the setup would run instead
                 Arguments = cmdScript,
                 CreateNoWindow = true,
                 UseShellExecute = false

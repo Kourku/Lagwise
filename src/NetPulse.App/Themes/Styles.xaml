@@ -787,7 +787,7 @@
                 <ControlTemplate TargetType="controls:StatusMark">
                     <Grid>
                         <Ellipse x:Name="disc" Fill="{DynamicResource BorderStrongBrush}" />
-                        <TextBlock x:Name="glyph" Text="&#xE738;" FontFamily="{StaticResource IconFont}" FontSize="9" FontWeight="Bold" Foreground="White"
+                        <TextBlock x:Name="glyph" Text="&#xE738;" FontFamily="{StaticResource IconFont}" FontSize="{TemplateBinding GlyphSize}" FontWeight="Bold" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Grid>
                     <ControlTemplate.Triggers>
@@ -806,6 +806,11 @@
                         <Trigger Property="Level" Value="Busy">
                             <Setter TargetName="disc" Property="Fill" Value="{DynamicResource AccentBlueBrush}" />
                             <Setter TargetName="glyph" Property="Text" Value="&#xE712;" />
+                        </Trigger>
+                        <Trigger Property="Level" Value="Info">
+                            <Setter TargetName="disc" Property="Fill" Value="{DynamicResource AccentBlueBrush}" />
+                            <Setter TargetName="glyph" Property="Text" Value="i" />
+                            <Setter TargetName="glyph" Property="FontFamily" Value="{StaticResource DisplayFont}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

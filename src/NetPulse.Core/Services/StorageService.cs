@@ -68,7 +68,8 @@ public class StorageService
         IReadOnlyList<TestRecord>? tests = null,
         Func<DateTime, DateTime>? toLocal = null,
         IReadOnlyList<string>? diaryLines = null,
-        IReadOnlyList<Sites.SiteResult>? sites = null)
+        IReadOnlyList<Sites.SiteResult>? sites = null,
+        bool includeAddresses = true)
     {
         var local = toLocal ?? (t => DateTime.SpecifyKind(t, DateTimeKind.Utc).ToLocalTime());
         string Clock(DateTime utc) => local(utc).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -80,7 +81,9 @@ public class StorageService
         sb.AppendLine();
         sb.AppendLine($"Created {Clock(now)} (local time, UTC{(offset < TimeSpan.Zero ? "-" : "+")}{offset:hh\\:mm}) by NetPulse {AppInfo.Version}.");
         sb.AppendLine("The reference servers are public servers, not game servers: nothing in this report is in-game ping. "
-            + "It contains this PC's local network addresses, so share it only with people you trust, such as your provider's support.");
+            + (includeAddresses
+                ? "It contains this PC's local network addresses, so share it only with people you trust, such as your provider's support."
+                : "Addresses on your home network and IPv6 addresses read [hidden]; Settings > Privacy and data can include them for your provider's support."));
         sb.AppendLine();
 
         sb.AppendLine("## Summary");
@@ -231,6 +234,6 @@ public class StorageService
         sb.AppendLine("---");
         sb.AppendLine("*Made by NetPulse on this PC. NetPulse sends nothing anywhere; this file only leaves the PC if you share it.*");
 
-        return Task.FromResult(sb.ToString());
+        return Task.FromResult(includeAddresses ? sb.ToString() : ReportPrivacy.HideAddresses(sb.ToString()));
     }
 }

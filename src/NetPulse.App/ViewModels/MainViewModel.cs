@@ -133,6 +133,8 @@ public class MainViewModel : ViewModelBase
     public SiteCheckViewModel SiteCheck { get; }
     /// <summary>Hour by hour, every day NetPulse ran, and every drop.</summary>
     public DiaryViewModel Diary { get; }
+    /// <summary>Is this PC and its connection safe?</summary>
+    public SecurityViewModel Security { get; }
 
     public MainViewModel(NetPulseHost host)
     {
@@ -202,6 +204,7 @@ public class MainViewModel : ViewModelBase
         Results = new TestResultsViewModel(host, Application.Current.Dispatcher, Toast);
         SiteCheck = new SiteCheckViewModel(host, Application.Current.Dispatcher, Toast);
         Diary = new DiaryViewModel(host, Application.Current.Dispatcher);
+        Security = new SecurityViewModel(host);
         ShowLastSpeedTest();
         // ping seen during real heavy traffic feeds the "Lag when others use the internet" line
         host.Tests.Changed += (_, _) => Application.Current?.Dispatcher.InvokeAsync(() => RefreshReadiness(force: true));
@@ -271,6 +274,7 @@ public class MainViewModel : ViewModelBase
             GameMonitor.IsVisible = value == "GameMonitor";
             Activity.IsVisible = value == "Activity";
             Diary.IsVisible = value == "Diary";
+            Security.IsVisible = value == "Security";
             if (value == "Dashboard") { RefreshLiveChart(); Diary.Refresh(); }
             if (value == "ProbeLog") RebuildProbeLog();
         }
@@ -308,7 +312,7 @@ public class MainViewModel : ViewModelBase
     public string MarkLagKeyText => _host.Settings.MarkLagHotkey == HotkeyGesture.Off ? "(not set)" : _host.Settings.MarkLagHotkey;
 
     /// <summary>Sidebar order, used by the Ctrl+1 ... Ctrl+0 shortcuts.</summary>
-    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Activity", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Sites", "Adapter", "ProbeLog", "Events", "Diary", "History" };
+    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Activity", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Sites", "Security", "Adapter", "ProbeLog", "Events", "Diary", "History" };
 
     /// <summary>The pages the sidebar currently shows, top to bottom (Beginner hides some).</summary>
     public IReadOnlyList<string> VisiblePages => PageOrder.Where(p => !IsBeginnerMode || !AdvancedOnlyTabs.Contains(p)).ToList();
@@ -1255,7 +1259,8 @@ public class MainViewModel : ViewModelBase
                 LatestSpeedTestResult,
                 _host.Tests.All(),
                 diaryLines: DiaryAnalysis.ReportLines(DiaryAnalysis.Build(_host.Diary.Snapshot(), 14, DateTime.UtcNow)),
-                sites: SiteCheck.LastResults());
+                sites: SiteCheck.LastResults(),
+                includeAddresses: _host.Settings.ReportsIncludeAddresses);
 
             try
             {
@@ -1350,7 +1355,7 @@ public class MainViewModel : ViewModelBase
             try
             {
                 Directory.CreateDirectory(_host.Sessions.Directory);
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_host.Sessions.Directory) { UseShellExecute = true });
+                SafeOpen.Folder(_host.Sessions.Directory);
             }
             catch (Exception ex)
             {

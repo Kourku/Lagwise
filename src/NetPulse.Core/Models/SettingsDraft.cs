@@ -87,6 +87,7 @@ public sealed class SettingsDraft
     public bool DesktopAlerts { get; set; }
     public bool AlertsOnlyInBackground { get; set; }
     public bool GameStartCheck { get; set; }
+    public bool ReportsIncludeAddresses { get; set; }
     public int RecordingRetentionDays { get; set; }
     public List<TargetDraft> Targets { get; set; } = new();
 
@@ -112,6 +113,7 @@ public sealed class SettingsDraft
         DesktopAlerts = s.DesktopAlerts,
         AlertsOnlyInBackground = s.AlertsOnlyInBackground,
         GameStartCheck = s.GameStartCheck,
+        ReportsIncludeAddresses = s.ReportsIncludeAddresses,
         RecordingRetentionDays = s.RecordingRetentionDays,
         Targets = s.Targets.Select(t => new TargetDraft
         {
@@ -159,6 +161,7 @@ public sealed class SettingsDraft
         settings.DesktopAlerts = DesktopAlerts;
         settings.AlertsOnlyInBackground = AlertsOnlyInBackground;
         settings.GameStartCheck = GameStartCheck;
+        settings.ReportsIncludeAddresses = ReportsIncludeAddresses;
         settings.RecordingRetentionDays = RecordingRetentionDays;
 
         var existing = settings.Targets.ToDictionary(t => t.Id);
