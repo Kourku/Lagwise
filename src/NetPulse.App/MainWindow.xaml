@@ -137,9 +137,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
-                    <Border Width="26" Height="26" CornerRadius="7" Background="{DynamicResource BrandGradientBrush}">
-                        <TextBlock Text="&#xE9D9;" Style="{StaticResource IconText}" FontSize="14" Foreground="White" HorizontalAlignment="Center" />
-                    </Border>
+                    <controls:LogoMark Width="26" Height="26" />
                     <TextBlock Text="NetPulse" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="15" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
                 </StackPanel>
 
@@ -273,6 +271,9 @@
                         <RadioButton Content="Speed test" Tag="&#xEC4A;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=SpeedTest}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="SpeedTest" />
+                        <RadioButton Content="Site check" Tag="&#xEC27;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                                     IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Sites}"
+                                     Command="{Binding SwitchTabCommand}" CommandParameter="Sites" />
                         <RadioButton Content="Adapter &amp; Wi-Fi" Tag="&#xE839;" GroupName="nav" Style="{StaticResource NavTabButton}" Visibility="{Binding IsAdvancedMode, Converter={StaticResource BoolToVis}}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Adapter}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Adapter" />
@@ -288,6 +289,9 @@
                         <RadioButton Content="Event timeline" Tag="&#xE8FD;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Events}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="Events" />
+                        <RadioButton Content="Connection diary" Tag="&#xE787;" GroupName="nav" Style="{StaticResource NavTabButton}"
+                                     IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=Diary}"
+                                     Command="{Binding SwitchTabCommand}" CommandParameter="Diary" />
                         <RadioButton Content="History &amp; reports" Tag="&#xE81C;" GroupName="nav" Style="{StaticResource NavTabButton}"
                                      IsChecked="{Binding CurrentTab, Mode=OneWay, Converter={StaticResource EqualsParam}, ConverterParameter=History}"
                                      Command="{Binding SwitchTabCommand}" CommandParameter="History" />
@@ -390,13 +394,13 @@
                         <!-- Headline numbers -->
                         <UniformGrid Columns="4" Margin="0,0,0,16">
                             <controls:StatTile Margin="0,0,8,0" Label="Reference ping" Glyph="&#xE774;" Unit="ms" Info="{Binding TipLatency}"
-                                               Value="{Binding QuickInternetLatency, StringFormat={}{0:F1}}" Caption="Typical ping to public servers (not a game server)" Badge="{Binding PingBadge}" BadgeBrush="{Binding PingBadgeBrush}" />
+                                               Value="{Binding QuickInternetLatency, StringFormat={}{0:F1}}" Caption="Typical ping to public servers (not a game server)" Badge="{Binding PingBadge}" BadgeBrush="{Binding PingBadgeBrush}" BadgeLevel="{Binding PingBadgeLevel}" />
                             <controls:StatTile Margin="8,0,8,0" Label="Latency variation" Glyph="&#xE9D2;" Unit="ms" Info="{Binding TipVariation}" Accent="#A78BFA"
-                                               Value="{Binding QuickJitter, StringFormat={}{0:F1}}" Caption="How much ping swings, last 60 s" Badge="{Binding JitterBadge}" BadgeBrush="{Binding JitterBadgeBrush}" />
-                            <controls:StatTile Margin="8,0,8,0" Label="Probe loss" Glyph="&#xE711;" Unit="%" Info="{Binding TipLoss}" Accent="#F472B6"
-                                               Value="{Binding QuickPacketLoss, StringFormat={}{0:F1}}" Caption="Test messages with no reply, last 60 s" Badge="{Binding LossBadge}" BadgeBrush="{Binding LossBadgeBrush}" />
+                                               Value="{Binding QuickJitter, StringFormat={}{0:F1}}" Caption="How much ping swings, last 60 s" Badge="{Binding JitterBadge}" BadgeBrush="{Binding JitterBadgeBrush}" BadgeLevel="{Binding JitterBadgeLevel}" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Probe loss" Glyph="&#xE8AB;" Unit="%" Info="{Binding TipLoss}" Accent="#F472B6"
+                                               Value="{Binding QuickPacketLoss, StringFormat={}{0:F1}}" Caption="Test messages with no reply, last 60 s" Badge="{Binding LossBadge}" BadgeBrush="{Binding LossBadgeBrush}" BadgeLevel="{Binding LossBadgeLevel}" />
                             <controls:StatTile Margin="8,0,0,0" Label="Your router" Glyph="&#xE968;" Unit="ms" Info="{Binding TipRouter}" Accent="#2DD4BF"
-                                               Value="{Binding QuickGatewayLatency, StringFormat={}{0:F1}}" Caption="This PC to your router (the first step)" Badge="{Binding RouterBadge}" BadgeBrush="{Binding RouterBadgeBrush}" />
+                                               Value="{Binding QuickGatewayLatency, StringFormat={}{0:F1}}" Caption="This PC to your router (the first step)" Badge="{Binding RouterBadge}" BadgeBrush="{Binding RouterBadgeBrush}" BadgeLevel="{Binding RouterBadgeLevel}" />
                         </UniformGrid>
 
                         <!-- Ready to play? -->
@@ -450,6 +454,48 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Last 24 hours, from the connection diary -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" DataContext="{Binding Diary}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Last 24 hours" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="{Binding Last24Text}" Style="{StaticResource CaptionText}" FontSize="13" Margin="0,4,0,0" AutomationProperties.Name="Last 24 hours summary" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Style="{StaticResource GhostButton}" VerticalAlignment="Top" Padding="10,6"
+                                            Command="{Binding DataContext.SwitchTabCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Diary" ToolTip="Open the connection diary (Ctrl+D)">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE787;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Open diary" /></StackPanel>
+                                    </Button>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Last24}" Margin="0,12,0,0" AutomationProperties.Name="Last 24 hours chart" Focusable="False">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="24" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="cell" Height="16" Margin="1.5" CornerRadius="4" Background="{DynamicResource BgInputBrush}" Opacity="{Binding Opacity}" ToolTip="{Binding Tip}" />
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Good"><Setter TargetName="cell" Property="Background" Value="{DynamicResource AccentGreenBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Fair"><Setter TargetName="cell" Property="Background" Value="{DynamicResource AccentAmberBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Poor"><Setter TargetName="cell" Property="Background" Value="{DynamicResource AccentRedBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Thin">
+                                                    <Setter TargetName="cell" Property="Background" Value="Transparent" />
+                                                    <Setter TargetName="cell" Property="BorderBrush" Value="{DynamicResource TextTertiaryBrush}" />
+                                                    <Setter TargetName="cell" Property="BorderThickness" Value="1.5" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Grid Margin="0,4,0,0">
+                                    <TextBlock Text="24 h ago" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                    <TextBlock Text="now" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Right" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Live graph of the last few minutes -->
                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                             <StackPanel>
@@ -492,9 +538,13 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource BlueSoftBrush}" VerticalAlignment="Top" Margin="0,0,14,0">
-                                        <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    </Border>
+                                    <Grid Width="40" Height="40" VerticalAlignment="Top" Margin="0,0,14,0">
+                                        <Border CornerRadius="10" Background="{DynamicResource BlueSoftBrush}" />
+                                        <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Visibility="{Binding GameMonitor.SelectedProfile.HasIcon, Converter={StaticResource InverseBoolToVis}, FallbackValue=Visible}" />
+                                        <Image Source="{Binding GameMonitor.SelectedProfile.Icon}" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality"
+                                               Visibility="{Binding GameMonitor.SelectedProfile.HasIcon, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                                    </Grid>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="Game Monitor" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" />
                                         <TextBlock Text="{Binding GameCardTitle}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,3,0,2" TextWrapping="Wrap" />
@@ -656,7 +706,21 @@
                                     </Grid.ColumnDefinitions>
                                     <Grid Grid.Column="0" Width="300" VerticalAlignment="Center">
                                         <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
-                                                  DisplayMemberPath="Display" IsEnabled="{Binding IsIdle}" AutomationProperties.Name="Game" />
+                                                  IsEnabled="{Binding IsIdle}" AutomationProperties.Name="Game">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Grid Width="22" Height="22" Margin="0,0,9,0">
+                                                            <Border CornerRadius="6" Background="{DynamicResource BlueSoftBrush}" Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}">
+                                                                <TextBlock Text="{Binding Monogram}" FontSize="8.5" FontWeight="Bold" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            </Border>
+                                                            <Image Source="{Binding Icon}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality" Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                                        </Grid>
+                                                        <TextBlock VerticalAlignment="Center" TextWrapping="NoWrap"><Run Text="{Binding Name, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding StatusText, Mode=OneWay, StringFormat=({0})}" Foreground="{DynamicResource TextTertiaryBrush}" /></TextBlock>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
                                         <TextBlock Text="Choose a game..." Foreground="{DynamicResource TextTertiaryBrush}" FontSize="14" Margin="13,0,36,0" VerticalAlignment="Center" IsHitTestVisible="False"
                                                    Visibility="{Binding HasProfile, Converter={StaticResource InverseBoolToVis}}" />
                                     </Grid>
@@ -1484,6 +1548,166 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <!-- TAB: SITE CHECK -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentTab}" Value="Sites">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+
+                    <StackPanel DataContext="{Binding SiteCheck}">
+                        <controls:PageHeader Title="Site check" Glyph="&#xEC27;"
+                                             Subtitle="Is a site down, or is something between you and it blocking it? NetPulse retraces what a browser does, one step at a time, and says where it stops." />
+                        <controls:Callout Kind="Info" Title="What a check sends" Margin="0,0,0,16"
+                                          Text="Each site is visited once from this PC as a browser would, without cookies or an account: a name lookup, a connection, a secure handshake and one request for its home page, plus its icon once a month. For comparison the name is also looked up with Cloudflare (1.1.1.1) and Google (8.8.8.8) public DNS over HTTPS, and a site's official status page is read when it has one. Nothing is sent unless you press Check or switch on the regular check. A bot check is never solved: it already proves the site answers." />
+
+                        <!-- summary and actions -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Popular sites, and yours" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="{Binding Summary}" FontSize="14" LineHeight="20" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" AutomationProperties.Name="Site check summary" />
+                                        <TextBlock Text="{Binding ProgressText}" Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,0,0,0">
+                                        <Button Command="{Binding CheckAllCommand}" Padding="16,8" AutomationProperties.Name="Check all sites">
+                                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Check all" /></StackPanel>
+                                        </Button>
+                                        <Button Content="Cancel" Style="{StaticResource OutlineButton}" Command="{Binding CancelCommand}" Padding="16,8" Margin="8,0,0,0"
+                                                Visibility="{Binding IsChecking, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                </Grid>
+                                <ProgressBar Height="4" IsIndeterminate="True" Margin="0,12,0,0" Visibility="{Binding IsChecking, Converter={StaticResource BoolToVis}}" />
+                                <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AutoCheck, Mode=TwoWay}" Content="{Binding AutoCheckText}" Margin="0,14,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- the sites -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding Sites}" AutomationProperties.Name="Sites" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="row" Background="{DynamicResource BgSidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12,9" Margin="0,0,0,8">
+                                                <StackPanel>
+                                                    <Grid Background="Transparent" Cursor="Hand">
+                                                        <Grid.InputBindings>
+                                                            <MouseBinding Gesture="LeftClick" Command="{Binding DataContext.ToggleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                        </Grid.InputBindings>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="72" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <!-- the site's own icon, or its letters until the icon is known -->
+                                                        <Grid Width="34" Height="34">
+                                                            <Border CornerRadius="9" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" />
+                                                            <Image Source="{Binding Icon}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality"
+                                                                   Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                                            <TextBlock Text="{Binding Monogram}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                       Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}" />
+                                                        </Grid>
+                                                        <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                            <TextBlock FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"><Run Text="{Binding Host, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding Category, Mode=OneWay}" /></TextBlock>
+                                                        </StackPanel>
+                                                        <Border x:Name="pill" Grid.Column="2" CornerRadius="13" Padding="5,3,11,3" Background="{DynamicResource BgInputBrush}" VerticalAlignment="Center">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <controls:StatusMark Level="{Binding Level}" Width="17" Height="17" />
+                                                                <TextBlock Text="{Binding VerdictText}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="7,0,0,0" TextWrapping="NoWrap" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="3" Text="{Binding AnswerText}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                                   Typography.NumeralAlignment="Tabular" TextWrapping="NoWrap" ToolTip="Time until the site answered the request" />
+                                                        <Button Grid.Column="4" Style="{StaticResource GhostButton}" Content="&#xE72C;" FontFamily="{StaticResource IconFont}" FontSize="12" Padding="9,7" Margin="10,0,0,0"
+                                                                Command="{Binding DataContext.CheckOneCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                                ToolTip="Check this site again" AutomationProperties.Name="{Binding Name, StringFormat='Check {0} again'}" />
+                                                        <Button Grid.Column="5" Style="{StaticResource GhostButton}" Content="&#xE711;" FontFamily="{StaticResource IconFont}" FontSize="11" Padding="9,7" Margin="2,0,0,0"
+                                                                Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                                ToolTip="Take this site off the list" AutomationProperties.Name="{Binding Name, StringFormat='Remove {0}'}" />
+                                                        <TextBlock x:Name="chevron" Grid.Column="6" Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="8,0,2,0" />
+                                                    </Grid>
+                                                    <!-- step by step -->
+                                                    <StackPanel Margin="46,10,4,2" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="Not checked yet. Press the circular arrow to check this site." Style="{StaticResource CaptionText}"
+                                                                   Visibility="{Binding HasResult, Converter={StaticResource InverseBoolToVis}}" />
+                                                        <TextBlock Text="{Binding Explanation}" FontSize="13.5" LineHeight="19" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                                        <ItemsControl ItemsSource="{Binding Steps}" Margin="0,10,0,0" Focusable="False">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Grid Margin="0,0,0,6">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="24" />
+                                                                            <ColumnDefinition Width="170" />
+                                                                            <ColumnDefinition Width="*" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <controls:StatusMark Level="{Binding Level}" Width="15" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" />
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                                                        <TextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <controls:Callout Kind="Info" Title="What you can do" Text="{Binding Advice}" Margin="0,8,0,0" Visibility="{Binding HasAdvice, Converter={StaticResource BoolToVis}}" />
+                                                        <TextBlock Text="{Binding CheckedText}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Good"><Setter TargetName="pill" Property="Background" Value="{DynamicResource GreenSoftBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Fair"><Setter TargetName="pill" Property="Background" Value="{DynamicResource AmberSoftBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Poor">
+                                                    <Setter TargetName="pill" Property="Background" Value="{DynamicResource RedSoftBrush}" />
+                                                    <Setter TargetName="row" Property="BorderBrush" Value="{DynamicResource RedEdgeBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Busy"><Setter TargetName="pill" Property="Background" Value="{DynamicResource BlueSoftBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter TargetName="chevron" Property="Text" Value="&#xE70E;" /></DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- add a site -->
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="360" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding NewSite, UpdateSourceTrigger=PropertyChanged}" controls:Hint.Text="Add a site, e.g. example.com" AutomationProperties.Name="New site address">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding AddCommand}" />
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                    <Button Grid.Column="1" Content="Add" Style="{StaticResource OutlineButton}" Command="{Binding AddCommand}" Margin="8,0,0,0" Padding="16,7" AutomationProperties.Name="Add site" />
+                                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" Content="{Binding ShowHiddenText}" Command="{Binding ShowHiddenCommand}" HorizontalAlignment="Right"
+                                            Visibility="{Binding HasHidden, Converter={StaticResource BoolToVis}}" />
+                                </Grid>
+                                <TextBlock Text="{Binding AddError}" FontSize="12.5" Foreground="{DynamicResource AccentRedBrush}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                           Visibility="{Binding HasAddError, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Border>
+
+                        <controls:Callout Kind="Info" Title="How NetPulse tells them apart" Margin="0,0,0,16"
+                                          Text="Blocked by your DNS: your provider's (or router's) name lookup fails or points nowhere, while public DNS finds the site and it works. Blocked on the way: the connection is cut as soon as it names the site, or both the lookup and the connection are stopped. Intercepted: something answers with a certificate that is not the site's. From one PC, a site that is down and a site whose address is blocked look the same; the site's own status page, where it has one, tells them apart." />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- TAB 6: ADAPTER & WI-FI -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ScrollViewer.Style>
@@ -1746,7 +1970,7 @@
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                     <Border Grid.Row="0" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+1 … Ctrl+9, Ctrl+0" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Open the 1st … 10th page of the sidebar; Ctrl+H opens History" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Open the 1st … 10th page of the sidebar; Ctrl+H opens History, Ctrl+D the Connection diary, Ctrl+K the Site check" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     <Border Grid.Row="1" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+Shift+C" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="Copy a short summary of your connection" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     <Border Grid.Row="2" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,2" Margin="0,3,12,3" HorizontalAlignment="Left"><TextBlock Text="Ctrl+E" FontFamily="Consolas" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" /></Border>
@@ -1785,6 +2009,141 @@
                         </ItemsControl>
                         <TextBlock Text="Switch to Advanced mode (top right) to also see how each value is measured." FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0"
                                    Visibility="{Binding IsBeginnerMode, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- TAB: CONNECTION DIARY -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentTab}" Value="Diary">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+
+                    <StackPanel DataContext="{Binding Diary}">
+                        <controls:PageHeader Title="Connection diary" Glyph="&#xE787;"
+                                             Subtitle="How your connection did hour by hour, every day NetPulse was running, recording or not. Kept on this PC for 31 days. Reference servers only: not your game's server." />
+
+                        <UniformGrid Columns="4" Margin="0,0,0,16">
+                            <controls:StatTile Margin="0,0,8,0" Label="Measured" Glyph="&#xE823;" Value="{Binding MeasuredText}" Caption="{Binding MeasuredCaption}" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Drops" Glyph="&#xF384;" Accent="#F87171" Value="{Binding DropsText}" Caption="{Binding DropsCaption}" />
+                            <controls:StatTile Margin="8,0,8,0" Label="Probe loss" Glyph="&#xE8AB;" Accent="#F472B6" Value="{Binding LossText}" Caption="{Binding LossCaption}" />
+                            <controls:StatTile Margin="8,0,0,0" Label="Worst hour" Glyph="&#xE9D2;" Accent="#A78BFA" Value="{Binding WorstText}" Caption="{Binding WorstCaption}" />
+                        </UniformGrid>
+
+                        <!-- hour by hour -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Hour by hour" Style="{StaticResource CardTitle}" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding MetricChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Metric, Mode=TwoWay}"
+                                              Width="170" Margin="0,0,8,0" AutomationProperties.Name="Diary colours by" />
+                                    <ComboBox Grid.Column="2" ItemsSource="{Binding RangeChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Days, Mode=TwoWay}"
+                                              Width="150" AutomationProperties.Name="Diary range" />
+                                </Grid>
+                                <TextBlock Text="{Binding Summary}" FontSize="14" LineHeight="20" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,14" AutomationProperties.Name="Diary summary" />
+
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="104" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding HourLabels}" Focusable="False">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="24" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate><TextBlock Text="{Binding}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="2,0,0,0" TextWrapping="NoWrap" /></DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Rows}" AutomationProperties.Name="Connection diary chart" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="104" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Label}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}" Focusable="False">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="24" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border x:Name="cell" Height="20" Margin="1.5" CornerRadius="4" Background="{DynamicResource BgInputBrush}" Opacity="{Binding Opacity}" ToolTip="{Binding Tip}" />
+                                                            <DataTemplate.Triggers>
+                                                                <DataTrigger Binding="{Binding Level}" Value="Good"><Setter TargetName="cell" Property="Background" Value="{DynamicResource AccentGreenBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Level}" Value="Fair"><Setter TargetName="cell" Property="Background" Value="{DynamicResource AccentAmberBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Level}" Value="Poor"><Setter TargetName="cell" Property="Background" Value="{DynamicResource AccentRedBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Level}" Value="Thin">
+                                                                    <Setter TargetName="cell" Property="Background" Value="Transparent" />
+                                                                    <Setter TargetName="cell" Property="BorderBrush" Value="{DynamicResource TextTertiaryBrush}" />
+                                                                    <Setter TargetName="cell" Property="BorderThickness" Value="1.5" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Level}" Value="Future">
+                                                                    <Setter TargetName="cell" Property="Background" Value="Transparent" />
+                                                                    <Setter TargetName="cell" Property="ToolTip" Value="{x:Null}" />
+                                                                </DataTrigger>
+                                                            </DataTemplate.Triggers>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- legend -->
+                                <WrapPanel Margin="104,12,0,0">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource AccentGreenBrush}" /><TextBlock Text="Good" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="6,0,0,0" VerticalAlignment="Center" /></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource AccentAmberBrush}" /><TextBlock Text="Worth a look" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="6,0,0,0" VerticalAlignment="Center" /></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource AccentRedBrush}" /><TextBlock Text="A drop, or lag you would feel" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="6,0,0,0" VerticalAlignment="Center" /></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><Border Width="14" Height="14" CornerRadius="3" BorderBrush="{DynamicResource TextTertiaryBrush}" BorderThickness="1.5" /><TextBlock Text="Too little measured to rate" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="6,0,0,0" VerticalAlignment="Center" /></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource BgInputBrush}" /><TextBlock Text="NetPulse not running" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="6,0,0,0" VerticalAlignment="Center" /></StackPanel>
+                                </WrapPanel>
+                                <TextBlock Text="Fainter colours: only part of that hour was measured. Hover an hour for its numbers." Style="{StaticResource CaptionText}" Margin="104,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- drops -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="Drops" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="Every time the internet stopped answering while NetPulse was measuring, how long it lasted, and where the break was." Style="{StaticResource CaptionText}" Margin="0,4,0,12" />
+                                <TextBlock Text="No drops in these days." Style="{StaticResource CaptionText}" Visibility="{Binding HasDrops, Converter={StaticResource InverseBoolToVis}}" />
+                                <ItemsControl ItemsSource="{Binding Drops}" AutomationProperties.Name="Drops" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="26" />
+                                                    <ColumnDefinition Width="210" />
+                                                    <ColumnDefinition Width="250" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <controls:StatusMark Level="Poor" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                                <TextBlock Grid.Column="1" Text="{Binding When}" FontSize="13.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="NoWrap" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Duration}" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" Margin="0,0,12,0" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Where}" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding MoreDropsText}" Style="{StaticResource CaptionText}" Visibility="{Binding HasMoreDrops, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Border>
+
+                        <controls:Callout Kind="Info" Title="How the diary works" Margin="0,0,0,12"
+                                          Text="Every second NetPulse runs, the plain-ping reference servers are measured anyway; the diary keeps what each hour added up to (stored in diary.json, about a few hundred kilobytes). Ping above usual compares each server with its own usual, so a far-away server never looks bad. A drop is counted when nothing on the internet answers for a few seconds; it says whether your router still answered (the break was at your modem or provider) or not (cable, Wi-Fi or the router). The exported report (Ctrl+E) includes the diary, as evidence for your provider." />
+                        <Button Content="Clear the diary" Style="{StaticResource OutlineButton}" Command="{Binding ClearCommand}" HorizontalAlignment="Left" Margin="0,0,0,16" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -2276,6 +2635,8 @@
                                     </Grid>
                                     <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding OverlayShowActivity, Mode=TwoWay}" Margin="0,14,0,0"
                                               Content="Show this PC's download and upload in the mini overlay" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding OverlayShowGraph, Mode=TwoWay}" Margin="0,10,0,0"
+                                              Content="Show a graph of the last minute of ping in the mini overlay" />
                                 </StackPanel>
                             </Border>
 
@@ -2368,6 +2729,8 @@
                                     <TextBlock Text="A Windows notification when the connection drops and when it comes back, when your router stops answering, when packets are being lost, or when Windows switches network. At most one of each kind every 3 minutes; latency spikes and Wi-Fi roaming stay in the timeline. Windows hides notifications while a full-screen game has focus if Do not disturb / game mode is on." Style="{StaticResource CaptionText}" Margin="0,4,0,14" />
                                     <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding DesktopAlerts, Mode=TwoWay}" Content="Show desktop alerts" />
                                     <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AlertsOnlyInBackground, Mode=TwoWay}" IsEnabled="{Binding DesktopAlerts}" Content="Only while NetPulse is in the background" Margin="0,10,0,0" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding GameStartCheck, Mode=TwoWay}" IsEnabled="{Binding DesktopAlerts}" Margin="0,10,0,0"
+                                              Content="When your game starts, show whether the connection is ready to play" />
                                 </StackPanel>
                             </Border>
 
@@ -2516,7 +2879,7 @@
                                     <TextBlock Text="{Binding ProviderDisclosure}" Style="{StaticResource CaptionText}" Margin="0,2,0,12" />
                                     <TextBlock Text="Where your data is kept" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
                                     <TextBlock Text="{Binding DataFolder}" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource AccentBlueHoverBrush}" Margin="0,2,0,2" />
-                                    <TextBlock Text="Settings and recordings live here, never beside the program. NetPulse does not collect analytics or telemetry and never uploads a recording." Style="{StaticResource CaptionText}" />
+                                    <TextBlock Text="Settings, recordings, test results, the connection diary and site icons live here, never beside the program. NetPulse does not collect analytics or telemetry and never uploads a recording." Style="{StaticResource CaptionText}" />
                                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                         <Button Content="Open data folder" Command="{Binding OpenDataFolderCommand}" Style="{StaticResource OutlineButton}" />
                                         <Button Content="Load default settings" Command="{Binding DefaultsCommand}" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" />

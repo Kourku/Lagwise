@@ -85,6 +85,11 @@ public sealed class GameMonitorService : IDisposable
     /// </summary>
     public TimeSpan AutoStopGrace { get; set; } = TimeSpan.FromSeconds(20);
     public event EventHandler? Updated;
+    /// <summary>
+    /// The selected game was started while NetPulse watched for it (not when it was already running as watching began).
+    /// Raised from the polling thread, whether or not a recording runs.
+    /// </summary>
+    public event EventHandler<GameProfile>? GameLaunched;
 
     public GameMonitorService(
         MeasurementEngine engine, SessionRecorder recorder, EventLogService events, Func<AppSettings> settings,
@@ -219,6 +224,8 @@ public sealed class GameMonitorService : IDisposable
             update = watcher.Observe(processes, now);
             monitoring = _monitoring;
         }
+        if (watcher.Observations > 1 && update.Changes.Any(c => c.Kind == GameProcessChangeKind.GameStarted))
+            GameLaunched?.Invoke(this, watcher.Profile);
 
         if (!monitoring && update.State.State == GameRunState.Running && _settings().AutoRecordGame && !_recorder.IsRecording)
         {

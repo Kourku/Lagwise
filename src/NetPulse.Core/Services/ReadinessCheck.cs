@@ -141,6 +141,30 @@ public static class ReadinessCheck
         return new("wifi", title, CheckStatus.Good, $"Strong ({signal}%). A cable is still steadier for competitive games.");
     }
 
+    /// <summary>
+    /// The notification shown when the selected game starts: the verdict, and the one or two items to look at
+    /// (Windows shows about 200 characters).
+    /// </summary>
+    public static (string Title, string Message, bool Problem) GameStartNotice(string game, ReadinessResult r)
+    {
+        var watch = r.Items.Where(i => i.Status is CheckStatus.Poor or CheckStatus.Fair).OrderByDescending(i => i.Status).ToList();
+        string title = r.Overall switch
+        {
+            CheckStatus.Good => $"{game} started: good to play",
+            CheckStatus.Fair => $"{game} started: playable, one thing to watch",
+            CheckStatus.Poor => $"{game} started: expect lag",
+            _ => $"{game} started"
+        };
+        string message = r.Overall switch
+        {
+            CheckStatus.Unknown => "NetPulse is still measuring your connection. The Overview has the result in a few seconds.",
+            CheckStatus.Good => "Nothing on your side of the connection looks wrong. NetPulse keeps watching while you play.",
+            _ => string.Join(" ", watch.Take(2).Select(i => $"{i.Title}: {i.Detail}"))
+        };
+        if (message.Length > 200) message = message[..199] + "…";
+        return (title, message, r.Overall is CheckStatus.Poor or CheckStatus.Fair);
+    }
+
     /// <summary>Real-use observations older than this are not mentioned: the connection or router may have changed.</summary>
     public static readonly TimeSpan RealLoadRelevance = TimeSpan.FromDays(14);
 

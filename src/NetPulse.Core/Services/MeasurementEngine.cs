@@ -43,6 +43,18 @@ public class MeasurementEngine
     private int _zeroSuccessCycles;
     private DateTime? _firstFailedCycleUtc;
     private bool _internetDown;
+    /// <summary>An internet server answered at least once: from then on, internet servers all going silent is an outage.</summary>
+    private bool _internetSeenUp;
+    /// <summary>The router answered during the current run of failed cycles.</summary>
+    private bool _routerAnsweredInFailedRun;
+
+    /// <summary>Marks a "Disconnected" event whose break was beyond the router (the router kept answering).</summary>
+    public const string BeyondRouterContext = "beyond-router";
+    /// <summary>Marks a "Disconnected" event where the router did not answer either.</summary>
+    public const string LocalContext = "local";
+
+    /// <summary>True while the internet is considered unreachable (between a "Disconnected" and its "Restored").</summary>
+    public bool IsInternetDown { get { lock (_ingestLock) return _internetDown; } }
 
     private CancellationTokenSource? _cts;
     private Task? _monitoringTask;
@@ -493,7 +505,13 @@ public class MeasurementEngine
         }
     }
 
-    /// <summary>Declares the Internet unreachable only after several consecutive cycles with no successful probe at all.</summary>
+    /// <summary>
+    /// Declares the Internet unreachable after several consecutive cycles in which nothing on the internet answered.
+    /// The router and the DNS lookup do not count as the internet: a router keeps answering when the modem or the
+    /// provider is down (the most common outage), and it can answer DNS lookups from its cache. Internet servers going
+    /// silent only counts once one of them has answered since start, so a network that blocks pings is not "down";
+    /// nothing answering at all, the router included, always counts.
+    /// </summary>
     private void TrackConnectivity(IReadOnlyList<Measurement> cycle, DateTime cycleTime)
     {
         if (cycle.Count == 0) return;
@@ -501,30 +519,42 @@ public class MeasurementEngine
         // endpoints chosen from a game process say nothing about whether the Internet itself is down
         cycle = cycle.Where(m => !m.TargetId.StartsWith("game:", StringComparison.Ordinal)).ToList();
         if (cycle.Count == 0) return;
-        bool anySuccess = cycle.Any(m => m.Success);
-        if (anySuccess)
+
+        bool IsLocal(Measurement m) => FindConfig(m.TargetId) is { } c && (c.IsGateway || c.IsDnsResolver);
+        var internet = cycle.Where(m => !IsLocal(m)).ToList();
+        bool internetAnswered = internet.Any(m => m.Success);
+        bool routerAnswered = cycle.Any(m => m.Success && FindConfig(m.TargetId)?.IsGateway == true);
+        if (internetAnswered) _internetSeenUp = true;
+
+        bool down = !cycle.Any(m => m.Success) || (internet.Count > 0 && !internetAnswered && _internetSeenUp);
+        if (!down)
         {
             if (_internetDown)
             {
                 var since = _firstFailedCycleUtc ?? cycleTime;
                 _eventLogService.LogEvent("Restored", "Info",
-                    $"Connectivity restored after about {(cycleTime - since).TotalSeconds:F0} s without any successful probe.",
+                    $"Back online: the internet answers again after about {(cycleTime - since).TotalSeconds:F0} s without a reply.",
                     Sessions.SessionRecorder.ConnectivityScope, timestamp: cycleTime);
             }
             _internetDown = false;
             _zeroSuccessCycles = 0;
             _firstFailedCycleUtc = null;
+            _routerAnsweredInFailedRun = false;
             return;
         }
 
         _firstFailedCycleUtc ??= cycleTime;
         _zeroSuccessCycles++;
+        _routerAnsweredInFailedRun |= routerAnswered;
         if (_zeroSuccessCycles >= DisconnectCycleThreshold && !_internetDown)
         {
             _internetDown = true;
+            bool beyond = _routerAnsweredInFailedRun;
             _eventLogService.LogEvent("Disconnected", "Critical",
-                $"No probe to any target succeeded for {_zeroSuccessCycles} consecutive cycles. Connection appears to be down.",
-                Sessions.SessionRecorder.ConnectivityScope, timestamp: _firstFailedCycleUtc);
+                beyond
+                    ? $"Nothing on the internet answered for {_zeroSuccessCycles} cycles in a row, while your router did: the break is beyond your home network, at your modem or your provider."
+                    : $"Nothing answered for {_zeroSuccessCycles} cycles in a row, not even your router: this PC lost its connection to your network (cable, Wi-Fi or the router itself).",
+                Sessions.SessionRecorder.ConnectivityScope, contextData: beyond ? BeyondRouterContext : LocalContext, timestamp: _firstFailedCycleUtc);
         }
     }
 

@@ -63,6 +63,7 @@ public partial class MainWindow : Window
             NetPulse.App.Themes.ThemeManager.Changed += (_, _) => WindowStyling.Apply(this, NetPulse.App.Themes.ThemeManager.IsLight);
             ApplyAppearance();
             App.Host.Events.EventLogged += (_, evt) => Dispatcher.InvokeAsync(() => MaybeAlert(evt));
+            App.Host.GameMonitor.GameLaunched += (_, game) => Dispatcher.InvokeAsync(() => ShowGameStartCheck(game));
 
             // tray hover text: a glance at the connection without opening the window
             _trayTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(5), System.Windows.Threading.DispatcherPriority.Background, (_, _) => UpdateTrayTooltip(vm), Dispatcher);
@@ -94,6 +95,8 @@ public partial class MainWindow : Window
         }
         else if (mods == ctrl && key == System.Windows.Input.Key.OemComma) { vm.CurrentTab = "Settings"; e.Handled = true; }
         else if (mods == ctrl && key == System.Windows.Input.Key.H) { vm.CurrentTab = "History"; e.Handled = true; }
+        else if (mods == ctrl && key == System.Windows.Input.Key.D) { vm.CurrentTab = "Diary"; e.Handled = true; }
+        else if (mods == ctrl && key == System.Windows.Input.Key.K) { vm.CurrentTab = "Sites"; e.Handled = true; }
         else if (mods == System.Windows.Input.ModifierKeys.None && key == System.Windows.Input.Key.F1) { vm.CurrentTab = "Help"; e.Handled = true; }
         else if (mods == ctrl && key == System.Windows.Input.Key.E) { vm.ExportReportCommand.Execute(null); e.Handled = true; }
         else if (mods == (ctrl | System.Windows.Input.ModifierKeys.Shift) && key == System.Windows.Input.Key.C) { vm.CopySummaryCommand.Execute(null); e.Handled = true; }
@@ -144,6 +147,19 @@ public partial class MainWindow : Window
         // a short confirmation the player can hear in game; a different sound when nothing is being recorded
         if (ok) System.Media.SystemSounds.Asterisk.Play();
         else System.Media.SystemSounds.Hand.Play();
+    }
+
+    /// <summary>
+    /// The selected game just started: one notification with the "Ready to play?" verdict, so a problem on your side is
+    /// known before the match, not halfway through it. Clicking it opens the Overview.
+    /// </summary>
+    private void ShowGameStartCheck(NetPulse.Core.Games.GameProfile game)
+    {
+        var settings = App.Host.Settings;
+        if (!settings.DesktopAlerts || !settings.GameStartCheck || _trayManager == null || DataContext is not MainViewModel vm) return;
+        if (settings.AlertsOnlyInBackground && IsVisible && IsActive && WindowState != WindowState.Minimized) return;
+        var (title, message, problem) = NetPulse.Core.Services.ReadinessCheck.GameStartNotice(game.DisplayName, vm.EvaluateReadiness());
+        _trayManager.ShowNotification(title, message, problem ? System.Windows.Forms.ToolTipIcon.Warning : System.Windows.Forms.ToolTipIcon.Info, "Dashboard");
     }
 
     /// <summary>Desktop notification for the few events that deserve one (see AlertPolicy); clicking it opens the timeline.</summary>

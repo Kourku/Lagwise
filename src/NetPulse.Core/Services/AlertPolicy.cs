@@ -33,7 +33,12 @@ public sealed class AlertPolicy
             case "Disconnected":
                 if (!Allowed("down", now)) return null;
                 _toldDisconnected = true;
-                return new DesktopAlert("Connection lost", "Nothing on the Internet is answering. NetPulse will tell you when it is back.", true);
+                return new DesktopAlert("Connection lost", e.ContextData switch
+                {
+                    MeasurementEngine.BeyondRouterContext => "Your router answers, but nothing on the internet does: the break is at your modem or your provider. NetPulse will tell you when it is back.",
+                    MeasurementEngine.LocalContext => "Not even your router answers: check the cable or Wi-Fi. NetPulse will tell you when it is back.",
+                    _ => "Nothing on the internet is answering. NetPulse will tell you when it is back."
+                }, true);
 
             case "Restored" when e.TargetName == SessionRecorder.ConnectivityScope:
                 if (!_toldDisconnected) return null;   // only close an alert we actually opened

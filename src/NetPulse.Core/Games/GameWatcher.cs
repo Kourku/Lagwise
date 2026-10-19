@@ -29,6 +29,8 @@ public sealed class GameWatcher
     public GameProcessState? Current { get; private set; }
     /// <summary>Number of times the game has gone from not running to running since this watcher was created.</summary>
     public int LaunchCount { get; private set; }
+    /// <summary>Process readings so far. A "start" on the very first one means the game was already running when watching began.</summary>
+    public int Observations { get; private set; }
 
     public GameWatcher(GameProfile profile)
     {
@@ -37,6 +39,7 @@ public sealed class GameWatcher
 
     public WatchUpdate Observe(IEnumerable<ProcessInfo> processes, DateTime nowUtc)
     {
+        Observations++;
         var state = GameProcessDetector.Detect(Profile, processes);
         var changes = new List<GameProcessChange>();
         var identities = state.GameProcesses.Select(p => p.Identity).ToHashSet();

@@ -135,6 +135,8 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool MarkLagSound { get => _lagSound; set => Set(ref _lagSound, value); }
     public bool DesktopAlerts { get => _alerts; set => Set(ref _alerts, value); }
     public bool AlertsOnlyInBackground { get => _alertsBg; set => Set(ref _alertsBg, value); }
+    private bool _gameStartCheck;
+    public bool GameStartCheck { get => _gameStartCheck; set => Set(ref _gameStartCheck, value); }
     private bool _alerts, _alertsBg;
     public int RecordingRetentionDays { get => _retentionDays; set => Set(ref _retentionDays, value); }
     public int HeavyTrafficMbps { get => _heavyMbps; set => Set(ref _heavyMbps, value); }
@@ -219,6 +221,7 @@ public sealed class SettingsViewModel : ViewModelBase
             MarkLagSound = d.MarkLagSound;
             DesktopAlerts = d.DesktopAlerts;
             AlertsOnlyInBackground = d.AlertsOnlyInBackground;
+            GameStartCheck = d.GameStartCheck;
             RecordingRetentionDays = Nearest(RetentionChoices, d.RecordingRetentionDays);
             HeavyTrafficMbps = Nearest(HeavyTrafficChoices, d.HeavyTrafficMbps);
             LatencySpikeText = d.LatencySpikeThresholdMs.ToString("0.#", CultureInfo.CurrentCulture);
@@ -274,6 +277,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.MarkLagSound = MarkLagSound;
         _draft.DesktopAlerts = DesktopAlerts;
         _draft.AlertsOnlyInBackground = AlertsOnlyInBackground;
+        _draft.GameStartCheck = GameStartCheck;
         _draft.RecordingRetentionDays = RecordingRetentionDays;
         _draft.HeavyTrafficMbps = HeavyTrafficMbps;
         _draft.LatencySpikeThresholdMs = spike;

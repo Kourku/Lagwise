@@ -201,6 +201,20 @@ try {
     Check 'Network activity shows live speeds and the graph' (($null -ne (Wait-For { Find-Like '^Network activity graph$' } 5)) -and ($null -ne (Find-Like '^Download now$'))) ''
     Check 'Network activity lists the programs online' ($null -ne (Wait-For { Find-Like '^Programs online$' } 8)) ''
 
+    # Site check: one site checked for real; any verdict will do, the page must reach one
+    Click-Element (Find-Like '^Site check$')
+    Check 'Site check lists the popular sites' (($null -ne (Wait-For { Find-Like '^YouTube$' } 5)) -and ($null -ne (Find-Like '^Reddit$'))) ''
+    $again = Find-Named 'Check YouTube again' 'ControlType.Button'
+    if ($again) { ($again.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke() }
+    $verdict = Wait-For { Find-Like '^(Up|Slow|Unreachable|Blocked by your DNS|Blocked on the way|Blocked on this PC|Intercepted|Legal block|Problem at the site|Name not found|No internet)$' } 30
+    Check 'A site check reaches a verdict' ($null -ne $verdict) $(if ($verdict) { $verdict.Current.Name })
+
+    # Connection diary, and its 24-hour strip on the Overview
+    Click-Element (Find-Like '^Connection diary$')
+    Check 'The connection diary shows its hour-by-hour chart' (($null -ne (Wait-For { Find-Like '^Connection diary chart$' } 5)) -and ($null -ne (Find-Like '^Diary summary$'))) ''
+    Click-Element (Find-Like '^Overview$')
+    Check 'The Overview shows the last 24 hours' ($null -ne (Wait-For { Find-Like '^Last 24 hours chart$' } 5)) ''
+
     # stored results, seeded before the start
     Click-Element (Find-Like '^Speed test$')
     Check 'Speed test keeps results over time' (($null -ne (Wait-For { Find-Like '^Typical of your 4 tests' } 5)) -and ($null -ne (Find-Like '^Recent results$'))) ''

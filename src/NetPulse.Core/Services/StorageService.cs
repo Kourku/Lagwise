@@ -66,7 +66,9 @@ public class StorageService
         BufferbloatResult? bufferbloat = null,
         SpeedTestResult? speedTest = null,
         IReadOnlyList<TestRecord>? tests = null,
-        Func<DateTime, DateTime>? toLocal = null)
+        Func<DateTime, DateTime>? toLocal = null,
+        IReadOnlyList<string>? diaryLines = null,
+        IReadOnlyList<Sites.SiteResult>? sites = null)
     {
         var local = toLocal ?? (t => DateTime.SpecifyKind(t, DateTimeKind.Utc).ToLocalTime());
         string Clock(DateTime utc) => local(utc).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -186,6 +188,29 @@ public class StorageService
                 };
                 sb.AppendLine($"| {local(t.T).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} | {what} | {(t.Connection.Length > 0 ? t.Connection : "-")} | {result} |");
             }
+            sb.AppendLine();
+        }
+
+        if (diaryLines != null && diaryLines.Count > 0)
+        {
+            sb.AppendLine("## Connection Diary (last 14 days)");
+            sb.AppendLine();
+            sb.AppendLine("Hour by hour while NetPulse was running, recording or not. Ping above usual compares each reference server with its own usual; a drop is a stretch when nothing on the internet answered.");
+            sb.AppendLine();
+            foreach (var line in diaryLines) sb.AppendLine(line);
+            sb.AppendLine();
+        }
+
+        if (sites != null && sites.Count > 0)
+        {
+            sb.AppendLine("## Site Check");
+            sb.AppendLine();
+            sb.AppendLine($"Checked {Clock(sites.Max(s => s.CheckedUtc))}. Each site was visited from this PC step by step (name lookup with your DNS and with public DNS, connection, secure handshake, answer).");
+            sb.AppendLine();
+            sb.AppendLine("| Site | Result | What was measured |");
+            sb.AppendLine("|---|---|---|");
+            foreach (var r in sites)
+                sb.AppendLine($"| {r.Site.Name} ({r.Site.Host}) | {r.Headline} | {r.Explanation.Replace("|", "/")} |");
             sb.AppendLine();
         }
 

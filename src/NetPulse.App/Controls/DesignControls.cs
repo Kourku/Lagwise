@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using Control = System.Windows.Controls.Control;
 using System.Windows.Media;
@@ -95,6 +96,73 @@ public class EmptyState : Control
     protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new TextBlockLikePeer(this, () => TextBlockLikePeer.Join(Title, Text));
 }
 
+/// <summary>
+/// The NetPulse mark: a pulse line across a rounded square, drawn as vectors so it stays sharp from the 16-pixel tray
+/// icon to the title bar. The app icon (app.ico) is rendered from <see cref="Draw"/> too.
+/// </summary>
+public class LogoMark : FrameworkElement
+{
+    private static readonly Color From = Color.FromRgb(0x63, 0x66, 0xF1), To = Color.FromRgb(0xA8, 0x55, 0xF7);
+
+    protected override void OnRender(DrawingContext dc) => Draw(dc, Math.Min(ActualWidth, ActualHeight));
+
+    protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new TextBlockLikePeer(this, () => "NetPulse");
+
+    public static void Draw(DrawingContext dc, double size)
+    {
+        if (size <= 0) return;
+        double k = size / 64.0;
+        var square = new RectangleGeometry(new Rect(0, 0, size, size), 15 * k, 15 * k);
+        square.Freeze();
+        var fill = new LinearGradientBrush(From, To, new Point(0, 0), new Point(1, 1));
+        fill.Freeze();
+        dc.DrawGeometry(fill, null, square);
+
+        // a soft light from the top, kept inside the rounded square
+        dc.PushClip(square);
+        var light = new LinearGradientBrush(Color.FromArgb(64, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), new Point(0, 0), new Point(0, 1));
+        light.Freeze();
+        dc.DrawRectangle(light, null, new Rect(0, 0, size, size * 0.6));
+        dc.Pop();
+
+        // the pulse: flat, a beat, flat again, ending in a dot (the probe coming back)
+        double stroke = size < 24 ? 7.5 * k : 5.4 * k;
+        var pen = new Pen(Brushes.White, stroke) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        pen.Freeze();
+        var points = new[] { (9.0, 35.0), (20.0, 35.0), (25.5, 21.0), (32.5, 47.0), (38.5, 27.0), (42.5, 35.0), (47.0, 35.0) };
+        var line = new StreamGeometry();
+        using (var g = line.Open())
+        {
+            g.BeginFigure(new Point(points[0].Item1 * k, points[0].Item2 * k), false, false);
+            foreach (var (x, y) in points.Skip(1)) g.LineTo(new Point(x * k, y * k), true, true);
+        }
+        line.Freeze();
+        dc.DrawGeometry(null, pen, line);
+        dc.DrawEllipse(Brushes.White, null, new Point(54.5 * k, 35 * k), (size < 24 ? 5.2 : 4.4) * k, (size < 24 ? 5.2 : 4.4) * k);
+    }
+}
+
+/// <summary>
+/// A round status mark that reads without colour: a tick (good), "!" (keep an eye on it), a cross (problem), a dash
+/// (unknown) or dots (checking). Screen readers hear the word.
+/// </summary>
+public class StatusMark : Control
+{
+    public static readonly DependencyProperty LevelProperty = DependencyProperty.Register(nameof(Level), typeof(string), typeof(StatusMark), new PropertyMetadata("Unknown"));
+
+    /// <summary>"Good", "Fair", "Poor", "Unknown" or "Busy".</summary>
+    public string Level { get => (string)GetValue(LevelProperty); set => SetValue(LevelProperty, value); }
+
+    protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new TextBlockLikePeer(this, () => Level switch
+    {
+        "Good" => "Good",
+        "Fair" => "Worth a look",
+        "Poor" => "Problem",
+        "Busy" => "Checking",
+        _ => "Unknown"
+    });
+}
+
 /// <summary>A metric card: icon, label (with an explanation on hover), big value with unit, and a caption.</summary>
 public class StatTile : Control
 {
@@ -107,6 +175,10 @@ public class StatTile : Control
     public static readonly DependencyProperty AccentProperty = DependencyProperty.Register(nameof(Accent), typeof(Brush), typeof(StatTile), new PropertyMetadata(null));
     public static readonly DependencyProperty BadgeProperty = DependencyProperty.Register(nameof(Badge), typeof(string), typeof(StatTile), new PropertyMetadata(""));
     public static readonly DependencyProperty BadgeBrushProperty = DependencyProperty.Register(nameof(BadgeBrush), typeof(Brush), typeof(StatTile), new PropertyMetadata(null));
+    public static readonly DependencyProperty BadgeLevelProperty = DependencyProperty.Register(nameof(BadgeLevel), typeof(string), typeof(StatTile), new PropertyMetadata("Unknown"));
+
+    /// <summary>"Good", "Fair", "Poor" or "Unknown": picks the symbol and tint of the rating, so it reads without colour.</summary>
+    public string BadgeLevel { get => (string)GetValue(BadgeLevelProperty); set => SetValue(BadgeLevelProperty, value); }
 
     /// <summary>One or two plain words rating the value ("Steady", "Higher than usual"); hidden when empty.</summary>
     public string Badge { get => (string)GetValue(BadgeProperty); set => SetValue(BadgeProperty, value); }

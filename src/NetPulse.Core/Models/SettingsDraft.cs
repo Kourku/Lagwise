@@ -86,6 +86,7 @@ public sealed class SettingsDraft
     public bool OverlayShowActivity { get; set; }
     public bool DesktopAlerts { get; set; }
     public bool AlertsOnlyInBackground { get; set; }
+    public bool GameStartCheck { get; set; }
     public int RecordingRetentionDays { get; set; }
     public List<TargetDraft> Targets { get; set; } = new();
 
@@ -110,6 +111,7 @@ public sealed class SettingsDraft
         OverlayShowActivity = s.OverlayShowActivity,
         DesktopAlerts = s.DesktopAlerts,
         AlertsOnlyInBackground = s.AlertsOnlyInBackground,
+        GameStartCheck = s.GameStartCheck,
         RecordingRetentionDays = s.RecordingRetentionDays,
         Targets = s.Targets.Select(t => new TargetDraft
         {
@@ -156,6 +158,7 @@ public sealed class SettingsDraft
         settings.OverlayShowActivity = OverlayShowActivity;
         settings.DesktopAlerts = DesktopAlerts;
         settings.AlertsOnlyInBackground = AlertsOnlyInBackground;
+        settings.GameStartCheck = GameStartCheck;
         settings.RecordingRetentionDays = RecordingRetentionDays;
 
         var existing = settings.Targets.ToDictionary(t => t.Id);

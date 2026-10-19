@@ -16,7 +16,8 @@ public static class StatusSummary
 {
     public const int MaxServers = 6;
 
-    public static string Build(ReadinessResult readiness, IReadOnlyList<TargetMetrics> metrics, NetworkInterfaceInfo? nic, DateTime localNow, string appVersion)
+    /// <param name="historyLine">One line about the last days from the connection diary, or null.</param>
+    public static string Build(ReadinessResult readiness, IReadOnlyList<TargetMetrics> metrics, NetworkInterfaceInfo? nic, DateTime localNow, string appVersion, string? historyLine = null)
     {
         var inv = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
@@ -51,6 +52,7 @@ public static class StatusSummary
         foreach (var i in readiness.Items.Where(i => i.Status is CheckStatus.Poor or CheckStatus.Fair))
             sb.AppendLine($"  {i.Title}: {i.Detail}");
 
+        if (!string.IsNullOrEmpty(historyLine)) sb.AppendLine(historyLine);
         sb.Append("Measured by NetPulse on this PC; it does not measure game-server ping.");
         return sb.ToString();
     }

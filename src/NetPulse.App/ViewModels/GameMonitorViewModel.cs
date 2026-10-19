@@ -16,12 +16,22 @@ using NetPulse.Core.Sessions;
 
 namespace NetPulse.App.ViewModels;
 
-public sealed class GameProfileItem
+public sealed class GameProfileItem : ViewModelBase
 {
-    public GameProfileItem(GameProfile profile) { Profile = profile; }
+    private ImageSource? _icon;
+
+    public GameProfileItem(GameProfile profile, ImageSource? icon = null) { Profile = profile; _icon = icon; }
     public GameProfile Profile { get; }
     public string Id => Profile.Id;
     public string Display => $"{Profile.DisplayName}  ({StatusLabel(Profile.Status)})";
+    public string Name => Profile.DisplayName;
+    public string StatusText => StatusLabel(Profile.Status);
+    public string Monogram => GameIcons.MonogramOf(Profile.Id, Profile.DisplayName);
+    /// <summary>The game's own icon once NetPulse has seen it running (kept on disk), else null and the initials show.</summary>
+    public ImageSource? Icon { get => _icon; set { if (SetProperty(ref _icon, value)) OnPropertyChanged(nameof(HasIcon)); } }
+    public bool HasIcon => _icon != null;
+    /// <summary>Set once an icon was looked for this session, so a program without one is not read every poll.</summary>
+    public bool IconTried { get; set; }
     public override string ToString() => Display;
 
     public static string StatusLabel(SupportStatus s) => s switch
@@ -198,7 +208,7 @@ public sealed class GameMonitorViewModel : ViewModelBase
         _monitor = host.GameMonitor;
         _dispatcher = dispatcher;
 
-        Profiles = new ObservableCollection<GameProfileItem>(GameProfiles.All.Select(p => new GameProfileItem(p)));
+        Profiles = new ObservableCollection<GameProfileItem>(GameProfiles.All.Select(p => new GameProfileItem(p, GameIcons.Load(host.DataDirectory, p.Id))));
 
         StartCommand = new RelayCommand(Start, () => !IsMonitoring && SelectedProfile != null);
         StopCommand = new RelayCommand(Stop, () => IsMonitoring);
@@ -484,10 +494,29 @@ public sealed class GameMonitorViewModel : ViewModelBase
         CommandManager.InvalidateRequerySuggested();
     }
 
+    /// <summary>The first time the selected game (or its launcher) is seen running, its program's icon becomes the game's icon.</summary>
+    private void CaptureIcon(GameMonitorSnapshot snap)
+    {
+        var item = SelectedProfile;
+        if (item == null || item.HasIcon || item.IconTried || snap.Process == null || snap.Profile?.Id != item.Id) return;
+        var exe = snap.Process.GameProcesses.Concat(snap.Process.CompanionProcesses)
+            .FirstOrDefault(p => !string.IsNullOrEmpty(p.ExecutablePath) && p.Role is ProcessRole.Game or ProcessRole.Launcher)?.ExecutablePath;
+        if (exe == null) return;
+        item.IconTried = true;
+        _ = CaptureIconAsync(item, exe);
+    }
+
+    private async System.Threading.Tasks.Task CaptureIconAsync(GameProfileItem item, string exe)
+    {
+        var icon = await GameIcons.CaptureAsync(_host.DataDirectory, item.Id, exe);
+        if (icon != null) item.Icon = icon;
+    }
+
     private void Refresh()
     {
         _snapshot = _monitor.Snapshot(_groupRepeats);
         var snap = _snapshot;
+        CaptureIcon(snap);
 
         // process status
         if (snap.Profile == null)

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NetPulse.Core.Models;
 
@@ -49,6 +50,19 @@ public class AppSettings
     public bool DesktopAlerts { get; set; } = true;
     /// <summary>Only alert while NetPulse is not the active window (the page already shows the problem).</summary>
     public bool AlertsOnlyInBackground { get; set; } = true;
+    /// <summary>When the selected game starts, show the "Ready to play?" result as a desktop notification.</summary>
+    public bool GameStartCheck { get; set; } = true;
+    /// <summary>Show a small graph of the last minute of reference ping in the mini overlay.</summary>
+    public bool OverlayShowGraph { get; set; } = true;
+
+    // Site check
+    /// <summary>Sites added by hand on the Site check page (host names).</summary>
+    public List<string> SiteCheckHosts { get; set; } = new();
+    /// <summary>Popular sites taken off the Site check page (their ids).</summary>
+    public List<string> SiteCheckHidden { get; set; } = new();
+    /// <summary>Check the sites every <see cref="SiteCheckEveryMinutes"/> minutes and note changes in the event timeline.</summary>
+    public bool SiteCheckAuto { get; set; } = false;
+    public int SiteCheckEveryMinutes { get; set; } = 15;
 
     // Appearance
     /// <summary>"Dark", "Light" or "System" (follow the Windows app theme).</summary>
@@ -72,6 +86,8 @@ public class AppSettings
     // Configured targets
     public List<TargetConfig> Targets { get; set; } = new();
 
+    public const int MaxSiteCheckHosts = 30;
+
     /// <summary>Clamps persisted values to safe ranges and restores defaults for anything unusable.</summary>
     public void Normalize()
     {
@@ -81,6 +97,10 @@ public class AppSettings
         EventDedupSeconds = System.Math.Clamp(EventDedupSeconds, 0, 600);
         PacketLossNotifyThreshold = System.Math.Clamp(PacketLossNotifyThreshold, 0.1, 100);
         HeavyTrafficMbps = System.Math.Clamp(HeavyTrafficMbps, 0, 10_000);
+        SiteCheckEveryMinutes = System.Math.Clamp(SiteCheckEveryMinutes, 5, 1440);
+        SiteCheckHidden ??= new List<string>();
+        SiteCheckHosts = (SiteCheckHosts ?? new List<string>())
+            .Select(Sites.SiteCatalog.NormalizeHost).Where(h => h != null).Select(h => h!).Distinct().Take(MaxSiteCheckHosts).ToList();
         LatencySpikeNotifyThreshold = System.Math.Clamp(LatencySpikeNotifyThreshold, 5, 10_000);
         RecordingRetentionDays = System.Math.Clamp(RecordingRetentionDays, 0, 3650);
         if (Theme is not ("Dark" or "Light" or "System")) Theme = "Dark";

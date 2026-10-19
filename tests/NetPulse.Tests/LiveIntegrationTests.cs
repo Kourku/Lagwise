@@ -86,8 +86,14 @@ public class LiveIntegrationTests
             Protocol = NetworkProtocol.Https
         };
 
+        // a live test: one retry-worthy blip of the connection (it happens) must not fail the build
         var result = await httpService.ProbeAsync(target, 5000);
-        Assert.True(result.Success);
+        for (int attempt = 1; attempt < 3 && !result.Success; attempt++)
+        {
+            await Task.Delay(1000);
+            result = await httpService.ProbeAsync(target, 5000);
+        }
+        Assert.True(result.Success, result.ErrorMessage);
         Assert.NotNull(result.HttpsBreakdown);
         Assert.True(result.HttpsBreakdown.TotalMs > 0);
         Assert.True(result.HttpsBreakdown.DnsLookupMs >= 0);

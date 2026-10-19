@@ -2,6 +2,40 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.15.0
+
+**New: Site check** (both modes, `Ctrl+K`)
+- Is a site down, or is something between you and it blocking it? Fifteen popular sites are listed (YouTube, X, Reddit, Twitch, Discord, Google, Wikipedia, Instagram, Facebook, TikTok, Netflix, Spotify, Steam, Epic Games, Riot Games), and you can add your own or take any off the list.
+- A check retraces what a browser does and says where it stops: this PC's hosts file, your DNS (your provider's or router's), public DNS over HTTPS (Cloudflare and Google, reached by address so a broken DNS cannot stop them), the connection, the secure handshake and the answer. Open a site for the step-by-step view.
+- Verdicts: Up, Slow, Blocked on this PC, Blocked by your DNS, Blocked on the way (the connection is cut as soon as it names the site: filtering by name, SNI), Intercepted (a certificate that is not the site's: a block page, antivirus or parental controls, a company network or a Wi-Fi sign-in page), Legal block (HTTP 451), Problem at the site, Unreachable, No internet. Each comes with what you can do.
+- **Down for everyone?** Reddit, Twitch, Discord, Wikipedia and Epic Games publish a public status page, read with each check. X's status page only answers with an API key, so it is not used. From one PC a site that is down and a site whose address is blocked look the same; the verdict says so instead of guessing.
+- No account, cookie or key is used, and bot checks are never solved: a bot check already proves the site answers.
+- Nothing is contacted unless you press Check, or switch on the regular check (every 15 minutes, off by default), which notes changes in the event timeline.
+- Each site shows its own icon, fetched from the site as a browser tab shows it, once a month.
+
+**New: Connection diary** (both modes, `Ctrl+D`)
+- How your connection did hour by hour, every day NetPulse runs, recording or not: a heatmap of the last 7, 14 or 30 days, coloured by overall quality, ping above usual, variation, probe loss or drops. Hover any hour for its numbers; fainter hours were only partly measured.
+- Every drop, with its length and where the break was: beyond your router (modem or provider) or with the router silent too (cable, Wi-Fi or the router).
+- A summary: time measured, drops, the worst hour, and whether evenings run above the rest of the day.
+- A **Last 24 hours** strip on the Overview.
+- The exported report gains the diary (one line per day, every drop) and the latest site check; Copy summary gains a line about the last 7 days.
+- Kept on this PC for 31 days (`diary.json`).
+
+**Fixed: "Connection lost" now covers outages beyond your router.** It used to need every probe to fail, the router included. When the modem or the provider is down the router keeps answering, so the most common outage was never reported as one: no desktop alert, no "connection lost" period in recordings. Now nothing on the internet answering for 3 cycles is a drop (once it has answered since NetPulse started, so a network that blocks pings is not "down"), and the timeline and the alert say whether your router still answered.
+
+**New: Ready to play? when your game starts.** When the selected game starts, a desktop notification gives the checklist's verdict ("League of Legends started: good to play", or the items to watch), so a problem on your side is known before the match. Not for a game already running when NetPulse starts. Settings > Desktop alerts.
+
+**Visual refresh**
+- **New NetPulse logo and app icon** (title bar, overlay, taskbar, tray and installer), drawn as vectors so it is sharp at every size.
+- **Ratings read without colour:** the Overview tiles' ratings carry a symbol and a tint (a tick, "!" or a cross), and new status marks show the state in Site check, the overlay and the diary.
+- The Probe loss tile no longer uses a cross as its icon (it looked like an error even at 0%).
+- **Games show their own icon** in the Game Monitor and on the Overview once NetPulse has seen them (or their launcher) running, taken from the program as Explorer shows it; their initials until then.
+- **Mini overlay:** the logo, a status mark for "Ready to play?", and a graph of the last minute of ping (Settings > Appearance).
+
+**Also**
+- The footer says outside services are only contacted when you run a test or a site check; Help lists `Ctrl+D` and `Ctrl+K` and explains drops, the diary, DNS blocks and filtering by name.
+- A live test of HTTPS timing retries a passing network blip twice before failing the build.
+
 ## 0.14.0
 
 **Evidence over time:** NetPulse now keeps what it measures, so a slow evening or a laggy download can be shown rather than remembered.

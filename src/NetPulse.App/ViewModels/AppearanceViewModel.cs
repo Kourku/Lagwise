@@ -85,6 +85,20 @@ public sealed class AppearanceViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Show a graph of the last minute of reference ping in the mini overlay.</summary>
+    public bool OverlayShowGraph
+    {
+        get => _host.Settings.OverlayShowGraph;
+        set
+        {
+            if (_host.Settings.OverlayShowGraph == value) return;
+            _host.Settings.OverlayShowGraph = value;
+            _host.SaveSettings(out _);
+            OnPropertyChanged();
+            Applied?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     /// <summary>Show this PC's live download / upload in the mini overlay.</summary>
     public bool OverlayShowActivity
     {

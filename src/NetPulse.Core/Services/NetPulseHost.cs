@@ -62,6 +62,10 @@ public sealed class NetPulseHost : IDisposable
     public GameMonitorService GameMonitor { get; }
     /// <summary>Speed and Bufferbloat results and ping seen under real load, kept across restarts (<c>test-history.json</c>).</summary>
     public TestHistory Tests { get; }
+    /// <summary>How the connection did hour by hour while NetPulse runs, recording or not, and every drop (<c>diary.json</c>).</summary>
+    public ConnectionDiary Diary { get; }
+    /// <summary>Is a site down, or blocked between this PC and it? Contacts sites only when asked.</summary>
+    public Sites.SiteCheckService SiteChecks { get; }
 
     /// <param name="processSource">Override for tests; defaults to the real Windows process list.</param>
     /// <param name="connectionSource">Override for tests; defaults to the Windows TCP/UDP socket tables.</param>
@@ -99,10 +103,18 @@ public sealed class NetPulseHost : IDisposable
         Tests = new TestHistory(Path.Combine(DataDirectory, "test-history.json"),
             () => LastBufferbloat is { } b ? new[] { TestRecord.FromBufferbloat(b, "") } : Array.Empty<TestRecord>());
 
-        Engine.MeasurementProcessed += (_, m) => Recorder.RecordMeasurement(m);
+        Diary = new ConnectionDiary(Path.Combine(DataDirectory, "diary.json"));
+        SiteChecks = new Sites.SiteCheckService(internetDown: () => Engine.IsInternetDown);
+
+        Engine.MeasurementProcessed += (_, m) =>
+        {
+            Recorder.RecordMeasurement(m);
+            if (IsReferencePing(m)) Diary.AddProbe(m.Timestamp, ConnectionDiary.KeyOf(m.Protocol, m.TargetHost), m.TargetName, m.Success, m.RttMs);
+        };
         Engine.CycleCompleted += (_, t) =>
         {
             Recorder.RecordCycle(t);
+            Diary.AddCycle(t, Settings.MonitoringIntervalMs);
             if (_lastBaselineSample == default) _lastBaselineSample = t;
             else if (t - _lastBaselineSample >= Statistics.BaselineMemory.SampleInterval)
             {
@@ -110,7 +122,13 @@ public sealed class NetPulseHost : IDisposable
                 Engine.SampleBaselines(t);
             }
         };
-        Events.EventLogged += (_, e) => Recorder.RecordEvent(e);
+        Events.EventLogged += (_, e) =>
+        {
+            Recorder.RecordEvent(e);
+            if (e.TargetName != SessionRecorder.ConnectivityScope) return;
+            if (e.EventType == "Disconnected") Diary.OutageStarted(e.Timestamp, e.ContextData == MeasurementEngine.BeyondRouterContext);
+            else if (e.EventType == "Restored") Diary.OutageEnded(e.Timestamp);
+        };
         Recorder.GapDetected += (_, gap) => Events.LogEvent("MonitoringGap", "Info",
             $"NetPulse was not measuring for {gap.DurationSeconds:F0} s (system sleep or stalled monitoring). This is not a network outage.",
             timestamp: gap.EndUtc);
@@ -187,6 +205,11 @@ public sealed class NetPulseHost : IDisposable
             Seconds = (int)Math.Round(h.Duration.TotalSeconds)
         });
     }
+
+    /// <summary>A plain ping to a reference server from Settings (not the router, not the DNS lookup, not a game endpoint).</summary>
+    private bool IsReferencePing(Measurement m) =>
+        m.Protocol == NetworkProtocol.Icmp
+        && Settings.Targets.FirstOrDefault(t => t.Id == m.TargetId) is { IsGateway: false, IsDnsResolver: false };
 
     private bool IsInternetAdapter(string adapterId) =>
         string.IsNullOrEmpty(adapterId) || string.Equals(InternetAdapterActivity()?.Id, adapterId, StringComparison.OrdinalIgnoreCase);
@@ -450,6 +473,7 @@ public sealed class NetPulseHost : IDisposable
         GameMonitor.Dispose(); // stops and saves a game session first, so nothing recorded is lost
         Mtr.Stop();
         Engine.Stop();
+        Diary.Save();   // the hour in progress, so a restart continues it
         StopSession(out _);
         SettingsService.TrySave(out _);
     }

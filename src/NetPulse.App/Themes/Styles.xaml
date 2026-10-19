@@ -776,6 +776,43 @@
     <!-- ===================================================================================== -->
     <!-- Stat tile                                                                               -->
     <!-- ===================================================================================== -->
+    <!-- StatusMark: a filled circle with a symbol, so the state reads without colour -->
+    <Style TargetType="controls:StatusMark">
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:StatusMark">
+                    <Grid>
+                        <Ellipse x:Name="disc" Fill="{DynamicResource BorderStrongBrush}" />
+                        <TextBlock x:Name="glyph" Text="&#xE738;" FontFamily="{StaticResource IconFont}" FontSize="9" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Level" Value="Good">
+                            <Setter TargetName="disc" Property="Fill" Value="{DynamicResource AccentGreenBrush}" />
+                            <Setter TargetName="glyph" Property="Text" Value="&#xE73E;" />
+                        </Trigger>
+                        <Trigger Property="Level" Value="Fair">
+                            <Setter TargetName="disc" Property="Fill" Value="{DynamicResource AccentAmberBrush}" />
+                            <Setter TargetName="glyph" Property="Text" Value="&#xE8C9;" />
+                        </Trigger>
+                        <Trigger Property="Level" Value="Poor">
+                            <Setter TargetName="disc" Property="Fill" Value="{DynamicResource AccentRedBrush}" />
+                            <Setter TargetName="glyph" Property="Text" Value="&#xE711;" />
+                        </Trigger>
+                        <Trigger Property="Level" Value="Busy">
+                            <Setter TargetName="disc" Property="Fill" Value="{DynamicResource AccentBlueBrush}" />
+                            <Setter TargetName="glyph" Property="Text" Value="&#xE712;" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="controls:StatTile">
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Accent" Value="{DynamicResource AccentBlueHoverBrush}" />
@@ -801,8 +838,11 @@
                                 <TextBlock Text="{TemplateBinding Value}" Style="{StaticResource BigNumber}" />
                                 <TextBlock Text="{TemplateBinding Unit}" FontSize="15" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Bottom" Margin="5,0,0,5" />
                             </StackPanel>
-                            <Border x:Name="badge" CornerRadius="10" Padding="8,1,9,2" BorderThickness="1" BorderBrush="{TemplateBinding BadgeBrush}" HorizontalAlignment="Left" Margin="0,2,0,6">
-                                <TextBlock Text="{TemplateBinding Badge}" FontSize="12" FontWeight="SemiBold" Foreground="{TemplateBinding BadgeBrush}" TextWrapping="NoWrap" />
+                            <Border x:Name="badge" CornerRadius="10" Padding="7,1,9,2" BorderThickness="1" BorderBrush="{TemplateBinding BadgeBrush}" Background="{DynamicResource BgInputBrush}" HorizontalAlignment="Left" Margin="0,2,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="badgeGlyph" Text="&#xE712;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{TemplateBinding BadgeBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                    <TextBlock Text="{TemplateBinding Badge}" FontSize="12" FontWeight="SemiBold" Foreground="{TemplateBinding BadgeBrush}" TextWrapping="NoWrap" />
+                                </StackPanel>
                             </Border>
                             <TextBlock Text="{TemplateBinding Caption}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="17" />
                         </StackPanel>
@@ -811,6 +851,18 @@
                         <Trigger Property="Info" Value="{x:Null}"><Setter TargetName="info" Property="Visibility" Value="Collapsed" /></Trigger>
                         <Trigger Property="Badge" Value=""><Setter TargetName="badge" Property="Visibility" Value="Collapsed" /></Trigger>
                         <Trigger Property="Badge" Value="{x:Null}"><Setter TargetName="badge" Property="Visibility" Value="Collapsed" /></Trigger>
+                        <Trigger Property="BadgeLevel" Value="Good">
+                            <Setter TargetName="badgeGlyph" Property="Text" Value="&#xE73E;" />
+                            <Setter TargetName="badge" Property="Background" Value="{DynamicResource GreenSoftBrush}" />
+                        </Trigger>
+                        <Trigger Property="BadgeLevel" Value="Fair">
+                            <Setter TargetName="badgeGlyph" Property="Text" Value="&#xE8C9;" />
+                            <Setter TargetName="badge" Property="Background" Value="{DynamicResource AmberSoftBrush}" />
+                        </Trigger>
+                        <Trigger Property="BadgeLevel" Value="Poor">
+                            <Setter TargetName="badgeGlyph" Property="Text" Value="&#xE711;" />
+                            <Setter TargetName="badge" Property="Background" Value="{DynamicResource RedSoftBrush}" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

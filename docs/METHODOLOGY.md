@@ -100,7 +100,31 @@ The rise is described (steady up to 15 ms, a little up to 30 ms, bufferbloat abo
 
 ---
 
-## 5. Diagnostic Evidence Attribution Matrix
+## 5. Drops and the Connection Diary (since 0.15)
+
+### 5.1 When the connection counts as lost
+A measurement cycle probes every target once. The internet counts as **down** after 3 cycles in a row in which no internet target answered: the reference servers and the HTTPS check count, the router and the DNS lookup do not (a router keeps answering when the modem or the provider is down, and it can answer DNS lookups from its cache). Internet servers going silent only counts once one of them has answered since start, so a network that blocks pings is not "down"; nothing answering at all, the router included, always counts. The drop is timed from the first failed cycle and records whether the router answered meanwhile: **beyond your router** (modem or provider) or **the router silent too** (cable, Wi-Fi or the router).
+
+### 5.2 The diary
+For every hour (UTC, shown in local time) NetPulse keeps how long it measured (pauses longer than 5 s or three intervals, such as sleep, are not counted) and, per plain-ping reference server: probes, replies, the median ping and the variation (mean change between consecutive replies). Probes during a drop are left out of probe loss: the drop already says it. A restart within an hour adds to the same hour (counts add up; medians are averaged by replies). Drops are kept separately; one still open when NetPulse closes ends at the last moment NetPulse measured and is marked as a minimum.
+
+For display, each server's **usual** is the median of its hourly medians (at least 30 replies per hour, at least 3 such hours). **Ping above usual** for an hour is the reply-weighted mean of (hour median - usual) over servers, so a far-away server never looks slow. **Probe loss** only counts servers that answered at all in that hour (a server that never answers is filtering pings). An hour needs 5 minutes of measuring to be rated; a drop is always shown. Ratings follow the checklist's rules of thumb: a drop, loss of 3% or more, variation over 20 ms or ping 50 ms above usual is red; loss of 1% or more, variation over 8 ms or ping 15 ms above usual is amber.
+
+## 6. Site Check (since 0.15)
+
+Each site is opened the way a browser opens it, and the first step that fails tells where the problem is:
+
+1. **This PC:** the hosts file. A line sending the site to an address that leads nowhere (0.0.0.0, 127.x, private ranges) is a block on this PC.
+2. **Your DNS:** Windows' own lookup (the provider's or the router's DNS). No answer, "does not exist", or only dead-end addresses are suspicious.
+3. **Public DNS:** the same name over DNS over HTTPS, from Cloudflare (`https://1.1.1.1/dns-query`) and, if that fails, Google (`https://8.8.8.8/resolve`), reached by address so a broken DNS cannot stop them. No account or key.
+4. **Connect:** TCP to port 443 of the address your DNS gave (the public one when yours gave none).
+5. **Secure handshake:** TLS naming the site (SNI). A certificate that is not valid for the site means something else answered (interception). A reset or timeout is repeated with a neutral name (`example.com`): if the same server answers that, connections are filtered by name.
+6. **Answer:** one `GET /` over HTTP/1.1 (no cookies). Any answer proves the site reachable, including a bot check (never solved) or a refusal of automated visits; 451 is a legal block, 5xx a problem at the site; more than 3 s is slow.
+7. **Status page:** for sites that publish one in the public Statuspage format (Reddit, Twitch, Discord, Wikipedia, Epic Games; each checked against the real address), its indicator and description.
+
+When the address from your DNS fails but the address from public DNS works, your DNS sends you to the wrong server (often a block page). When no site in a check answers, the connection itself is down. From one PC, a site that is down and a site whose address is blocked look the same: the verdict says so, and the status page, where public, tells them apart.
+
+## 7. Diagnostic Evidence Attribution Matrix
 
 | Gateway Health | Internet Targets | DNS Resolver | Bufferbloat Delta | Diagnostic Classification |
 |---|---|---|---|---|

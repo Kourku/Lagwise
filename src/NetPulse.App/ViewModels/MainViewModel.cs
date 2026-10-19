@@ -129,6 +129,10 @@ public class MainViewModel : ViewModelBase
     public AppearanceViewModel Appearance { get; }
     /// <summary>Stored Speed and Bufferbloat results ("Your results over time").</summary>
     public TestResultsViewModel Results { get; }
+    /// <summary>Is a site down, or blocked, and where?</summary>
+    public SiteCheckViewModel SiteCheck { get; }
+    /// <summary>Hour by hour, every day NetPulse ran, and every drop.</summary>
+    public DiaryViewModel Diary { get; }
 
     public MainViewModel(NetPulseHost host)
     {
@@ -196,13 +200,22 @@ public class MainViewModel : ViewModelBase
         History = new HistoryViewModel(host, Application.Current.Dispatcher) { Toast = Toast };
         Activity = new ActivityViewModel(host, Application.Current.Dispatcher, () => _activeNic?.Id);
         Results = new TestResultsViewModel(host, Application.Current.Dispatcher, Toast);
+        SiteCheck = new SiteCheckViewModel(host, Application.Current.Dispatcher, Toast);
+        Diary = new DiaryViewModel(host, Application.Current.Dispatcher);
         ShowLastSpeedTest();
         // ping seen during real heavy traffic feeds the "Lag when others use the internet" line
         host.Tests.Changed += (_, _) => Application.Current?.Dispatcher.InvokeAsync(() => RefreshReadiness(force: true));
         // the overlay's traffic line follows the adapter Windows uses for the internet, once a second, only while shown
         host.Activity.Sampled += (_, _) =>
         {
-            if (!_host.Settings.OverlayVisible || !_host.Settings.OverlayShowActivity) return;
+            if (!_host.Settings.OverlayVisible) return;
+            if (_host.Settings.OverlayShowGraph)
+            {
+                // the last minute of reference ping, one value a second, for the overlay's small graph
+                var pings = ReferencePing.PerSecond(_engine.GetAllHistory(), _host.ReferencePingIds(), DateTime.UtcNow.AddSeconds(-60)).Select(x => x.Ms).ToList();
+                Application.Current?.Dispatcher.InvokeAsync(() => OverlayPingHistory = pings);
+            }
+            if (!_host.Settings.OverlayShowActivity) return;
             var a = _host.InternetAdapterActivity();
             if (a?.Latest is not { } p) return;
             Application.Current?.Dispatcher.InvokeAsync(() =>
@@ -213,7 +226,7 @@ public class MainViewModel : ViewModelBase
         };
         Settings = new SettingsViewModel(host);
         Appearance = new AppearanceViewModel(host);
-        Appearance.Applied += (_, _) => OnPropertyChanged(nameof(ShowOverlayTraffic));
+        Appearance.Applied += (_, _) => { OnPropertyChanged(nameof(ShowOverlayTraffic)); OnPropertyChanged(nameof(ShowOverlayGraph)); };
         // brushes taken from the palette in code (status tints, grade ring) are re-read after a theme switch
         NetPulse.App.Themes.ThemeManager.Changed += (_, _) =>
         {
@@ -257,7 +270,8 @@ public class MainViewModel : ViewModelBase
             if (value == "History") _ = History.RefreshAsync();   // pick up recordings saved since the tab was last open
             GameMonitor.IsVisible = value == "GameMonitor";
             Activity.IsVisible = value == "Activity";
-            if (value == "Dashboard") RefreshLiveChart();
+            Diary.IsVisible = value == "Diary";
+            if (value == "Dashboard") { RefreshLiveChart(); Diary.Refresh(); }
             if (value == "ProbeLog") RebuildProbeLog();
         }
     }
@@ -294,7 +308,7 @@ public class MainViewModel : ViewModelBase
     public string MarkLagKeyText => _host.Settings.MarkLagHotkey == HotkeyGesture.Off ? "(not set)" : _host.Settings.MarkLagHotkey;
 
     /// <summary>Sidebar order, used by the Ctrl+1 ... Ctrl+0 shortcuts.</summary>
-    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Activity", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Adapter", "ProbeLog", "Events", "History" };
+    private static readonly string[] PageOrder = { "Dashboard", "GameMonitor", "Activity", "Monitoring", "RoutePath", "Bufferbloat", "SpeedTest", "Sites", "Adapter", "ProbeLog", "Events", "Diary", "History" };
 
     /// <summary>The pages the sidebar currently shows, top to bottom (Beginner hides some).</summary>
     public IReadOnlyList<string> VisiblePages => PageOrder.Where(p => !IsBeginnerMode || !AdvancedOnlyTabs.Contains(p)).ToList();
@@ -378,6 +392,13 @@ public class MainViewModel : ViewModelBase
     public string OverlayDown { get => _overlayDown; private set => SetProperty(ref _overlayDown, value); }
     public string OverlayUp { get => _overlayUp; private set => SetProperty(ref _overlayUp, value); }
     public bool ShowOverlayTraffic => _host.Settings.OverlayShowActivity;
+    public bool ShowOverlayGraph => _host.Settings.OverlayShowGraph;
+    private IReadOnlyList<double> _overlayPings = Array.Empty<double>();
+    /// <summary>The last minute of reference ping, one value a second (the overlay's graph).</summary>
+    public IReadOnlyList<double> OverlayPingHistory { get => _overlayPings; private set => SetProperty(ref _overlayPings, value); }
+    private string _readinessLevel = "Unknown";
+    /// <summary>The checklist verdict as "Good" / "Fair" / "Poor" / "Unknown", for status marks that read without colour.</summary>
+    public string ReadinessLevel { get => _readinessLevel; private set => SetProperty(ref _readinessLevel, value); }
 
     public bool IsOverlayVisible
     {
@@ -462,7 +483,8 @@ public class MainViewModel : ViewModelBase
         + "When a game is selected it also lists the network connections that game has open.\n\n"
         + "It does not measure the ping you see inside a game, and it does not know which server your match is on. Public reference servers are not game servers. "
         + "A result is a clue backed by measurements, never a verdict, and NetPulse says how confident it is.\n\n"
-        + "Everything stays on this PC. The only outside services contacted are the public reference servers it pings, and the speed-test provider when you run Speed Test or Bufferbloat.";
+        + "Everything stays on this PC. The only outside services contacted are the public reference servers it pings, the speed-test provider when you run Speed Test or Bufferbloat, "
+        + "and, when you check them on the Site check page, the sites themselves, two public DNS services (Cloudflare and Google) and the sites' public status pages.";
     public string ProbeIntervalText => $" • Probing every {_host.Settings.MonitoringIntervalMs / 1000.0:0.##} s";
     public bool HasNoHops => MtrHops.Count == 0;
 
@@ -708,7 +730,8 @@ public class MainViewModel : ViewModelBase
     {
         var metrics = _engine.GetCurrentMetrics();
         var r = ReadinessCheck.Evaluate(metrics, ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow, _host.WorstRecentRealLoad(DateTime.UtcNow));
-        return StatusSummary.Build(r, metrics, ActiveNic, DateTime.Now, NetPulse.Core.AppInfo.Version);
+        string? history = DiaryAnalysis.SummaryLine(DiaryAnalysis.Build(_host.Diary.Snapshot(), 7, DateTime.UtcNow), 7);
+        return StatusSummary.Build(r, metrics, ActiveNic, DateTime.Now, NetPulse.Core.AppInfo.Version, history);
     }
 
     private async void CopySummary()
@@ -727,6 +750,10 @@ public class MainViewModel : ViewModelBase
         CopySummaryText = "Copy summary";
     }
 
+    /// <summary>The "Ready to play?" checklist as it stands right now.</summary>
+    public ReadinessResult EvaluateReadiness() =>
+        ReadinessCheck.Evaluate(_engine.GetCurrentMetrics(), ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow, _host.WorstRecentRealLoad(DateTime.UtcNow));
+
     private void RefreshReadiness(bool force = false)
     {
         // a checklist that changes every second is unreadable; every few seconds is plenty
@@ -737,6 +764,7 @@ public class MainViewModel : ViewModelBase
         ReadinessHeadline = r.Headline;
         UpdateBadges(r);
         (ReadinessGlyph, ReadinessBrush) = StatusVisual(r.Overall);
+        ReadinessLevel = LevelOf(r.Overall);
         for (int i = 0; i < r.Items.Count; i++)
         {
             var item = r.Items[i];
@@ -806,6 +834,14 @@ public class MainViewModel : ViewModelBase
     public Brush JitterBadgeBrush { get => _jitterBadgeBrush; private set => SetProperty(ref _jitterBadgeBrush, value); }
     public Brush LossBadgeBrush { get => _lossBadgeBrush; private set => SetProperty(ref _lossBadgeBrush, value); }
     public Brush RouterBadgeBrush { get => _routerBadgeBrush; private set => SetProperty(ref _routerBadgeBrush, value); }
+    private string _pingLevel = "Unknown", _jitterLevel = "Unknown", _lossLevel = "Unknown", _routerLevel = "Unknown";
+    /// <summary>"Good" / "Fair" / "Poor" / "Unknown" for each tile: the symbol in its rating, so it reads without colour.</summary>
+    public string PingBadgeLevel { get => _pingLevel; private set => SetProperty(ref _pingLevel, value); }
+    public string JitterBadgeLevel { get => _jitterLevel; private set => SetProperty(ref _jitterLevel, value); }
+    public string LossBadgeLevel { get => _lossLevel; private set => SetProperty(ref _lossLevel, value); }
+    public string RouterBadgeLevel { get => _routerLevel; private set => SetProperty(ref _routerLevel, value); }
+
+    private static string LevelOf(CheckStatus s) => s switch { CheckStatus.Good => "Good", CheckStatus.Fair => "Fair", CheckStatus.Poor => "Poor", _ => "Unknown" };
 
     /// <summary>
     /// One or two words per headline number. Ping is judged against the servers' own normal (never a fixed number, since a
@@ -846,6 +882,11 @@ public class MainViewModel : ViewModelBase
             CheckStatus.Fair => ("Slower than ideal", DegradedBrush),
             _ => ("Losing packets", CriticalBrush)
         };
+        // "higher than usual" is never worse than "watch it"; one lossy server alone is judged harmless (good)
+        PingBadgeLevel = Of("normal") is CheckStatus.Unknown ? "Unknown" : Of("normal") is CheckStatus.Good ? "Good" : "Fair";
+        JitterBadgeLevel = LevelOf(Of("stability"));
+        LossBadgeLevel = LevelOf(Of("loss"));
+        RouterBadgeLevel = LevelOf(Of("router"));
     }
 
     // ---- live probe log (Advanced) ----
@@ -1212,7 +1253,9 @@ public class MainViewModel : ViewModelBase
                 routePath,
                 LatestBufferbloatResult,
                 LatestSpeedTestResult,
-                _host.Tests.All());
+                _host.Tests.All(),
+                diaryLines: DiaryAnalysis.ReportLines(DiaryAnalysis.Build(_host.Diary.Snapshot(), 14, DateTime.UtcNow)),
+                sites: SiteCheck.LastResults());
 
             try
             {
@@ -1252,7 +1295,7 @@ public class MainViewModel : ViewModelBase
     public string TransferDisclosure => _host.TransferProvider.Disclosure;
     public string TransferProviderTitle => $"This test uses {_host.TransferProvider.DisplayName}";
 
-    public string FooterPrivacyText => $"Local-first \u2022 No telemetry \u2022 {_host.TransferProvider.DisplayName} only for speed tests";
+    public string FooterPrivacyText => "Local-first \u2022 No telemetry \u2022 Tests and site checks only when you ask";
 
     private bool _isAnyRecording;
     private string _footerRecordingText = "";
@@ -1272,7 +1315,7 @@ public class MainViewModel : ViewModelBase
 
     public string PrivacyFooter =>
         "Local-first: no analytics or telemetry. Continuous probes go to your router and public DNS/CDN endpoints; Speed Test and Bufferbloat contact "
-        + _host.TransferProvider.DisplayName + " only when you run them.";
+        + _host.TransferProvider.DisplayName + " only when you run them; Site check contacts the sites you check, Cloudflare and Google public DNS and the sites' status pages, only when you check.";
 
     private void InitializeSessionCommands()
     {
