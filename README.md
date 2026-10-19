@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)]()
 [![Runtime](https://img.shields.io/badge/.NET-10.0%20(Self--Contained)-512BD4.svg)]()
-[![Tests](https://img.shields.io/badge/tests-320%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-340%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
@@ -70,13 +70,14 @@ NetPulse clearly distinguishes between:
 - **RFC 3550 Interarrival Jitter:** Implements standard statistical jitter:
   $$\text{Jitter}_{new} = \text{Jitter}_{old} + \frac{|\Delta\text{RTT}| - \text{Jitter}_{old}}{16}$$
 - **Full Statistical Suite:** Real-time Minimum, Maximum, Mean, Median, and 95th Percentile (P95) latency over rolling sliding windows.
-- **Bufferbloat / Loaded Latency Test:** Automated 3-phase test (Baseline $\rightarrow$ Download Load $\rightarrow$ Upload Load) with letter grades (A+ to F) and router SQM recommendations.
-- **On-Demand Bandwidth Benchmark:** Multi-stream throughput test with traffic warning prompt and live Mbps gauge.
+- **Bufferbloat / Loaded Latency Test:** Automated 3-phase test (Baseline $\rightarrow$ Download Load $\rightarrow$ Upload Load) with letter grades (A+ to F) and router SQM recommendations. NetPulse also watches real use: when this PC itself downloads a lot, it notes how much your ping rose meanwhile, without running a test.
+- **On-Demand Bandwidth Benchmark:** Multi-stream throughput test with live Mbps gauges.
+- **Your results over time:** every Speed and Bufferbloat result is kept on this PC with a chart, so evenings can be compared with daytime and Wi-Fi with a cable ("Evening tests are 46% slower than daytime ones"). The exported report lists them too.
 - **Active Adapter & Wi-Fi Telemetry:** Reports interface name, link speed, IPv4/IPv6, gateway, DNS, and native Windows Wi-Fi metrics (SSID, signal strength %, channel, 802.11 protocol).
 - **Chronological Event Timeline:** Records latency spikes, packet loss bursts, gateway degradations, route shifts, network switches and Wi-Fi access-point roaming.
 - **Desktop alerts:** a Windows notification when the connection drops and comes back, the router stops answering, packets are being lost or Windows switches network; rate-limited, background-only by default.
 - **Game Monitor (7 games, all Reference-only):** detects the game, lists the connections its process opens, records the session, and marks lag with a system-wide shortcut (default `Ctrl+Shift+F9`) that works while the game has focus. Optional automatic recording starts when the game starts and saves when it closes. See [docs/GAME_MONITOR.md](docs/GAME_MONITOR.md).
-- **History & reports:** every recording with an interactive graph (hover for exact values), per-target statistics, what was measured around each lag marker, and Markdown/CSV export.
+- **History & reports:** every recording with an interactive graph (hover for exact values), per-target statistics, what was measured around each lag marker (including whether this PC was busy downloading at that moment), and Markdown/CSV export.
 - **When is my connection worst?** History pools every recording by hour of the day, comparing each server with its own usual ping.
 - **Network activity:** live download and upload of this PC's network adapter, like Task Manager's Performance tab but with a 1 / 5 / 15-minute graph, peaks and averages, data used, link use, packets and errors. Your ping can be drawn over the traffic (bufferbloat, live), "Programs online now" shows which programs are talking to the internet, recordings keep every second of traffic, and sustained heavy traffic is noted in the timeline with the programs that were online.
 - **Live ping graph** of the last minutes on the Overview, and **Copy summary**: a short text snapshot (no IP addresses or network names) to paste into a chat or support ticket.

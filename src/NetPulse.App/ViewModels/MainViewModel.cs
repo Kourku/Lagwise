@@ -127,6 +127,8 @@ public class MainViewModel : ViewModelBase
     public SettingsViewModel Settings { get; }
     public HistoryViewModel History { get; }
     public AppearanceViewModel Appearance { get; }
+    /// <summary>Stored Speed and Bufferbloat results ("Your results over time").</summary>
+    public TestResultsViewModel Results { get; }
 
     public MainViewModel(NetPulseHost host)
     {
@@ -193,6 +195,10 @@ public class MainViewModel : ViewModelBase
         GameMonitor = new GameMonitorViewModel(host, Application.Current.Dispatcher);
         History = new HistoryViewModel(host, Application.Current.Dispatcher) { Toast = Toast };
         Activity = new ActivityViewModel(host, Application.Current.Dispatcher, () => _activeNic?.Id);
+        Results = new TestResultsViewModel(host, Application.Current.Dispatcher, Toast);
+        ShowLastSpeedTest();
+        // ping seen during real heavy traffic feeds the "Lag when others use the internet" line
+        host.Tests.Changed += (_, _) => Application.Current?.Dispatcher.InvokeAsync(() => RefreshReadiness(force: true));
         // the overlay's traffic line follows the adapter Windows uses for the internet, once a second, only while shown
         host.Activity.Sampled += (_, _) =>
         {
@@ -616,7 +622,24 @@ public class MainViewModel : ViewModelBase
     public SpeedTestResult? LatestSpeedTestResult
     {
         get => _latestSpeedTestResult;
-        set => SetProperty(ref _latestSpeedTestResult, value);
+        set
+        {
+            if (!SetProperty(ref _latestSpeedTestResult, value)) return;
+            OnPropertyChanged(nameof(SpeedDownloadedText));
+            OnPropertyChanged(nameof(SpeedUploadedText));
+        }
+    }
+
+    public string SpeedDownloadedText => _latestSpeedTestResult?.CompletedSuccessfully == true ? $"{AdapterActivityMonitor.FormatBytes(_latestSpeedTestResult.BytesDownloaded)} transferred" : " ";
+    public string SpeedUploadedText => _latestSpeedTestResult?.CompletedSuccessfully == true ? $"{AdapterActivityMonitor.FormatBytes(_latestSpeedTestResult.BytesUploaded)} transferred" : " ";
+
+    /// <summary>After a restart the gauges show the last stored result instead of zero.</summary>
+    private void ShowLastSpeedTest()
+    {
+        if (_host.Tests.Latest(TestKind.Speed) is not { } last) return;
+        DownloadMbps = last.DownMbps;
+        UploadMbps = last.UpMbps;
+        SpeedTestStatus = $"Last test {DateTime.SpecifyKind(last.T, DateTimeKind.Utc).ToLocalTime():ddd d MMM, HH:mm}: {last.DownMbps:0.#} Mbps down, {last.UpMbps:0.#} Mbps up.";
     }
 
     #endregion
@@ -684,7 +707,7 @@ public class MainViewModel : ViewModelBase
     public string BuildStatusSummary()
     {
         var metrics = _engine.GetCurrentMetrics();
-        var r = ReadinessCheck.Evaluate(metrics, ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow);
+        var r = ReadinessCheck.Evaluate(metrics, ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow, _host.WorstRecentRealLoad(DateTime.UtcNow));
         return StatusSummary.Build(r, metrics, ActiveNic, DateTime.Now, NetPulse.Core.AppInfo.Version);
     }
 
@@ -710,7 +733,7 @@ public class MainViewModel : ViewModelBase
         if (!force && DateTime.UtcNow - _lastReadiness < TimeSpan.FromSeconds(4)) return;
         _lastReadiness = DateTime.UtcNow;
 
-        var r = ReadinessCheck.Evaluate(_engine.GetCurrentMetrics(), ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow);
+        var r = ReadinessCheck.Evaluate(_engine.GetCurrentMetrics(), ActiveNic, _latestBufferbloatResult ?? _host.LastBufferbloat, DateTime.UtcNow, _host.WorstRecentRealLoad(DateTime.UtcNow));
         ReadinessHeadline = r.Headline;
         UpdateBadges(r);
         (ReadinessGlyph, ReadinessBrush) = StatusVisual(r.Overall);
@@ -1057,20 +1080,12 @@ public class MainViewModel : ViewModelBase
     {
         if (IsSpeedTestRunning) return;
 
-        var confirm = MessageBox.Show(
-            "The speed test generates substantial network download and upload traffic to measure maximum connection throughput. Proceed?",
-            "Start Bandwidth Throughput Test",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (confirm != MessageBoxResult.Yes) return;
-
         IsSpeedTestRunning = true;
         using var loadScope = _host.BeginLoadTest();   // this traffic is NetPulse's own, not "heavy traffic on this PC"
         _speedTestCts = new CancellationTokenSource();
         CommandManager.InvalidateRequerySuggested();
         SpeedTestProgress = 5;
-        SpeedTestStatus = "Starting multi-stream bandwidth test...";
+        SpeedTestStatus = "Starting the speed test...";
 
         DownloadMbps = UploadMbps = 0;
         var progress = new Progress<SpeedTestProgress>(p =>
@@ -1086,14 +1101,15 @@ public class MainViewModel : ViewModelBase
         {
             var res = await _speedTestService.RunSpeedTestAsync(progress, _speedTestCts.Token);
             LatestSpeedTestResult = res;
+            _host.RememberSpeedTest(res);
             if (res.CompletedSuccessfully) { DownloadMbps = res.DownloadSpeedMbps; UploadMbps = res.UploadSpeedMbps; }
             if (res.CompletedSuccessfully)
             {
-                SpeedTestStatus = $"Finished: {res.DownloadSpeedMbps:F1} Mbps Download | {res.UploadSpeedMbps:F1} Mbps Upload";
+                SpeedTestStatus = $"Finished: {res.DownloadSpeedMbps:F1} Mbps down, {res.UploadSpeedMbps:F1} Mbps up.";
                 _eventLogService.LogEvent(
                     "SpeedTest",
                     "Info",
-                    $"Throughput test: {res.DownloadSpeedMbps:F1} Mbps Down, {res.UploadSpeedMbps:F1} Mbps Up",
+                    $"Speed test: {res.DownloadSpeedMbps:F1} Mbps down, {res.UploadSpeedMbps:F1} Mbps up.",
                     "SpeedTest");
             }
             else
@@ -1195,7 +1211,8 @@ public class MainViewModel : ViewModelBase
                 Events.ToList(),
                 routePath,
                 LatestBufferbloatResult,
-                LatestSpeedTestResult);
+                LatestSpeedTestResult,
+                _host.Tests.All());
 
             try
             {

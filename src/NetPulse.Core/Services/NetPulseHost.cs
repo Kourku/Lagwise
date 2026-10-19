@@ -60,6 +60,8 @@ public sealed class NetPulseHost : IDisposable
     public SessionRecorder Recorder { get; }
     public SessionStore Sessions { get; }
     public GameMonitorService GameMonitor { get; }
+    /// <summary>Speed and Bufferbloat results and ping seen under real load, kept across restarts (<c>test-history.json</c>).</summary>
+    public TestHistory Tests { get; }
 
     /// <param name="processSource">Override for tests; defaults to the real Windows process list.</param>
     /// <param name="connectionSource">Override for tests; defaults to the Windows TCP/UDP socket tables.</param>
@@ -93,6 +95,9 @@ public sealed class NetPulseHost : IDisposable
 
         Recorder = new SessionRecorder();
         Sessions = new SessionStore(Path.Combine(DataDirectory, "sessions"));
+        // versions before 0.14 only remembered the last bufferbloat result: it starts the history
+        Tests = new TestHistory(Path.Combine(DataDirectory, "test-history.json"),
+            () => LastBufferbloat is { } b ? new[] { TestRecord.FromBufferbloat(b, "") } : Array.Empty<TestRecord>());
 
         Engine.MeasurementProcessed += (_, m) => Recorder.RecordMeasurement(m);
         Engine.CycleCompleted += (_, t) =>
@@ -128,6 +133,10 @@ public sealed class NetPulseHost : IDisposable
         };
         Activity.HeavyTrafficDetected += (_, h) =>
         {
+            // the minute before is remembered now: a long stretch outlasts the probe history
+            if (IsInternetAdapter(h.AdapterId))
+                lock (_loadLock) _pingBeforeLoad[h.AdapterId] = PingUnderLoad.Before(Engine.GetAllHistory(), ReferencePingIds(), h.StartUtc, _lastLoadEndUtc);
+
             // name the programs that could be behind it; Windows does not say which program moved the bytes
             string who = OnlinePrograms.HeavyCandidatesText(ProgramsOnline());
             Events.LogEvent("HeavyTraffic", GameMonitor.IsMonitoring ? "Warning" : "Info",
@@ -136,6 +145,7 @@ public sealed class NetPulseHost : IDisposable
                 "Downloads, updates and uploads compete with games for your connection. Other devices at home are not included.",
                 h.Adapter, h.RxBps / 1e6);
         };
+        Activity.HeavyTrafficEnded += (_, h) => OnHeavyTrafficEnded(h);
         // while recording, keep each second of traffic on the internet adapter with the recording
         Activity.Sampled += (_, _) =>
         {
@@ -146,6 +156,46 @@ public sealed class NetPulseHost : IDisposable
     }
 
     private DateTime _lastBaselineSample;
+
+    private readonly object _loadLock = new();
+    private readonly Dictionary<string, IReadOnlyDictionary<string, double>> _pingBeforeLoad = new(StringComparer.OrdinalIgnoreCase);
+    private DateTime _lastLoadEndUtc;
+
+    /// <summary>
+    /// A stretch of heavy traffic is over: notes in the timeline what it did to ping (passive bufferbloat) and keeps the
+    /// observation with the test results. Only the adapter Windows uses for the internet counts, so a VPN adapter
+    /// carrying the same traffic is not counted twice.
+    /// </summary>
+    private void OnHeavyTrafficEnded(HeavyTrafficStretch h)
+    {
+        IReadOnlyDictionary<string, double>? before;
+        lock (_loadLock)
+        {
+            if (!_pingBeforeLoad.Remove(h.AdapterId, out before)) return;
+            _lastLoadEndUtc = h.EndUtc;
+        }
+        var ping = PingUnderLoad.During(Engine.GetAllHistory(), ReferencePingIds(), before, h.StartUtc, h.EndUtc);
+        Events.LogEvent("HeavyTrafficEnded", ping?.RiseMs > PingUnderLoad.ClearRiseMs ? "Warning" : "Info",
+            PingUnderLoad.Describe(h, ping), h.Adapter, ping?.RiseMs, timestamp: h.EndUtc);
+        if (ping == null) return;
+        Tests.Add(new TestRecord
+        {
+            T = h.EndUtc, Kind = TestKind.RealLoad, Connection = TestRecord.ConnectionOf(Engine.CurrentNic),
+            RestMs = ping.RestMs, LoadedMs = ping.LoadedMs, RiseMs = ping.RiseMs, LossPercent = ping.LossPercent,
+            DownMbps = Math.Round(h.AverageRxBps / 1e6, 1), UpMbps = Math.Round(h.AverageTxBps / 1e6, 1),
+            PeakDownMbps = Math.Round(h.PeakRxBps / 1e6, 1), PeakUpMbps = Math.Round(h.PeakTxBps / 1e6, 1),
+            Seconds = (int)Math.Round(h.Duration.TotalSeconds)
+        });
+    }
+
+    private bool IsInternetAdapter(string adapterId) =>
+        string.IsNullOrEmpty(adapterId) || string.Equals(InternetAdapterActivity()?.Id, adapterId, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The plain-ping reference servers: what "your ping" means on the traffic graph and under load.</summary>
+    public IReadOnlySet<string> ReferencePingIds() =>
+        Engine.GetCurrentMetrics()
+            .Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == NetworkProtocol.Icmp)
+            .Select(m => m.TargetId).ToHashSet();
 
     /// <summary>Raised after a recording has been stopped and saved (or failed to save), from any source: the History tab, the Game Monitor or automatic recording.</summary>
     public event EventHandler<SessionSavedEventArgs>? SessionSaved;
@@ -252,12 +302,15 @@ public sealed class NetPulseHost : IDisposable
         }
     }
 
-    /// <summary>Remembers a completed bufferbloat test. Invalid (failed) results are ignored.</summary>
+    /// <summary>Remembers a completed bufferbloat test, also in the test history. Invalid (failed) results are ignored.</summary>
     public void RememberBufferbloat(BufferbloatResult result)
     {
         if (!result.IsValid) return;
+        _ = LastBufferbloat;   // seeds the history from the old file first, so this result is not added twice
+        _ = Tests.All();
         _lastBufferbloat = result;
         _bufferbloatLoaded = true;
+        Tests.Add(TestRecord.FromBufferbloat(result, TestRecord.ConnectionOf(Engine.CurrentNic)));
         try
         {
             Directory.CreateDirectory(DataDirectory);
@@ -268,6 +321,20 @@ public sealed class NetPulseHost : IDisposable
         {
             // still remembered for this run
         }
+    }
+
+    /// <summary>
+    /// The largest ping rise seen in real use in the last two weeks, or null. The largest, not the newest: a steady ping
+    /// during a lighter download does not undo a clear rise during a heavier one.
+    /// </summary>
+    public TestRecord? WorstRecentRealLoad(DateTime nowUtc) =>
+        Tests.Of(TestKind.RealLoad).Where(r => nowUtc - r.T <= ReadinessCheck.RealLoadRelevance).MaxBy(r => r.RiseMs);
+
+    /// <summary>Keeps a completed speed test in the test history. Failed tests are not kept.</summary>
+    public void RememberSpeedTest(SpeedTestResult result)
+    {
+        if (!result.CompletedSuccessfully) return;
+        Tests.Add(TestRecord.FromSpeed(result, TestRecord.ConnectionOf(Engine.CurrentNic)));
     }
 
     /// <summary>True while any recording (plain or Game Monitor) is running.</summary>

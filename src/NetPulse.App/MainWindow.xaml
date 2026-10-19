@@ -46,6 +46,75 @@
             <Setter Property="VerticalAlignment" Value="Top" />
             <Setter Property="Margin" Value="0,22,0,0" />
         </Style>
+
+        <!-- "Your results over time": bars for the latest results, the newest few as text, and what they add up to (TestPanel) -->
+        <DataTemplate x:Key="TestPanelBody">
+            <StackPanel>
+                <TextBlock Text="{Binding Summary}" FontSize="14" LineHeight="20" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12" TextWrapping="Wrap"
+                           Visibility="{Binding HasAny, Converter={StaticResource BoolToVis}}" />
+                <ItemsControl ItemsSource="{Binding Bars}" Visibility="{Binding HasAny, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Results chart">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="3,0" ToolTip="{Binding Tip}" Background="Transparent" MaxWidth="90">
+                                <Grid Height="104">
+                                    <StackPanel VerticalAlignment="Bottom">
+                                        <TextBlock Text="{Binding ValueText}" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center" TextWrapping="NoWrap"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" Typography.NumeralAlignment="Tabular" Margin="0,0,0,3" />
+                                        <!-- a test is filled; ping seen in real use is drawn as an outline, because it was not a test -->
+                                        <Grid Height="{Binding Height}">
+                                            <Border x:Name="bar" CornerRadius="3,3,1,1" Opacity="{Binding Opacity}" Background="{DynamicResource AccentGreenBrush}" />
+                                            <Border x:Name="edge" CornerRadius="3,3,1,1" BorderThickness="{Binding Edge}" BorderBrush="{DynamicResource AccentGreenBrush}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Level}" Value="Evening">
+                                    <Setter TargetName="bar" Property="Background" Value="{DynamicResource AccentBlueBrush}" />
+                                    <Setter TargetName="edge" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="Warn">
+                                    <Setter TargetName="bar" Property="Background" Value="{DynamicResource AccentAmberBrush}" />
+                                    <Setter TargetName="edge" Property="BorderBrush" Value="{DynamicResource AccentAmberBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="Bad">
+                                    <Setter TargetName="bar" Property="Background" Value="{DynamicResource AccentRedBrush}" />
+                                    <Setter TargetName="edge" Property="BorderBrush" Value="{DynamicResource AccentRedBrush}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding Recent}" Margin="0,14,0,0" AutomationProperties.Name="Recent results">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="230" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding When}" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Kind}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Main}" FontSize="13.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="detail" Text="{Binding Detail}" FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Detail}" Value=""><Setter TargetName="detail" Property="Visibility" Value="Collapsed" /></DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding CountText}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
@@ -972,7 +1041,7 @@
                         </Border>
 
                         <controls:Callout Kind="Info" Title="Why this matters for games"
-                                          Text="A game needs very little bandwidth (often well under 1 Mbps), but it needs it on time. A big download, a game update or a cloud backup on this PC fills the queue in your router and your game's packets wait behind it. When this PC moves more than the heavy-traffic limit in Settings (15 Mbps by default) for 10 seconds or longer, NetPulse notes it in the event timeline with the programs that were online, and recordings keep every second of traffic, so a lag spike you marked can be matched with it. Other devices at home do not show up here; the Bufferbloat test shows how your router copes with them." Margin="0,0,0,16" />
+                                          Text="A game needs very little bandwidth (often well under 1 Mbps), but it needs it on time. A big download, a game update or a cloud backup on this PC fills the queue in your router and your game's packets wait behind it. When this PC moves more than the heavy-traffic limit in Settings (15 Mbps by default) for 10 seconds or longer, NetPulse notes it in the event timeline with the programs that were online. When it ends, the timeline says how much your ping rose meanwhile, a free bufferbloat check in real use (kept on the Bufferbloat page). Recordings keep every second of traffic, and History says for each moment you marked as laggy whether this PC was busy. Other devices at home do not show up here; the Bufferbloat test shows how your router copes with them." Margin="0,0,0,16" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -1240,6 +1309,9 @@
                                     <TextBlock Text="{Binding BufferbloatLiveText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Right"
                                                Visibility="{Binding IsBufferbloatRunning, Converter={StaticResource BoolToVis}}" Typography.NumeralAlignment="Tabular" />
                                 </Grid>
+                                <controls:Callout Kind="Warning" Title="A recording is running" Margin="0,14,0,0"
+                                                  Text="The test fills your connection on purpose, so the recording will show high ping while it runs. Stop the recording first, or keep that in mind when you read it."
+                                                  Visibility="{Binding IsAnyRecording, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Border>
 
@@ -1293,6 +1365,25 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        <!-- Results over time (stored in test-history.json) -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" DataContext="{Binding Results.Bufferbloat}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Your results over time" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Every finished test is kept on this PC, together with what NetPulse saw in real use: when this PC itself downloads or uploads a lot, the ping meanwhile shows whether your connection queues (outlined bars). Green is steady, amber a noticeable rise, red lag you will feel." Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Clear" Style="{StaticResource OutlineButton}" Command="{Binding ClearCommand}" VerticalAlignment="Top" Margin="12,0,0,0"
+                                            AutomationProperties.Name="Clear stored results" Visibility="{Binding HasAny, Converter={StaticResource BoolToVis}}" />
+                                </Grid>
+                                <TextBlock Text="No results yet. Run the test, or simply keep NetPulse open: the next big download on this PC shows how your ping copes." Style="{StaticResource CaptionText}" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
+                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource TestPanelBody}" Focusable="False" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -1335,6 +1426,9 @@
                                 </Grid>
                                 <ProgressBar Height="6" Value="{Binding SpeedTestProgress}" Maximum="100" Margin="0,18,0,8" Foreground="{DynamicResource AccentGreenBrush}" />
                                 <TextBlock Text="{Binding SpeedTestStatus}" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                <controls:Callout Kind="Warning" Title="A recording is running" Margin="0,14,0,0"
+                                                  Text="The test fills your connection on purpose, so the recording will show high ping while it runs. Stop the recording first, or keep that in mind when you read it."
+                                                  Visibility="{Binding IsAnyRecording, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Border>
 
@@ -1349,7 +1443,7 @@
                                             <TextBlock Text="Mbps" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
                                         </StackPanel>
                                     </Grid>
-                                    <TextBlock Text="{Binding LatestSpeedTestResult.BytesDownloaded, StringFormat='{}{0:N0} bytes transferred', FallbackValue=' '}" FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,-14,0,0" />
+                                    <TextBlock Text="{Binding SpeedDownloadedText}" FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,-14,0,0" />
                                 </StackPanel>
                             </Border>
                             <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0" Padding="20,22">
@@ -1362,11 +1456,31 @@
                                             <TextBlock Text="Mbps" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
                                         </StackPanel>
                                     </Grid>
-                                    <TextBlock Text="{Binding LatestSpeedTestResult.BytesUploaded, StringFormat='{}{0:N0} bytes transferred', FallbackValue=' '}" FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,-14,0,0" />
+                                    <TextBlock Text="{Binding SpeedUploadedText}" FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,-14,0,0" />
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
-                        <TextBlock Text="{Binding SpeedGaugeScale}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding SpeedGaugeScale}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,16" />
+
+                        <!-- Results over time (stored in test-history.json) -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" DataContext="{Binding Results.Speed}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Your results over time" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Every finished test is kept on this PC. Blue bars are evening tests (18:00 to midnight), when providers are busiest; green bars are other times. Comparing them, and Wi-Fi with a cable, shows whether a slowdown is at home or at your provider." Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Clear" Style="{StaticResource OutlineButton}" Command="{Binding ClearCommand}" VerticalAlignment="Top" Margin="12,0,0,0"
+                                            AutomationProperties.Name="Clear stored results" Visibility="{Binding HasAny, Converter={StaticResource BoolToVis}}" />
+                                </Grid>
+                                <TextBlock Text="No results yet. Your finished tests are listed here, so you can compare evenings with daytime." Style="{StaticResource CaptionText}" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
+                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource TestPanelBody}" Focusable="False" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -1929,6 +2043,8 @@
                                     <TextBlock Text="For each marker, what the measurements showed in the seconds around it, compared with each target's own normal." Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
                                     <TextBlock Text="No lag markers in this recording. Press Mark lag while recording to flag a moment." Style="{StaticResource CaptionText}"
                                                Visibility="{Binding HasNoLagMarkers, Converter={StaticResource BoolToVis}}" />
+                                    <controls:Callout Kind="Info" Title="Lag and this PC's own traffic" Text="{Binding LagTrafficSummary}" Margin="0,0,0,10"
+                                                      Visibility="{Binding HasLagTrafficSummary, Converter={StaticResource BoolToVis}}" />
                                     <ItemsControl ItemsSource="{Binding LagMarkers}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>

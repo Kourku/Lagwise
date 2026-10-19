@@ -78,13 +78,19 @@ public static class SessionReportBuilder
         {
             sb.AppendLine("No lag markers were added. Pressing **Mark lag** when you notice lag lets this report check what the measurements showed at that moment.");
         }
+        if (stats.LagTrafficSummary.Length > 0)
+        {
+            sb.AppendLine(stats.LagTrafficSummary);
+            sb.AppendLine();
+        }
         foreach (var c in stats.LagCorrelations)
         {
             sb.AppendLine($"### {Clock(c.MarkerUtc)}{(string.IsNullOrEmpty(c.Note) ? "" : $" - {c.Note}")}");
             sb.AppendLine();
             var affected = c.Affected.ToList();
-            if (affected.Count == 0 && c.NearbyEvents.Count == 0)
+            if (affected.Count == 0 && c.NearbyEvents.Count == 0 && c.Traffic?.Busy != true)
                 sb.AppendLine($"Nothing unusual was measured within {SessionAnalysis.LagWindowSeconds} s of this moment. The lag may have been in the game's own servers or a path these targets do not share.");
+            if (c.Traffic != null) sb.AppendLine($"- {c.Traffic.Describe()}");
             foreach (var a in affected)
                 sb.AppendLine($"- {a.Name}: median {Ms(a.WindowMedianMs)} around this moment versus {Ms(a.SessionMedianMs)} for the session; {a.WindowFailures} of {a.WindowProbes} probes unanswered.");
             foreach (var e in c.NearbyEvents.Take(8))

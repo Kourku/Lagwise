@@ -142,10 +142,7 @@ public sealed class ActivityViewModel : ViewModelBase
     /// <summary>Typical ping to the plain-ping reference servers, one value per second.</summary>
     private IReadOnlyList<PingPoint> PingSeries(DateTime fromUtc)
     {
-        var refs = _host.Engine.GetCurrentMetrics()
-            .Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == Core.Models.NetworkProtocol.Icmp)
-            .Select(m => m.TargetId).ToHashSet();
-        return ReferencePing.PerSecond(_host.Engine.GetAllHistory(), refs, fromUtc).Select(p => new PingPoint(p.T, p.Ms)).ToList();
+        return ReferencePing.PerSecond(_host.Engine.GetAllHistory(), _host.ReferencePingIds(), fromUtc).Select(p => new PingPoint(p.T, p.Ms)).ToList();
     }
 
     /// <summary>Reads the socket table every few seconds, off the UI thread (it enumerates every process).</summary>

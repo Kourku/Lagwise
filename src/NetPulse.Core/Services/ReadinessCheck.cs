@@ -26,7 +26,9 @@ public static class ReadinessCheck
     /// <summary>Recent probes a target needs before it is judged.</summary>
     public const int MinSamples = 8;
 
-    public static ReadinessResult Evaluate(IReadOnlyList<TargetMetrics> metrics, NetworkInterfaceInfo? nic, BufferbloatResult? lastBufferbloat, DateTime nowUtc)
+    /// <param name="lastRealLoad">Ping last seen during heavy traffic on this PC (real use, not a test), or null.</param>
+    public static ReadinessResult Evaluate(IReadOnlyList<TargetMetrics> metrics, NetworkInterfaceInfo? nic, BufferbloatResult? lastBufferbloat, DateTime nowUtc,
+        TestRecord? lastRealLoad = null)
     {
         bool wifi = nic?.IsWifi == true;
         var items = new List<ReadinessItem>
@@ -40,7 +42,7 @@ public static class ReadinessCheck
         items.Add(Normal(refs));
         items.Add(Dns(metrics.FirstOrDefault(m => m.IsDnsResolver)));
         if (wifi) items.Add(WifiSignal(nic!));
-        items.Add(UnderLoad(lastBufferbloat, nowUtc));
+        items.Add(UnderLoad(lastBufferbloat, lastRealLoad, nowUtc));
 
         // an untested bufferbloat (or a missing DNS target) must not block "Good"; only measured items decide
         var decided = items.Where(i => i.Status != CheckStatus.Unknown).ToList();
@@ -139,14 +141,35 @@ public static class ReadinessCheck
         return new("wifi", title, CheckStatus.Good, $"Strong ({signal}%). A cable is still steadier for competitive games.");
     }
 
-    private static ReadinessItem UnderLoad(BufferbloatResult? b, DateTime nowUtc)
+    /// <summary>Real-use observations older than this are not mentioned: the connection or router may have changed.</summary>
+    public static readonly TimeSpan RealLoadRelevance = TimeSpan.FromDays(14);
+
+    private static string Ago(TimeSpan age) =>
+        age.TotalMinutes < 2 ? "just now" : age.TotalHours < 1 ? $"{age.TotalMinutes:F0} min ago" : age.TotalDays < 1 ? $"{age.TotalHours:F0} h ago" : $"{age.TotalDays:F0} days ago";
+
+    private static ReadinessItem UnderLoad(BufferbloatResult? b, TestRecord? seen, DateTime nowUtc)
     {
         const string title = "Lag when others use the internet";
+        if (seen != null && (seen.Kind != TestKind.RealLoad || nowUtc - seen.T > RealLoadRelevance)) seen = null;
+        string seenText = seen == null ? "" : $"Seen in real use {Ago(nowUtc - seen.T)}: ping {(seen.RiseMs > PingUnderLoad.SteadyRiseMs ? $"rose by {seen.RiseMs:F0} ms" : "stayed steady")} while this PC downloaded at about {seen.DownMbps:F0} Mbps.";
+
         if (b == null || !b.IsValid)
-            return new("load", title, CheckStatus.Unknown, "Not tested yet. Run the Bufferbloat test once to see whether downloads at home will make your game lag.");
-        var age = nowUtc - b.Timestamp;
-        string when = age.TotalMinutes < 2 ? "just now" : age.TotalHours < 1 ? $"{age.TotalMinutes:F0} min ago" : age.TotalDays < 1 ? $"{age.TotalHours:F0} h ago" : $"{age.TotalDays:F0} days ago";
+        {
+            // real use proves a problem when ping clearly rose; a steady ping proves little, the line may not have been full
+            if (seen != null && seen.RiseMs > PingUnderLoad.ClearRiseMs)
+                return new("load", title, seen.RiseMs > 60 ? CheckStatus.Poor : CheckStatus.Fair, seenText + " Run the Bufferbloat test for a grade under full load.");
+            return new("load", title, CheckStatus.Unknown, seen != null
+                ? seenText + " The line may not have been full: run the Bufferbloat test once for a grade."
+                : "Not tested yet. Run the Bufferbloat test once to see whether downloads at home will make your game lag.");
+        }
         var status = b.Grade switch { "A+" or "A" => CheckStatus.Good, "B" or "C" => CheckStatus.Fair, _ => CheckStatus.Poor };
-        return new("load", title, status, $"Bufferbloat grade {b.Grade} (tested {when}): ping rose by up to {Math.Max(b.DownloadDeltaMs, b.UploadDeltaMs):F0} ms under load.");
+        string text = $"Bufferbloat grade {b.Grade} (tested {Ago(nowUtc - b.Timestamp)}): ping rose by up to {Math.Max(b.DownloadDeltaMs, b.UploadDeltaMs):F0} ms under load.";
+        // a newer real-use observation that went worse than the test is worth knowing
+        if (seen != null && seen.T > b.Timestamp && seen.RiseMs > Math.Max(PingUnderLoad.ClearRiseMs, Math.Max(b.DownloadDeltaMs, b.UploadDeltaMs) + 15))
+        {
+            text += " " + seenText;
+            if (status == CheckStatus.Good) status = CheckStatus.Fair;
+        }
+        return new("load", title, status, text);
     }
 }

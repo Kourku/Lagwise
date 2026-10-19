@@ -46,7 +46,8 @@ public static class Lexicon
             "Times the TCP handshake to the endpoint's port. It measures that service, which may not be the machine running your match."),
         new("bufferbloat", "Bufferbloat",
             "Your connection getting laggy only when it is busy, for example during a big download, because your router queues data too long.",
-            "NetPulse compares ping before and during saturating download/upload load from the test provider. Only the increase is graded, not the absolute ping."),
+            "NetPulse compares ping before and during saturating download/upload load from the test provider. Only the increase is graded, not the absolute ping. "
+            + "It also watches real use: when this PC itself moves a lot of data, each reference server's ping during it is compared with its ping in the minute before. That is noted but never graded, because the line may not have been full."),
         new("route", "Route trace and hops",
             "The path your data takes: a list of the devices (hops) it passes through. A slow hop only matters if later hops are slow too.",
             "TTL-stepped ICMP probes. A hop that shows loss or delay while later hops and the destination look normal is usually just ignoring probes, so NetPulse does not blame it."),
@@ -85,6 +86,7 @@ public static class Lexicon
         ["NetworkChange"] = "Network changed",
         ["WifiRoam"] = "Wi-Fi access point changed",
         ["HeavyTraffic"] = "Heavy traffic on this PC",
+        ["HeavyTrafficEnded"] = "Heavy traffic ended",
         ["Disconnected"] = "Connection lost",
         ["Restored"] = "Recovered",
         ["GameProcess"] = "Game",
@@ -100,6 +102,10 @@ public static class Lexicon
     };
 
     public static IReadOnlyCollection<string> KnownEventTypes => EventLabels.Keys;
+
+    /// <summary>"45 s", "2 min 05 s", "1 h 20 min".</summary>
+    public static string Duration(TimeSpan d) =>
+        d.TotalHours >= 1 ? $"{(int)d.TotalHours} h {d.Minutes:00} min" : d.TotalMinutes >= 1 ? $"{(int)d.TotalMinutes} min {d.Seconds:00} s" : $"{Math.Max(0, d.Seconds)} s";
 
     public static string EventLabel(string? eventType) =>
         eventType != null && EventLabels.TryGetValue(eventType, out var label) ? label : SplitCamelCase(eventType ?? string.Empty);

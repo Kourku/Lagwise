@@ -49,8 +49,7 @@ public sealed class SessionRow
     public bool IsComplete { get; }
     public string Status { get; }
 
-    public static string FormatDuration(TimeSpan d) =>
-        d.TotalHours >= 1 ? $"{(int)d.TotalHours} h {d.Minutes:00} min" : d.TotalMinutes >= 1 ? $"{(int)d.TotalMinutes} min {d.Seconds:00} s" : $"{Math.Max(0, d.Seconds)} s";
+    public static string FormatDuration(TimeSpan d) => Lexicon.Duration(d);
 }
 
 public sealed class TargetStatRow
@@ -88,8 +87,9 @@ public sealed class LagRow
         Note = string.IsNullOrEmpty(c.Note) ? "Lag marked" : c.Note;
         var sb = new StringBuilder();
         var affected = c.Affected.ToList();
-        if (affected.Count == 0 && c.NearbyEvents.Count == 0)
-            sb.Append($"Nothing unusual was measured within {SessionAnalysis.LagWindowSeconds} s. The lag may have been on the game's side or on a path these targets do not share.");
+        if (affected.Count == 0 && c.NearbyEvents.Count == 0 && c.Traffic?.Busy != true)
+            sb.AppendLine($"Nothing unusual was measured within {SessionAnalysis.LagWindowSeconds} s. The lag may have been on the game's side or on a path these targets do not share.");
+        if (c.Traffic != null) sb.AppendLine($"• {c.Traffic.Describe()}");
         foreach (var a in affected)
             sb.AppendLine($"• {a.Name}: {(a.WindowMedianMs.HasValue ? $"{a.WindowMedianMs:F0} ms" : "no replies")} around this moment, normally {a.SessionMedianMs:F0} ms; {a.WindowFailures} of {a.WindowProbes} probes unanswered.");
         foreach (var e in c.NearbyEvents.Take(4))
@@ -274,6 +274,14 @@ public sealed class HistoryViewModel : ViewModelBase
     public ChartData? Chart { get => _chart; private set => SetProperty(ref _chart, value); }
     public IReadOnlyList<string> ChartTargetOrder => _session?.Targets.Select(t => t.Id).ToList() ?? new List<string>();
     public bool HasNoLagMarkers => LagMarkers.Count == 0;
+
+    /// <summary>The heavy-traffic limit from Settings counts as "busy" around lag markers (the default when it is off).</summary>
+    private double BusyBps => _host.Settings.HeavyTrafficMbps > 0 ? _host.Settings.HeavyTrafficMbps * 1_000_000.0 : SessionAnalysis.DefaultBusyBps;
+
+    private string _lagTrafficSummary = "";
+    /// <summary>How many lag markers came while this PC was busy; empty for recordings without traffic data.</summary>
+    public string LagTrafficSummary { get => _lagTrafficSummary; private set { if (SetProperty(ref _lagTrafficSummary, value)) OnPropertyChanged(nameof(HasLagTrafficSummary)); } }
+    public bool HasLagTrafficSummary => _lagTrafficSummary.Length > 0;
     public bool HasNoFindings => Findings.Count == 0;
 
     public string ChartCaption => ModeIndex switch
@@ -360,7 +368,7 @@ public sealed class HistoryViewModel : ViewModelBase
             var (session, stats) = await Task.Run(() =>
             {
                 var s = _host.Sessions.Load(id);
-                return (s, s == null ? null : SessionAnalysis.Compute(s));
+                return (s, s == null ? null : SessionAnalysis.Compute(s, BusyBps));
             });
 
             if (cts.IsCancellationRequested) return;
@@ -396,7 +404,7 @@ public sealed class HistoryViewModel : ViewModelBase
             var other = await Task.Run<(MonitoringSession Session, SessionStats Stats)?>(() =>
             {
                 var s = _host.Sessions.Load(otherId);
-                return s == null ? null : (s, SessionAnalysis.Compute(s));
+                return s == null ? null : (s, SessionAnalysis.Compute(s, BusyBps));
             });
             if (cts.IsCancellationRequested) return;
             if (other == null) { CompareSummary = "That recording could not be opened."; NotifyCompare(); return; }
@@ -440,6 +448,7 @@ public sealed class HistoryViewModel : ViewModelBase
         _session = null;
         _stats = null;
         TargetStats.Clear(); LagMarkers.Clear(); Findings.Clear(); Events.Clear(); Legend.Clear(); Cards.Clear();
+        LagTrafficSummary = "";
         Chart = null;
         DetailTitle = DetailSubtitle = LimitationsText = ConnectionsText = VersionNote = "";
         ResetCompareChoices();
@@ -475,6 +484,7 @@ public sealed class HistoryViewModel : ViewModelBase
 
         LagMarkers.Clear();
         foreach (var c in stats.LagCorrelations) LagMarkers.Add(new LagRow(c));
+        LagTrafficSummary = stats.LagTrafficSummary;
 
         Findings.Clear();
         foreach (var f in s.Findings) Findings.Add(new FindingItem(f));

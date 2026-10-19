@@ -43,7 +43,14 @@ public sealed class AdapterActivity
 }
 
 /// <summary>A stretch of heavy traffic on this PC, reported once when it has lasted long enough.</summary>
-public sealed record HeavyTraffic(string Adapter, double RxBps, double TxBps, TimeSpan Duration);
+public sealed record HeavyTraffic(string Adapter, double RxBps, double TxBps, TimeSpan Duration, DateTime StartUtc = default, string AdapterId = "");
+
+/// <summary>A reported stretch of heavy traffic that has ended: when it ran and how fast. Averages cover the heavy seconds.</summary>
+public sealed record HeavyTrafficStretch(string AdapterId, string Adapter, DateTime StartUtc, DateTime EndUtc,
+    double PeakRxBps, double PeakTxBps, double AverageRxBps, double AverageTxBps)
+{
+    public TimeSpan Duration => EndUtc - StartUtc;
+}
 
 /// <summary>
 /// Network adapter activity, like the Performance tab of Task Manager: reads each adapter's byte, packet and error
@@ -58,6 +65,11 @@ public sealed class AdapterActivityMonitor
     /// <summary>Traffic at least this fast (either direction) for <see cref="HeavyTrafficAfter"/> counts as heavy.</summary>
     public double HeavyTrafficBps { get; set; } = 15_000_000;
     public TimeSpan HeavyTrafficAfter { get; set; } = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// Downloads are bursty (a launcher pauses to write to disk, a server hands over to the next): a dip shorter than
+    /// this does not end a stretch of heavy traffic.
+    /// </summary>
+    public TimeSpan HeavyTrafficGrace { get; set; } = TimeSpan.FromSeconds(5);
 
     private sealed class State
     {
@@ -67,8 +79,18 @@ public sealed class AdapterActivityMonitor
         public DateTime FirstT;
         public readonly List<ActivityPoint> History = new();
         public DateTime? HeavySince;
+        public DateTime HeavyLastT;
         public bool HeavyReported;
-        public double HeavyPeakRx, HeavyPeakTx;
+        public double HeavyPeakRx, HeavyPeakTx, HeavySumRx, HeavySumTx;
+        public int HeavySeconds;
+
+        public void ResetHeavy()
+        {
+            HeavySince = null;
+            HeavyReported = false;
+            HeavyPeakRx = HeavyPeakTx = HeavySumRx = HeavySumTx = 0;
+            HeavySeconds = 0;
+        }
     }
 
     private readonly Func<IReadOnlyList<AdapterCounters>> _read;
@@ -77,6 +99,8 @@ public sealed class AdapterActivityMonitor
 
     /// <summary>Raised once per stretch of heavy traffic (unless <see cref="SuppressHeavyTraffic"/> says it is NetPulse's own test).</summary>
     public event EventHandler<HeavyTraffic>? HeavyTrafficDetected;
+    /// <summary>Raised when a stretch that was reported through <see cref="HeavyTrafficDetected"/> is over.</summary>
+    public event EventHandler<HeavyTrafficStretch>? HeavyTrafficEnded;
     public event EventHandler? Sampled;
 
     /// <summary>True while NetPulse itself is generating load (speed and bufferbloat tests), which must not be reported.</summary>
@@ -95,6 +119,7 @@ public sealed class AdapterActivityMonitor
         catch (Exception) { return; } // adapters can vanish mid-enumeration; the next reading will do
 
         var reports = new List<HeavyTraffic>();
+        var ended = new List<HeavyTrafficStretch>();
         lock (_lock)
         {
             foreach (var c in counters)
@@ -122,7 +147,9 @@ public sealed class AdapterActivityMonitor
                 s.Last = c;
                 s.LastT = nowUtc;
 
-                if (TrackHeavy(s, p, nowUtc) is { } heavy) reports.Add(heavy with { Adapter = c.Name });
+                var (started, over) = TrackHeavy(s, p, c);
+                if (started != null) reports.Add(started);
+                if (over != null) ended.Add(over);
             }
 
             // adapters that disappeared (unplugged, disabled) are forgotten
@@ -130,27 +157,38 @@ public sealed class AdapterActivityMonitor
             foreach (var gone in _states.Keys.Where(k => !present.Contains(k)).ToList()) _states.Remove(gone);
         }
 
+        foreach (var e in ended) HeavyTrafficEnded?.Invoke(this, e);
         foreach (var r in reports) HeavyTrafficDetected?.Invoke(this, r);
         Sampled?.Invoke(this, EventArgs.Empty);
     }
 
-    private HeavyTraffic? TrackHeavy(State s, ActivityPoint p, DateTime now)
+    private (HeavyTraffic? Started, HeavyTrafficStretch? Ended) TrackHeavy(State s, ActivityPoint p, AdapterCounters c)
     {
-        bool heavy = Math.Max(p.RxBps, p.TxBps) >= HeavyTrafficBps && !SuppressHeavyTraffic();
-        if (!heavy)
+        // NetPulse's own test is heavy on purpose, and mixed into a stretch it would spoil it: forget the stretch
+        if (SuppressHeavyTraffic()) { s.ResetHeavy(); return default; }
+
+        if (Math.Max(p.RxBps, p.TxBps) < HeavyTrafficBps)
         {
-            s.HeavySince = null;
-            s.HeavyReported = false;
-            s.HeavyPeakRx = s.HeavyPeakTx = 0;
-            return null;
+            if (s.HeavySince == null || p.T - s.HeavyLastT < HeavyTrafficGrace) return default;   // a short dip
+            var ended = s.HeavyReported
+                ? new HeavyTrafficStretch(c.Id, c.Name, s.HeavySince.Value, s.HeavyLastT, s.HeavyPeakRx, s.HeavyPeakTx,
+                    s.HeavySumRx / s.HeavySeconds, s.HeavySumTx / s.HeavySeconds)
+                : null;
+            s.ResetHeavy();   // re-arms: the next stretch is a new report
+            return (null, ended);
         }
+
         s.HeavySince ??= p.T;
+        s.HeavyLastT = p.T;
         s.HeavyPeakRx = Math.Max(s.HeavyPeakRx, p.RxBps);
         s.HeavyPeakTx = Math.Max(s.HeavyPeakTx, p.TxBps);
-        var lasted = now - s.HeavySince.Value;
-        if (s.HeavyReported || lasted < HeavyTrafficAfter) return null;
-        s.HeavyReported = true;   // once per stretch; it re-arms after traffic drops back
-        return new HeavyTraffic("", s.HeavyPeakRx, s.HeavyPeakTx, lasted);
+        s.HeavySumRx += p.RxBps;
+        s.HeavySumTx += p.TxBps;
+        s.HeavySeconds++;
+        var lasted = p.T - s.HeavySince.Value;
+        if (s.HeavyReported || lasted < HeavyTrafficAfter) return default;
+        s.HeavyReported = true;   // once per stretch
+        return (new HeavyTraffic(c.Name, s.HeavyPeakRx, s.HeavyPeakTx, lasted, s.HeavySince.Value, c.Id), null);
     }
 
     /// <summary>All adapters seen in the latest reading, busiest-capable first (the one with a default route is chosen by the page).</summary>

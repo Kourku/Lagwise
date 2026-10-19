@@ -74,9 +74,9 @@ Common hops $[1 \dots k-1]$ represent shared local and ISP aggregation paths, wh
 ## 4. Bufferbloat & Loaded Latency Methodology
 
 ### 4.1 Test Phases
-1. **Unloaded Baseline:** Probe target 8 times over 1 second in an idle state. Calculate baseline median latency $L_{\text{base}}$.
-2. **Download Saturation:** Initiate 4 parallel HTTP GET chunk streams from high-capacity CDN edge servers, measuring latency concurrently every 150ms. Calculate loaded download latency $L_{\text{dl}}$ and delta $\Delta_{\text{dl}} = \max(0, L_{\text{dl}} - L_{\text{base}})$.
-3. **Upload Saturation:** Initiate parallel HTTP POST uploads with random 256KB binary payloads, measuring latency concurrently. Calculate loaded upload latency $L_{\text{ul}}$ and delta $\Delta_{\text{ul}} = \max(0, L_{\text{ul}} - L_{\text{base}})$.
+1. **Unloaded Baseline:** Probe the target 8 times in an idle state. Calculate baseline median latency $L_{\text{base}}$.
+2. **Download Saturation:** 10 seconds of 6 parallel HTTP GET streams from the test provider, pinging concurrently. Pings from the first 2.5 seconds, while the transfer speeds up, are shown but not graded. Calculate loaded download latency $L_{\text{dl}}$ and delta $\Delta_{\text{dl}} = \max(0, L_{\text{dl}} - L_{\text{base}})$. A phase needs at least 2 MB to count; the speed reached is stored with the result.
+3. **Upload Saturation:** 10 seconds of 4 parallel HTTP POST streams with random 256 KB payloads, pinging concurrently, with the same warm-up rule. Calculate loaded upload latency $L_{\text{ul}}$ and delta $\Delta_{\text{ul}} = \max(0, L_{\text{ul}} - L_{\text{base}})$.
 
 ### 4.2 Grading Scale
 $$\Delta_{\max} = \max(\Delta_{\text{dl}}, \Delta_{\text{ul}})$$
@@ -87,6 +87,16 @@ $$\Delta_{\max} = \max(\Delta_{\text{dl}}, \Delta_{\text{ul}})$$
 - **C ($30 - 60\text{ ms}$):** Noticeable. Interactive gaming/video calls degrade under load.
 - **D ($60 - 150\text{ ms}$):** Poor. Heavy buffer bloat.
 - **F ($> 150\text{ ms}$):** Critical. Router buffers hold hundreds of milliseconds of data.
+
+### 4.3 Observed in Real Use (since 0.14)
+When this PC itself moves more than the heavy-traffic limit (15 Mbps by default) for at least 10 seconds, NetPulse compares the plain-ping reference servers during that stretch with the minute before it:
+
+- **Before:** each reference server's median over the 60 s before the stretch started (not reaching back into an earlier stretch), taken when the stretch is first reported, because a long stretch outlasts the probe history. A server needs 5 replies.
+- **During:** each server's median from 3 s after the start to the last heavy second. A server needs 5 replies.
+- **Rise:** the median over servers of $L_{\text{during}} - L_{\text{before}}$, so every server is compared with itself and a far-away server never looks like a rise. Probes without a reply during the stretch are reported as a percentage.
+- **Stretch boundaries:** dips below the limit shorter than 5 s do not end a stretch (downloads are bursty). NetPulse's own Speed and Bufferbloat tests are never counted, and a stretch they interrupt is dropped. Only the adapter Windows uses for the internet counts.
+
+The rise is described (steady up to 15 ms, a little up to 30 ms, bufferbloat above), stored with the test results and shown on the Bufferbloat page, but **never graded**: the line may not have been full, so a steady ping proves little. In the "Ready to play?" checklist, a clear rise (above 30 ms) seen in the last 14 days counts as evidence of bufferbloat when no test was run; a steady ping does not count as a pass.
 
 ---
 

@@ -35,6 +35,15 @@ function Check($name, $ok, $detail) {
 
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 $env:NETPULSE_DATA_DIR = $DataDir
+# results "from earlier runs": the Speed test and Bufferbloat pages must show them after a start
+@(
+    @{ T = '2026-10-10T10:00:00Z'; Kind = 'Speed'; Connection = 'Wired'; DownMbps = 400; UpMbps = 40 },
+    @{ T = '2026-10-11T11:00:00Z'; Kind = 'Speed'; Connection = 'Wired'; DownMbps = 420; UpMbps = 41 },
+    @{ T = '2026-10-10T19:30:00Z'; Kind = 'Speed'; Connection = 'Wired'; DownMbps = 210; UpMbps = 38 },
+    @{ T = '2026-10-11T20:00:00Z'; Kind = 'Speed'; Connection = 'Wired'; DownMbps = 230; UpMbps = 39 },
+    @{ T = '2026-10-12T20:00:00Z'; Kind = 'Bufferbloat'; Connection = 'Wired'; Grade = 'C'; RestMs = 14; DownDeltaMs = 45; UpDeltaMs = 12; DownMbps = 380; UpMbps = 38 },
+    @{ T = '2026-10-13T21:00:00Z'; Kind = 'RealLoad'; Connection = 'Wired'; RestMs = 14; LoadedMs = 52; RiseMs = 38; DownMbps = 85; UpMbps = 2; PeakDownMbps = 95; PeakUpMbps = 3; Seconds = 130 }
+) | ConvertTo-Json | Set-Content -Path (Join-Path $DataDir 'test-history.json') -Encoding UTF8
 $proc = Start-Process -FilePath $Exe -PassThru
 $script:Root = $null
 
@@ -172,6 +181,7 @@ try {
     Check 'A recording shows its network activity view' ($null -ne (Wait-For { Find-Like '^Recording network activity graph$' } 5)) ''
     if ($graphView) { $graphView.SetFocus(); [System.Windows.Forms.SendKeys]::SendWait('{UP}{UP}{UP}'); Start-Sleep -Milliseconds 500 }
     Check 'Lag marked with the shortcut is listed in the report' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
+    Check "History says whether this PC was busy when lag was marked" ($null -ne (Find-Like "^Lag and this PC's own traffic\. ")) ''
     Check 'History shows how much space recordings use' ($null -ne (Find-Like '^1 recording, .* MB on this PC')) ''
     Check 'History writes its summary index' (Test-Path (Join-Path $DataDir 'sessions\index.json')) ''
 
@@ -190,6 +200,13 @@ try {
     Click-Element (Find-Like '^Network activity$')
     Check 'Network activity shows live speeds and the graph' (($null -ne (Wait-For { Find-Like '^Network activity graph$' } 5)) -and ($null -ne (Find-Like '^Download now$'))) ''
     Check 'Network activity lists the programs online' ($null -ne (Wait-For { Find-Like '^Programs online$' } 8)) ''
+
+    # stored results, seeded before the start
+    Click-Element (Find-Like '^Speed test$')
+    Check 'Speed test keeps results over time' (($null -ne (Wait-For { Find-Like '^Typical of your 4 tests' } 5)) -and ($null -ne (Find-Like '^Recent results$'))) ''
+    Check 'Speed test shows the last stored result after a start' ($null -ne (Find-Like '^Last test .*230 Mbps down')) ''
+    Click-Element (Find-Like '^Bufferbloat test$')
+    Check 'Bufferbloat lists its tests and what was seen in real use' (($null -ne (Wait-For { Find-Like '^Seen in real use$' } 5)) -and ($null -ne (Find-Like 'Seen once in real use: ping rose by 38 ms'))) ''
 
 
     # ---- Settings: change a value, save, and confirm it was applied and written ----

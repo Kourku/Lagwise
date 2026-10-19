@@ -2,6 +2,32 @@
 
 Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 0.14.0
+
+**Evidence over time:** NetPulse now keeps what it measures, so a slow evening or a laggy download can be shown rather than remembered.
+
+**New: your results over time** (Speed test and Bufferbloat pages)
+- Every finished Speed and Bufferbloat test is kept on this PC (`test-history.json`, the latest 500), with a bar chart of the latest 12 and the 5 newest as text.
+- A plain conclusion under each chart, for example "Evening tests are 46% slower than daytime ones (220 against 410 Mbps down, cable tests only). Slower evenings usually mean your provider's network is busy at peak time." Evenings (18:00 to midnight) and daytime are only compared on one kind of connection, so a Wi-Fi test among cable tests cannot fake a slow evening. Wi-Fi and cable are compared when both were tested.
+- The Speed test shows your last result after a restart instead of zero. The Bufferbloat result remembered by earlier versions starts the history.
+- **Clear** forgets the stored results of that page, after asking.
+- Only numbers and the kind of connection (Wired or Wi-Fi) are stored: no addresses, adapter or network names.
+
+**New: lag under real load, without running a test**
+- When this PC itself moves a lot of data (a game update, a cloud backup) and the heavy-traffic stretch ends, the timeline gets a "Heavy traffic ended" entry saying how much your ping rose meanwhile: "Ping to the reference servers rose by 38 ms meanwhile (14 ms before, 52 ms during): the load made your connection queue (bufferbloat)...". Each reference server is compared with its own ping in the minute before, so distance never looks like a rise.
+- The observation is kept with the Bufferbloat results (outlined bars, "Seen in real use") but never graded: the line may not have been full, so a steady ping proves little. The page says so.
+- "Ready to play?" uses it honestly: without a Bufferbloat test, a clear rise (over 30 ms) seen in the last two weeks is reported as a likely problem; a steady ping stays "not tested". With a test, its grade stands, and a newer, clearly worse observation is mentioned.
+
+**New: lag marks and this PC's own traffic** (History, recordings from 0.13 on)
+- Each moment you marked as laggy says whether this PC was busy at the time ("This PC was busy: up to 48 Mbps down... That traffic competes with the game") or its own traffic was light, so a download on this PC was not the cause.
+- A line above the list sums it up ("2 of the 3 moments you marked came while this PC was busy..."). The exported recording report includes both. "Busy" uses the heavy-traffic limit from Settings.
+
+**Improved**
+- **Heavy-traffic stretches tolerate short dips.** A dip below the limit shorter than 5 seconds no longer ends a stretch, so a bursty download (a launcher pausing to write to disk) is one stretch, not several or none.
+- **The exported report (Ctrl+E) is rewritten in plain words:** local times with the time zone, event names as on screen (not internal codes), newest events first, a "Tests over time" section with the conclusions and the latest 30 results, and no Wi-Fi network name or access point address (a provider does not need them). It says it contains local network addresses and that nothing in it is game-server ping.
+- **Speed test:** no more pop-up asking to confirm; the page already says what the test does. While a recording runs, both test pages warn that the test will show up in it. Data transferred reads "212 MB" instead of a 9-digit byte count.
+- Help: the Bufferbloat glossary entry explains the real-use observation.
+
 ## 0.13.0
 
 **Network activity, refined**

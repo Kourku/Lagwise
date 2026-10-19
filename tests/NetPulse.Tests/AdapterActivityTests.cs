@@ -84,7 +84,7 @@ public class AdapterActivityTests
         void Run(int seconds, long bytesPerSecond) { for (int i = 0; i < seconds; i++) { f.Rx += bytesPerSecond; m.Sample(T0.AddSeconds(++s)); } }
 
         Run(5, 5_000_000);       // 40 Mbps for 5 s: too short
-        Run(3, 10_000);          // quiet again
+        Run(6, 10_000);          // quiet again, for longer than a dip
         Assert.Empty(reports);
 
         Run(20, 5_000_000);      // 40 Mbps for 20 s
@@ -93,7 +93,7 @@ public class AdapterActivityTests
         Assert.Equal(40_000_000, r.RxBps, 3);
         Assert.True(r.Duration >= TimeSpan.FromSeconds(10));
 
-        Run(3, 10_000);          // drops back, then a new stretch is a new report
+        Run(6, 10_000);          // drops back for longer than a dip, then a new stretch is a new report
         Run(12, 5_000_000);
         Assert.Equal(2, reports.Count);
     }
