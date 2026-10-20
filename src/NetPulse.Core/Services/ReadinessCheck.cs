@@ -36,7 +36,7 @@ public static class ReadinessCheck
             Router(metrics.FirstOrDefault(m => m.IsGateway), wifi),
         };
 
-        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == NetworkProtocol.Icmp && m.RecentSampleCount >= MinSamples).ToList();
+        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && m.Protocol == NetworkProtocol.Icmp && m.RecentSampleCount >= MinSamples).ToList();
         items.Add(Loss(refs));
         items.Add(Stability(refs));
         items.Add(Normal(refs));

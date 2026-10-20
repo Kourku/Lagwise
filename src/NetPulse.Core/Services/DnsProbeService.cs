@@ -107,8 +107,10 @@ public class DnsProbeService
 
             sw.Restart();
             await udpClient.SendAsync(query, query.Length, endpoint);
-            var receiveTask = udpClient.ReceiveAsync(cts.Token).AsTask();
-            var result = await receiveTask;
+            // only the server asked, answering this query, counts: anyone on the network can send a packet to this port
+            UdpReceiveResult result;
+            do { result = await udpClient.ReceiveAsync(cts.Token); }
+            while (!IsAnswerTo(query, dnsServerIp, result));
             sw.Stop();
 
             if (result.Buffer.Length > 12)
@@ -137,6 +139,15 @@ public class DnsProbeService
         }
 
         return measurement;
+    }
+
+    /// <summary>True when <paramref name="reply"/> comes from <paramref name="server"/> and carries the query's transaction id.</summary>
+    public static bool IsAnswerTo(byte[] query, IPAddress server, UdpReceiveResult reply)
+    {
+        var from = reply.RemoteEndPoint.Address;
+        if (from.IsIPv4MappedToIPv6) from = from.MapToIPv4();
+        return from.Equals(server) && reply.RemoteEndPoint.Port == 53
+            && reply.Buffer.Length >= 2 && reply.Buffer[0] == query[0] && reply.Buffer[1] == query[1];
     }
 
     private static byte[] BuildDnsQuery(string domain)

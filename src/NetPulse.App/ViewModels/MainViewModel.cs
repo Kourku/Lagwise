@@ -245,7 +245,7 @@ public class MainViewModel : ViewModelBase
         };
         GameMonitor.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(GameMonitorViewModel.ProcessStatus) or nameof(GameMonitorViewModel.IsMonitoring) or nameof(GameMonitorViewModel.SelectedProfile)) UpdateGameCard();
+            if (e.PropertyName is nameof(GameMonitorViewModel.CardTitle) or nameof(GameMonitorViewModel.CardDetail) or nameof(GameMonitorViewModel.IsMonitoring)) UpdateGameCard();
         };
         MtrHops.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoHops));
         GameMonitor.OpenRecordingRequested += (_, id) => OpenRecording(id);
@@ -484,9 +484,9 @@ public class MainViewModel : ViewModelBase
     public System.Collections.Generic.IReadOnlyList<GlossaryEntry> Glossary => Lexicon.Glossary;
     public string HelpMeasuresText =>
         "NetPulse measures how your connection behaves: how fast and how steadily your router and several independent public servers answer, and whether answers go missing. "
-        + "When a game is selected it also lists the network connections that game has open.\n\n"
-        + "It does not measure the ping you see inside a game, and it does not know which server your match is on. Public reference servers are not game servers. "
-        + "A result is a clue backed by measurements, never a verdict, and NetPulse says how confident it is.\n\n"
+        + "While you play any of your games, it records this and afterwards says whether lag came from your side: your Wi-Fi or router, your provider, or this PC (its own downloads, a processor working flat out).\n\n"
+        + "It does not measure the ping you see inside a game, and it does not know which server your match is on: games send the match over UDP, and Windows only shows where that goes to programs with administrator rights. "
+        + "Public reference servers are not game servers. When your side was fine, the lag was further away.\n\n"
         + "Everything stays on this PC. The only outside services contacted are the public reference servers it pings, the speed-test provider when you run Speed Test or Bufferbloat, "
         + "and, when you check them on the Site check page, the sites themselves, two public DNS services (Cloudflare and Google) and the sites' public status pages.";
     public string ProbeIntervalText => $" • Probing every {_host.Settings.MonitoringIntervalMs / 1000.0:0.##} s";
@@ -494,7 +494,7 @@ public class MainViewModel : ViewModelBase
 
     private string _latestEventText = "No problems recorded since NetPulse started.";
     public string LatestEventText { get => _latestEventText; private set => SetProperty(ref _latestEventText, value); }
-    private string _gameCardTitle = "No game selected";
+    private string _gameCardTitle = "Watching for your games";
     public string GameCardTitle { get => _gameCardTitle; private set => SetProperty(ref _gameCardTitle, value); }
     private string _gameCardDetail = "Choose a game to watch your connection while you play.";
     public string GameCardDetail { get => _gameCardDetail; private set => SetProperty(ref _gameCardDetail, value); }
@@ -515,15 +515,8 @@ public class MainViewModel : ViewModelBase
 
     private void UpdateGameCard()
     {
-        var gm = GameMonitor;
-        if (gm.SelectedProfile == null)
-        {
-            GameCardTitle = "No game selected";
-            GameCardDetail = "Choose a game to watch your connection while you play.";
-            return;
-        }
-        GameCardTitle = gm.SelectedProfile.Profile.DisplayName;
-        GameCardDetail = (gm.IsMonitoring ? "Recording - " : "Not recording - ") + gm.ProcessStatus;
+        GameCardTitle = GameMonitor.CardTitle;
+        GameCardDetail = GameMonitor.CardDetail;
     }
 
     public string MtrDestination
@@ -792,7 +785,7 @@ public class MainViewModel : ViewModelBase
     {
         if (IsRecording) RefreshSessionStatus();
         UpdateFooterRecording();
-        foreach (var m in metrics.Where(x => !x.IsGameEndpoint))
+        foreach (var m in metrics)
         {
             var existing = Targets.FirstOrDefault(t => t.TargetId == m.TargetId);
             if (existing != null)
@@ -813,7 +806,7 @@ public class MainViewModel : ViewModelBase
 
         // Reference targets are different kinds of probe (a plain ping vs. an HTTPS handshake), so their latencies are not averaged
         // together. The headline numbers use the typical (median) of the plain pings; loss is the mean over all reference targets.
-        var internet = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.TotalProbes > 0).ToList();
+        var internet = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && m.TotalProbes > 0).ToList();
         if (internet.Count > 0)
         {
             var pings = internet.Where(i => i.Protocol == NetworkProtocol.Icmp && i.ReplyCount > 0).ToList();
@@ -1313,7 +1306,7 @@ public class MainViewModel : ViewModelBase
         IsAnyRecording = _host.IsRecording;
         if (!IsAnyRecording) { FooterRecordingText = ""; return; }
         var elapsed = DateTime.UtcNow - (_host.Recorder.StartedUtc ?? DateTime.UtcNow);
-        string what = GameMonitor.IsMonitoring ? $"Recording {GameMonitor.SelectedProfile?.Profile.DisplayName}" : "Recording network session";
+        string what = GameMonitor.IsMonitoring ? $"Recording {GameMonitor.RecordingGameName}" : "Recording network session";
         string key = _host.Settings.MarkLagHotkey;
         FooterRecordingText = $"{what}  {elapsed:hh\\:mm\\:ss}" + (key == HotkeyGesture.Off ? "" : $"  \u2022  {key} marks lag");
     }
@@ -1372,10 +1365,11 @@ public class MainViewModel : ViewModelBase
         return ok;
     }
 
+    /// <summary>Shows History &amp; reports, with the given recording open (an empty id just shows the list).</summary>
     public void OpenRecording(string id)
     {
         CurrentTab = "History";
-        _ = History.OpenAsync(id);
+        if (!string.IsNullOrEmpty(id)) _ = History.OpenAsync(id);
     }
 
     private string? _lastSavedId;
@@ -1385,7 +1379,7 @@ public class MainViewModel : ViewModelBase
     private void OnSessionSaved(SessionSavedEventArgs e)
     {
         var s = e.Session;
-        if (s.GameId == null)
+        if (!s.IsGameRecording)
         {
             IsRecording = false;
             _lastSavedId = e.Error == null ? s.Id : null;

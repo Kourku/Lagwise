@@ -104,6 +104,10 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         new("Keep forever", 0), new("Delete after 30 days", 30), new("Delete after 90 days", 90), new("Delete after 1 year", 365)
     };
+    public IReadOnlyList<Choice> AutoKeepChoices { get; } = new Choice[]
+    {
+        new("The newest 20", 20), new("The newest 50 - recommended", 50), new("The newest 200", 200), new("All of them", 0)
+    };
     public IReadOnlyList<string> HotkeyChoices { get; } = HotkeyGesture.Presets;
     public IReadOnlyList<string> NewMethods { get; } = new[] { "Ping (ICMP)", "TCP connect", "HTTPS handshake" };
 
@@ -141,6 +145,8 @@ public sealed class SettingsViewModel : ViewModelBase
     public bool ReportsIncludeAddresses { get => _reportAddresses; set => Set(ref _reportAddresses, value); }
     private bool _alerts, _alertsBg;
     public int RecordingRetentionDays { get => _retentionDays; set => Set(ref _retentionDays, value); }
+    private int _autoKept;
+    public int AutoRecordingsKept { get => _autoKept; set => Set(ref _autoKept, value); }
     public int HeavyTrafficMbps { get => _heavyMbps; set => Set(ref _heavyMbps, value); }
     private int _heavyMbps;
     public IReadOnlyList<Choice> HeavyTrafficChoices { get; } = new Choice[]
@@ -226,6 +232,7 @@ public sealed class SettingsViewModel : ViewModelBase
             GameStartCheck = d.GameStartCheck;
             ReportsIncludeAddresses = d.ReportsIncludeAddresses;
             RecordingRetentionDays = Nearest(RetentionChoices, d.RecordingRetentionDays);
+            AutoRecordingsKept = Nearest(AutoKeepChoices, d.AutoRecordingsKept);
             HeavyTrafficMbps = Nearest(HeavyTrafficChoices, d.HeavyTrafficMbps);
             LatencySpikeText = d.LatencySpikeThresholdMs.ToString("0.#", CultureInfo.CurrentCulture);
             PacketLossText = d.PacketLossThresholdPercent.ToString("0.#", CultureInfo.CurrentCulture);
@@ -283,6 +290,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _draft.GameStartCheck = GameStartCheck;
         _draft.ReportsIncludeAddresses = ReportsIncludeAddresses;
         _draft.RecordingRetentionDays = RecordingRetentionDays;
+        _draft.AutoRecordingsKept = AutoRecordingsKept;
         _draft.HeavyTrafficMbps = HeavyTrafficMbps;
         _draft.LatencySpikeThresholdMs = spike;
         _draft.PacketLossThresholdPercent = loss;

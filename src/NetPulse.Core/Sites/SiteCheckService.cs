@@ -231,9 +231,43 @@ public sealed class SiteCheckService
     private static readonly HttpClient IconHttp = CreateIconHttp();
     private static HttpClient CreateIconHttp()
     {
-        var c = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, ConnectTimeout = TimeSpan.FromSeconds(5) });
+        var c = new HttpClient(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 3,
+            ConnectTimeout = TimeSpan.FromSeconds(5),
+            // a page or a redirect chooses the icon's address: refuse one on this PC or the home network, so a site
+            // cannot make NetPulse send requests to the router or other devices
+            ConnectCallback = async (context, token) =>
+            {
+                var addresses = (await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, token)).Where(IsPublicAddress).ToArray();
+                if (addresses.Length == 0) throw new HttpRequestException("an icon on this PC or the home network is not fetched");
+                var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                try
+                {
+                    await socket.ConnectAsync(addresses, context.DnsEndPoint.Port, token);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+        });
         c.DefaultRequestHeaders.UserAgent.ParseAdd(SiteProbes.UserAgent);
         return c;
+    }
+
+    /// <summary>An address on the internet: not this PC, the home network, a provider's shared range, link-local or multicast.</summary>
+    public static bool IsPublicAddress(IPAddress ip)
+    {
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any)) return false;
+        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+            return !(ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal || ip.IsIPv6Multicast);
+        var b = ip.GetAddressBytes();
+        return b[0] != 0 && b[0] < 224 && !Services.ReportPrivacy.IsPersonal(ip);
     }
 
     /// <summary>Only the image formats Windows draws without help: ICO, PNG, GIF and JPEG, recognised by their first bytes.</summary>

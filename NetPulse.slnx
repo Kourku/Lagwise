@@ -5,6 +5,7 @@
     <Project Path="src/NetPulse.Installer/NetPulse.Installer.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/NetPulse.FakeGame/NetPulse.FakeGame.csproj" />
     <Project Path="tests/NetPulse.Tests/NetPulse.Tests.csproj" />
   </Folder>
 </Solution>

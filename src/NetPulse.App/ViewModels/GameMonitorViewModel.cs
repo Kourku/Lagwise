@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -16,188 +15,78 @@ using NetPulse.Core.Sessions;
 
 namespace NetPulse.App.ViewModels;
 
-public sealed class GameProfileItem : ViewModelBase
+/// <summary>An entry of the game picker: "All my games", or one game found on this PC.</summary>
+public sealed class GameItem : ViewModelBase
 {
     private ImageSource? _icon;
 
-    public GameProfileItem(GameProfile profile, ImageSource? icon = null) { Profile = profile; _icon = icon; }
-    public GameProfile Profile { get; }
-    public string Id => Profile.Id;
-    public string Display => $"{Profile.DisplayName}  ({StatusLabel(Profile.Status)})";
-    public string Name => Profile.DisplayName;
-    public string StatusText => StatusLabel(Profile.Status);
-    public string Monogram => GameIcons.MonogramOf(Profile.Id, Profile.DisplayName);
-    /// <summary>The game's own icon once NetPulse has seen it running (kept on disk), else null and the initials show.</summary>
+    public GameItem(GameProfile? profile, string subtitle, ImageSource? icon = null)
+    {
+        Profile = profile;
+        Subtitle = subtitle;
+        _icon = icon;
+    }
+
+    /// <summary>Null for "All my games".</summary>
+    public GameProfile? Profile { get; }
+    public string Id => Profile?.Id ?? GameMonitorService.AllGames;
+    public bool IsAll => Profile == null;
+    public string Name => Profile?.DisplayName ?? "All my games";
+    public string Subtitle { get; }
+    public string Monogram => Profile == null ? "" : GameIcons.MonogramOf(Profile.Id, Profile.DisplayName);
     public ImageSource? Icon { get => _icon; set { if (SetProperty(ref _icon, value)) OnPropertyChanged(nameof(HasIcon)); } }
     public bool HasIcon => _icon != null;
-    /// <summary>Set once an icon was looked for this session, so a program without one is not read every poll.</summary>
-    public bool IconTried { get; set; }
-    public override string ToString() => Display;
-
-    public static string StatusLabel(SupportStatus s) => s switch
-    {
-        SupportStatus.Supported => "Supported",
-        SupportStatus.ReferenceOnly => "Reference-only",
-        _ => "Not implemented"
-    };
+    public bool CanRemove => Profile != null;
+    public override string ToString() => Name;
 }
 
-public sealed class ConnectionRow : ViewModelBase
+/// <summary>A saved game session in the "Recent sessions" list.</summary>
+public sealed class RecentSessionItem
 {
-    private string _state = "", _lastSeen = "", _measuredBy = "";
-    private bool _isActive;
-
-    public ConnectionRow(ConnectionView v) { Id = v.Id; Update(v); }
-
-    /// <summary>Row identity: grouped rows are keyed by remote endpoint so a reconnect does not replace the row (or lose the selection).</summary>
-    public static string KeyOf(ConnectionView v) => v.HasRemote ? $"{v.Protocol}|{v.Remote}" : v.Id;
-
-    /// <summary>The connection the row currently stands for (the most recent one in a group); used when measuring.</summary>
-    public string Id { get; private set; }
-    public string Kind { get; private set; } = "";
-    public string KindExplanation { get; private set; } = "";
-    public bool IsWebService { get; private set; }
-    private int _occurrences = 1;
-    public int Occurrences { get => _occurrences; private set { if (SetProperty(ref _occurrences, value)) OnPropertyChanged(nameof(OccurrencesText)); } }
-    public string OccurrencesText => _occurrences > 1 ? $"{_occurrences}x" : "";
-    public string Protocol { get; private set; } = "";
-    public string Local { get; private set; } = "";
-    public string Remote { get; private set; } = "";
-    public string Scope { get; private set; } = "";
-    public string Role { get; private set; } = "";
-    public int Pid { get; private set; }
-    public string FirstSeen { get; private set; } = "";
-    public string Hint { get; private set; } = "";
-    public bool HasRemote { get; private set; }
-    public string State { get => _state; private set => SetProperty(ref _state, value); }
-    public string LastSeen { get => _lastSeen; private set => SetProperty(ref _lastSeen, value); }
-    public string MeasuredBy { get => _measuredBy; private set => SetProperty(ref _measuredBy, value); }
-    public bool IsActive { get => _isActive; private set { if (SetProperty(ref _isActive, value)) OnPropertyChanged(nameof(Status)); } }
-    public string Status => IsActive ? State : "Ended";
-
-    public void Update(ConnectionView v)
+    public RecentSessionItem(SessionSummary s, ImageSource? icon)
     {
-        Id = v.Id;
-        Kind = v.KindLabel; KindExplanation = v.KindExplanation; IsWebService = v.Kind == ConnectionKind.WebService;
-        Occurrences = v.Occurrences;
-        Protocol = v.Protocol; Local = v.Local; Remote = v.Remote; Scope = v.Scope; Role = v.Role; Pid = v.Pid;
-        FirstSeen = v.FirstSeenUtc.ToLocalTime().ToString("HH:mm:ss"); Hint = v.MeasureHint; HasRemote = v.HasRemote;
-        State = v.State;
-        LastSeen = v.LastSeenUtc.ToLocalTime().ToString("HH:mm:ss");
-        MeasuredBy = v.MeasuredBy ?? "";
-        IsActive = v.IsActive;
-    }
-}
-
-/// <summary>A row in either the "measured endpoints" or the "reference measurements" list.</summary>
-public sealed class MeasurementRow : ViewModelBase
-{
-    private string _latency = "-", _variation = "-", _loss = "-", _status = "Waiting for the first probe...";
-
-    public MeasurementRow(string id, string name, string method, string kind, string note)
-    {
-        Id = id; Name = name; Method = method; Kind = kind; Note = note;
+        Id = s.Id;
+        Title = s.GameDisplayName ?? s.Name;
+        var start = s.StartedUtc.ToLocalTime();
+        var length = (s.EndedUtc ?? s.StartedUtc) - s.StartedUtc;
+        When = $"{GameMonitorViewModel.Day(start)} {start:HH:mm}  ·  {VerdictViewModel.Duration(length)}" + (s.LagMarkerCount > 0 ? $"  ·  {s.LagMarkerCount} lag mark{(s.LagMarkerCount == 1 ? "" : "s")}" : "");
+        Level = s.Verdict is VerdictLevel v ? VerdictViewModel.LevelOf(v) : "Unknown";
+        Headline = s.VerdictHeadline ?? (s.IsComplete ? "" : "Interrupted recording");
+        Icon = icon;
+        Monogram = GameIcons.MonogramOf(s.GameId ?? "", Title);
     }
 
     public string Id { get; }
-    public string Name { get; }
-    public string Method { get; }
-    public string Kind { get; }
-    public string Note { get; }
-    public string Latency { get => _latency; private set => SetProperty(ref _latency, value); }
-    public string Variation { get => _variation; private set => SetProperty(ref _variation, value); }
-    public string Loss { get => _loss; private set => SetProperty(ref _loss, value); }
-    public string Status { get => _status; private set => SetProperty(ref _status, value); }
-
-    public void Update(TargetMetrics m)
-    {
-        bool replied = m.ReplyCount > 0;
-        Latency = replied && m.IsReachable ? $"{m.CurrentLatency:F1} ms" : "no reply";
-        Variation = m.RecentSampleCount >= 2 && replied ? $"{m.Jitter:F1} ms" : "-";
-        Loss = m.RecentSampleCount > 0 ? $"{m.PacketLossPercent:F0}% of {m.RecentSampleCount} probes / {m.RecentWindowSeconds:F0} s" : "-";
-
-        Status = m.TotalProbes == 0 ? "Waiting for the first probe..."
-            : !replied && m.TotalProbes >= 3 ? "No replies yet - the endpoint may filter this kind of probe (not necessarily offline)."
-            : !m.IsReachable ? "Stopped answering."
-            : m.IsLatencyElevated ? "Slower than this target's own normal."
-            : "Answering.";
-    }
-}
-
-public sealed class FindingItem
-{
-    public FindingItem(GameFinding f)
-    {
-        Title = f.Title;
-        ConfidenceText = $"Confidence: {f.Confidence}";
-        Observations = string.Join("\n", f.Observations.Select(o => "• " + o));
-        NextTest = f.NextTest;
-        Details = BuildDetails(f);
-        Brush = f.Severity switch
-        {
-            FindingSeverity.Warning => new SolidColorBrush(Color.FromRgb(245, 158, 11)),
-            FindingSeverity.Notice => new SolidColorBrush(Color.FromRgb(59, 130, 246)),
-            _ => new SolidColorBrush(Color.FromRgb(156, 163, 175))
-        };
-        Brush.Freeze();
-    }
-
     public string Title { get; }
-    public string ConfidenceText { get; }
-    public string Observations { get; }
-    public string NextTest { get; }
-    public string Details { get; }
-    public Brush Brush { get; }
-
-    private static string BuildDetails(GameFinding f)
-    {
-        var sb = new StringBuilder();
-        if (f.PossibleExplanations.Count > 0) sb.AppendLine("Possible explanations:").AppendLine(string.Join("\n", f.PossibleExplanations.Select(x => "  - " + x)));
-        if (f.Evidence.Count > 0) sb.AppendLine("Supporting evidence:").AppendLine(string.Join("\n", f.Evidence.Select(x => "  - " + x)));
-        if (f.Contradictions.Count > 0) sb.AppendLine("Measurements pointing the other way:").AppendLine(string.Join("\n", f.Contradictions.Select(x => "  - " + x)));
-        return sb.ToString().TrimEnd();
-    }
+    public string When { get; }
+    public string Level { get; }
+    public string Headline { get; }
+    public ImageSource? Icon { get; }
+    public bool HasIcon => Icon != null;
+    public string Monogram { get; }
 }
 
-/// <summary>Presentation logic for the Game Monitor tab. All state comes from the shared <see cref="GameMonitorService"/>.</summary>
+/// <summary>Presentation logic for the Game Monitor page. All state comes from the shared <see cref="GameMonitorService"/>.</summary>
 public sealed class GameMonitorViewModel : ViewModelBase
 {
-    private static readonly Brush RunningBrush = Frozen(Color.FromRgb(16, 185, 129));
-    private static readonly Brush WaitingBrush = Frozen(Color.FromRgb(245, 158, 11));
-    private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
-
     private readonly NetPulseHost _host;
     private readonly GameMonitorService _monitor;
     private readonly Dispatcher _dispatcher;
     private readonly DispatcherTimer _clock;
-    private readonly Dictionary<string, ConnectionRow> _connectionRows = new();
-    private readonly Dictionary<string, MeasurementRow> _measuredRows = new();
-    private readonly Dictionary<string, MeasurementRow> _referenceRows = new();
+    private readonly Dictionary<string, ImageSource?> _icons = new(StringComparer.OrdinalIgnoreCase);
     private int _refreshQueued;
-    private GameProfileItem? _selectedProfile;
+    private GameItem? _selectedGame;
     private GameMonitorSnapshot _snapshot = new();
-    private DateTime? _sessionStart;
-
-    private string _processStatus = "Choose a game to begin.";
-    private Brush _processBrush = System.Windows.Media.Brushes.Gray;
-    private string _elapsed = "00:00:00";
-    private string _endpointSummary = "";
-    private string _connectionsEmptyText = "Choose a game, then press Start monitoring.";
-    private string _actionMessage = "";
-    private string _warningText = "";
-    private string _sessionMessage = "";
-    private string _profileSummary = "";
-    private string _limitationsText = "";
-    private string _statusPageText = "";
-    private string? _statusPageUrl;
-    private bool _isMonitoring;
-    private ConnectionRow? _selectedConnection;
-    private bool _groupRepeats = true;
-    private bool _matchTrafficHidden;
-    private MeasurementRow? _selectedMeasured;
-    private bool _isVisible;
-    private string _findingsSignature = "";
+    private bool _isMonitoring, _isVisible, _verdictBusy;
+    private string _elapsed = "00:00:00", _actionMessage = "", _sessionMessage = "";
+    private string _statusTitle = "Looking for your games...", _statusDetail = "", _statusLevel = "Info", _gamesFoundText = "";
+    private string _routerPing = "-", _internetPing = "-", _jitter = "-", _loss = "-", _traffic = "-", _processor = "-";
+    private string _routerLevel = "Unknown", _internetLevel = "Unknown", _jitterLevel = "Unknown", _lossLevel = "Unknown", _trafficLevel = "Unknown", _processorLevel = "Unknown";
+    private string _routerCaption = "", _internetCaption = "", _trafficCaption = "", _processorCaption = "";
+    private VerdictViewModel? _soFar, _lastVerdict;
+    private string _lastVerdictTitle = "";
     private string? _lastSavedId;
+    private DateTime _lastSoFar;
 
     /// <summary>Raised when the user asks to open a saved recording in History &amp; reports.</summary>
     public event EventHandler<string>? OpenRecordingRequested;
@@ -208,59 +97,228 @@ public sealed class GameMonitorViewModel : ViewModelBase
         _monitor = host.GameMonitor;
         _dispatcher = dispatcher;
 
-        Profiles = new ObservableCollection<GameProfileItem>(GameProfiles.All.Select(p => new GameProfileItem(p, GameIcons.Load(host.DataDirectory, p.Id))));
-
-        StartCommand = new RelayCommand(Start, () => !IsMonitoring && SelectedProfile != null);
+        StartCommand = new RelayCommand(Start, () => !IsMonitoring && SelectedGame != null);
         StopCommand = new RelayCommand(Stop, () => IsMonitoring);
         MarkLagCommand = new RelayCommand(MarkLag, () => IsMonitoring);
-        MeasureIcmpCommand = new RelayCommand(() => Measure(EndpointMethod.Icmp), () => IsMonitoring && SelectedConnection != null);
-        MeasureTcpCommand = new RelayCommand(() => Measure(EndpointMethod.TcpConnect), () => IsMonitoring && SelectedConnection != null);
-        StopMeasuringCommand = new RelayCommand(StopMeasuring, () => SelectedMeasured != null);
-        OpenStatusPageCommand = new RelayCommand(OpenStatusPage, () => !string.IsNullOrEmpty(_statusPageUrl));
-        OpenSessionsFolderCommand = new RelayCommand(OpenSessionsFolder);
+        AddGameCommand = new RelayCommand(AddGame, () => !IsMonitoring);
+        RemoveGameCommand = new RelayCommand(RemoveGame, () => !IsMonitoring && SelectedGame?.CanRemove == true);
+        RestoreGamesCommand = new RelayCommand(RestoreGames, () => !IsMonitoring && _host.Settings.IgnoredGames.Count > 0);
+        RefreshGamesCommand = new RelayCommand(() => _ = RefreshGamesAsync(), () => !IsMonitoring);
+        OpenStatusPageCommand = new RelayCommand(OpenStatusPage, () => StatusPageGame != null);
         OpenRecordingCommand = new RelayCommand(() => { if (_lastSavedId != null) OpenRecordingRequested?.Invoke(this, _lastSavedId); }, () => _lastSavedId != null && !IsMonitoring);
-        _host.SessionSaved += (_, e) => { if (e.Session.GameId != null) _dispatcher.InvokeAsync(() => OnSessionSaved(e)); };
+        OpenSessionCommand = new RelayCommand(p => { if (p is RecentSessionItem s) OpenRecordingRequested?.Invoke(this, s.Id); });
+        OpenHistoryCommand = new RelayCommand(() => OpenRecordingRequested?.Invoke(this, ""));
 
+        Games.Add(new GameItem(null, "Records whichever of your games starts"));
+        _host.SessionSaved += (_, e) => _dispatcher.InvokeAsync(() => OnSessionSaved(e));
+        _host.GamesChanged += (_, _) => _dispatcher.InvokeAsync(RebuildGames);
         _monitor.Updated += (_, _) => QueueRefresh();
         _host.Engine.MetricsUpdated += (_, _) => QueueRefresh();
-        _host.Events.EventLogged += (_, e) => _dispatcher.InvokeAsync(() => OnEvent(e));
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateElapsed(), _dispatcher);
         _clock.Stop();
 
-        // restore the previously selected game (starts light-weight process detection only)
-        var last = Profiles.FirstOrDefault(p => p.Id == host.Settings.LastGameId);
-        if (last != null) SelectedProfile = last;
+        // what was watched last time: all games unless one game was chosen
+        string watch = string.IsNullOrEmpty(host.Settings.LastGameId) ? GameMonitorService.AllGames : host.Settings.LastGameId!;
+        _monitor.Select(watch, out _);
+        if (_monitor.Watching == null) _monitor.Select(GameMonitorService.AllGames, out _);
+        RebuildGames();
+        _ = RefreshGamesAsync();
+        _ = LoadRecentAsync();
     }
 
-    public ObservableCollection<GameProfileItem> Profiles { get; }
-    public ObservableCollection<ConnectionRow> Connections { get; } = new();
-    public ObservableCollection<MeasurementRow> MeasuredEndpoints { get; } = new();
-    public ObservableCollection<MeasurementRow> ReferenceTargets { get; } = new();
-    public ObservableCollection<FindingItem> Findings { get; } = new();
-    public ObservableCollection<ConnectionEvent> Timeline { get; } = new();
+    public ObservableCollection<GameItem> Games { get; } = new();
+    public ObservableCollection<RecentSessionItem> RecentSessions { get; } = new();
 
     public RelayCommand StartCommand { get; }
     public RelayCommand StopCommand { get; }
     public RelayCommand MarkLagCommand { get; }
-    public RelayCommand MeasureIcmpCommand { get; }
-    public RelayCommand MeasureTcpCommand { get; }
-    public RelayCommand StopMeasuringCommand { get; }
+    public RelayCommand AddGameCommand { get; }
+    public RelayCommand RemoveGameCommand { get; }
+    public RelayCommand RestoreGamesCommand { get; }
+    public RelayCommand RefreshGamesCommand { get; }
     public RelayCommand OpenStatusPageCommand { get; }
-    public RelayCommand OpenSessionsFolderCommand { get; }
     public RelayCommand OpenRecordingCommand { get; }
+    public RelayCommand OpenSessionCommand { get; }
+    /// <summary>Opens History &amp; reports (an empty recording id).</summary>
+    public RelayCommand OpenHistoryCommand { get; }
 
-    /// <summary>
-    /// Set by the shell when the Game Monitor page is shown. While hidden only the cheap parts (process status for the
-    /// Overview card) are refreshed; the connection table and findings are rebuilt when the page comes back.
-    /// </summary>
+    /// <summary>Set by the shell while the page is shown: the live tiles and the verdict so far are only worked out then.</summary>
     public bool IsVisible
     {
         get => _isVisible;
-        set { if (SetProperty(ref _isVisible, value) && value) QueueRefresh(); }
+        set
+        {
+            if (!SetProperty(ref _isVisible, value) || !value) return;
+            QueueRefresh();
+            _ = LoadRecentAsync();
+        }
     }
 
-    /// <summary>Start recording when the game starts and save when it closes. Applied and saved immediately.</summary>
+    // ------------------------------------------------------------------ the game list
+
+    public GameItem? SelectedGame
+    {
+        get => _selectedGame;
+        set
+        {
+            if (_selectedGame == value || value == null) return;
+            if (IsMonitoring) { OnPropertyChanged(); return; }   // cannot switch while recording; the binding reverts
+            if (!_monitor.Select(value.Id, out var message)) { ActionMessage = message; OnPropertyChanged(); return; }
+            _selectedGame = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusPageGame));
+            OnPropertyChanged(nameof(HasStatusPage));
+            OnPropertyChanged(nameof(StatusPageText));
+            _host.Settings.LastGameId = value.Id;
+            _host.SaveSettings(out _);
+            ActionMessage = "";
+            CommandManager.InvalidateRequerySuggested();
+            QueueRefresh();
+        }
+    }
+
+    public string GamesFoundText { get => _gamesFoundText; private set { if (SetProperty(ref _gamesFoundText, value)) OnPropertyChanged(nameof(HasIgnoredGames)); } }
+    /// <summary>Some games were taken off the list (they can be brought back).</summary>
+    public bool HasIgnoredGames => _host.Settings.IgnoredGames.Count > 0;
+
+    private async Task RefreshGamesAsync()
+    {
+        try
+        {
+            await Task.Run(() => _host.RefreshGames());   // raises GamesChanged, which rebuilds the list
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write("Finding games", ex);
+        }
+    }
+
+    /// <summary>The picker: all games, then the games found on this PC, most recently played first.</summary>
+    private void RebuildGames()
+    {
+        var library = _monitor.Library;
+        var running = _snapshot.Running.Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var shown = library
+            .Where(p => p.Source != GameSource.BuiltIn || p.ExecutablePath != null || running.Contains(p.Id) || p.Id == _monitor.Watching)
+            .OrderByDescending(p => p.LastPlayedUtc ?? DateTime.MinValue).ThenBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        string watching = _monitor.Watching ?? GameMonitorService.AllGames;
+        var keepAll = Games.FirstOrDefault(g => g.IsAll) ?? new GameItem(null, "Records whichever of your games starts");
+        var items = new List<GameItem> { keepAll };
+        foreach (var p in shown) items.Add(new GameItem(p, SubtitleFor(p), IconFor(p)));
+
+        _selectedGame = null;
+        Games.Clear();
+        foreach (var i in items) Games.Add(i);
+        _selectedGame = items.FirstOrDefault(i => string.Equals(i.Id, watching, StringComparison.OrdinalIgnoreCase)) ?? keepAll;
+        OnPropertyChanged(nameof(SelectedGame));
+        OnPropertyChanged(nameof(StatusPageGame));
+        OnPropertyChanged(nameof(HasStatusPage));
+        OnPropertyChanged(nameof(StatusPageText));
+
+        int found = shown.Count;
+        GamesFoundText = found == 0
+            ? "No games found yet. Windows lists a game once it has run on this PC; or add one yourself."
+            : $"{found} game{(found == 1 ? "" : "s")} found on this PC" + (_host.Settings.IgnoredGames.Count > 0 ? $"; {_host.Settings.IgnoredGames.Count} taken off the list" : "") + ".";
+        CommandManager.InvalidateRequerySuggested();
+        _ = LoadIconsAsync(shown);
+        QueueRefresh();
+    }
+
+    public static string Day(DateTime local)
+    {
+        var today = DateTime.Today;
+        return local.Date == today ? "Today" : local.Date == today.AddDays(-1) ? "Yesterday" : local.ToString(local.Year == today.Year ? "ddd d MMM" : "d MMM yyyy");
+    }
+
+    private static string SubtitleFor(GameProfile p)
+    {
+        if (p.LastPlayedUtc is DateTime last)
+        {
+            var local = last.ToLocalTime();
+            int days = (DateTime.Today - local.Date).Days;
+            return days <= 0 ? "Played today" : days == 1 ? "Played yesterday" : days < 14 ? $"Played {days} days ago" : $"Last played {local:d MMM yyyy}";
+        }
+        return p.Source switch
+        {
+            GameSource.AddedByYou => "Added by you",
+            GameSource.Windows => "Found by Windows",
+            _ => "Known to NetPulse"
+        };
+    }
+
+    private ImageSource? IconFor(GameProfile p)
+    {
+        if (_icons.TryGetValue(p.Id, out var cached)) return cached;
+        var icon = GameIcons.Load(_host.DataDirectory, p.Id);
+        if (icon != null) _icons[p.Id] = icon;
+        return icon;
+    }
+
+    /// <summary>Takes the icon of each game's own program the first time, in the background, and keeps it.</summary>
+    private async Task LoadIconsAsync(List<GameProfile> games)
+    {
+        foreach (var p in games.Where(p => p.ExecutablePath != null && !_icons.ContainsKey(p.Id)).ToList())
+        {
+            _icons[p.Id] = null;    // tried once per run
+            var icon = await GameIcons.CaptureAsync(_host.DataDirectory, p.Id, p.ExecutablePath!);
+            if (icon == null) continue;
+            _icons[p.Id] = icon;
+            foreach (var item in Games.Where(g => g.Profile?.Id == p.Id)) item.Icon = icon;
+            NotifyCard();
+        }
+    }
+
+    private void AddGame()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the game's program",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true
+        };
+        if (dlg.ShowDialog() != true) return;
+        if (!_host.AddGame(dlg.FileName, out var error)) { ActionMessage = error ?? "That program could not be added."; return; }
+        string id = GameLibrary.UserPrefix + GameLibrary.StableId(dlg.FileName);
+        ActionMessage = $"Added {GameLibrary.NameFor(dlg.FileName)}. NetPulse now watches for it.";
+        _ = Task.Run(() =>
+        {
+            _host.RefreshGames();
+            _dispatcher.InvokeAsync(() =>
+            {
+                // an exe Windows already lists is that game, not a second one
+                var item = Games.FirstOrDefault(g => g.Id == id) ?? Games.FirstOrDefault(g => g.Profile?.ExecutablePath is { } p && GameProcessDetector.SamePath(p, dlg.FileName));
+                if (item != null && SelectedGame?.IsAll != true) SelectedGame = item;
+            });
+        });
+    }
+
+    private void RemoveGame()
+    {
+        var game = SelectedGame?.Profile;
+        if (game == null) return;
+        if (!_host.RemoveGame(game, out var error)) { ActionMessage = error ?? "Could not change the list."; return; }
+        ActionMessage = game.Source == GameSource.AddedByYou
+            ? $"{game.DisplayName} was removed."
+            : $"{game.DisplayName} is off the list: NetPulse no longer watches for it. \"Show all games again\" brings it back.";
+        _monitor.Select(GameMonitorService.AllGames, out _);
+        _host.Settings.LastGameId = GameMonitorService.AllGames;
+        _host.SaveSettings(out _);
+        _ = RefreshGamesAsync();
+    }
+
+    private void RestoreGames()
+    {
+        if (!_host.RestoreGames(out var error)) { ActionMessage = error ?? "Could not change the list."; return; }
+        ActionMessage = "Every game is back on the list.";
+        _ = RefreshGamesAsync();
+    }
+
+    // ------------------------------------------------------------------ recording
+
+    /// <summary>Start recording when a game starts and save when it closes. Applied and saved immediately.</summary>
     public bool AutoRecord
     {
         get => _host.Settings.AutoRecordGame;
@@ -271,39 +329,16 @@ public sealed class GameMonitorViewModel : ViewModelBase
             _host.SaveSettings(out _);
             OnPropertyChanged();
             ActionMessage = value
-                ? "Automatic recording is on: NetPulse starts recording when the game starts and saves the recording once it has been closed for 20 seconds."
-                : "Automatic recording is off.";
-        }
-    }
-
-    public string MarkLagShortcutText => _host.Settings.MarkLagHotkey == Core.Models.HotkeyGesture.Off
-        ? "Tip: set a keyboard shortcut for Mark lag in Settings, so you can mark lag without leaving the game."
-        : $"Shortcut: press {_host.Settings.MarkLagHotkey} in game to mark lag (works while the game has focus).";
-    public void NotifyShortcutChanged() => OnPropertyChanged(nameof(MarkLagShortcutText));
-
-    public GameProfileItem? SelectedProfile
-    {
-        get => _selectedProfile;
-        set
-        {
-            if (_selectedProfile == value) return;
-            if (IsMonitoring) { OnPropertyChanged(); return; } // cannot switch while recording; binding reverts
-            _selectedProfile = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(HasProfile));
-
-            _monitor.Select(value?.Id, out var message);
-            _host.Settings.LastGameId = value?.Id;
-            _host.SaveSettings(out _);
-            ActionMessage = "";
-            SessionMessage = "";
-            RenderProfile(value?.Profile);
+                ? "Automatic recording is on: a game starting starts a recording, and it is saved once the game has been closed for 20 seconds."
+                : "Automatic recording is off: press Record now when you play.";
             QueueRefresh();
         }
     }
 
-    /// <summary>False until a game is chosen: the picker shows a prompt and the per-game controls stay hidden.</summary>
-    public bool HasProfile => _selectedProfile != null;
+    public string MarkLagShortcutText => _host.Settings.MarkLagHotkey == HotkeyGesture.Off
+        ? "Tip: set a keyboard shortcut for Mark lag in Settings, so you can mark lag without leaving the game."
+        : $"In game, press {_host.Settings.MarkLagHotkey} when it lags. It works while the game has focus.";
+    public void NotifyShortcutChanged() => OnPropertyChanged(nameof(MarkLagShortcutText));
 
     public bool IsMonitoring
     {
@@ -312,74 +347,37 @@ public sealed class GameMonitorViewModel : ViewModelBase
     }
     public bool IsIdle => !IsMonitoring;
 
-    public string ProcessStatus { get => _processStatus; private set => SetProperty(ref _processStatus, value); }
-    public Brush ProcessBrush { get => _processBrush; private set => SetProperty(ref _processBrush, value); }
+    /// <summary>The game being recorded (or "a game" while the recording waits for one).</summary>
+    public string RecordingGameName => _monitor.RecordedGame?.DisplayName ?? "a game";
+
     public string Elapsed { get => _elapsed; private set => SetProperty(ref _elapsed, value); }
-    public string EndpointSummary { get => _endpointSummary; private set => SetProperty(ref _endpointSummary, value); }
-    public string ConnectionsEmptyText { get => _connectionsEmptyText; private set => SetProperty(ref _connectionsEmptyText, value); }
-    public bool ShowConnectionsEmptyText => Connections.Count == 0;
-    public string ActionMessage { get => _actionMessage; private set => SetProperty(ref _actionMessage, value); }
-    public string WarningText { get => _warningText; private set { if (SetProperty(ref _warningText, value)) OnPropertyChanged(nameof(HasWarning)); } }
-    public bool HasWarning => !string.IsNullOrEmpty(_warningText);
-    public string SessionMessage { get => _sessionMessage; private set => SetProperty(ref _sessionMessage, value); }
-    public string ProfileSummary { get => _profileSummary; private set => SetProperty(ref _profileSummary, value); }
-    public string LimitationsText { get => _limitationsText; private set => SetProperty(ref _limitationsText, value); }
-    public string StatusPageText { get => _statusPageText; private set => SetProperty(ref _statusPageText, value); }
-    public bool HasNoFindings => Findings.Count == 0;
-    public string NoFindingsText => IsMonitoring
-        ? "Nothing notable yet. Findings appear once enough recent measurements exist, and are rechecked every couple of seconds."
-        : "Start monitoring to get findings.";
-    public string MeasurementNote =>
-        "Reference measurements (your router, DNS and public endpoints) show the health of your connection in general. They are not game-server ping. "
-        + "In-game latency is not measured by NetPulse.";
+    public string ActionMessage { get => _actionMessage; private set { if (SetProperty(ref _actionMessage, value)) OnPropertyChanged(nameof(HasActionMessage)); } }
+    public bool HasActionMessage => _actionMessage.Length > 0;
+    public string SessionMessage { get => _sessionMessage; private set { if (SetProperty(ref _sessionMessage, value)) OnPropertyChanged(nameof(HasSessionMessage)); } }
+    public bool HasSessionMessage => _sessionMessage.Length > 0;
 
-    /// <summary>Show repeated reconnects to the same endpoint as one row (default), or every connection separately.</summary>
-    public bool GroupRepeats
-    {
-        get => _groupRepeats;
-        set
-        {
-            if (!SetProperty(ref _groupRepeats, value)) return;
-            Connections.Clear();
-            _connectionRows.Clear();
-            QueueRefresh();
-        }
-    }
-
-    /// <summary>The game is running with UDP sockets: its match traffic is almost certainly there, where Windows cannot show the server.</summary>
-    public bool MatchTrafficHidden { get => _matchTrafficHidden; private set => SetProperty(ref _matchTrafficHidden, value); }
-    public string MatchTrafficText =>
-        "Games normally send the match itself over UDP, and Windows only reports the local side of a UDP socket, so the match server's address is not visible to NetPulse. "
-        + "The internet connections listed are mostly the game's web services (logins, chat, telemetry). Measuring one of them is not the same as your in-game ping.";
-
-    public ConnectionRow? SelectedConnection
-    {
-        get => _selectedConnection;
-        set { if (SetProperty(ref _selectedConnection, value)) { OnPropertyChanged(nameof(SelectedConnectionHint)); CommandManager.InvalidateRequerySuggested(); } }
-    }
-
-    public string SelectedConnectionHint => SelectedConnection == null
-        ? "Select a connection to see which measurement methods make sense for it."
-        : SelectedConnection.Hint;
-
-    public MeasurementRow? SelectedMeasured
-    {
-        get => _selectedMeasured;
-        set { if (SetProperty(ref _selectedMeasured, value)) CommandManager.InvalidateRequerySuggested(); }
-    }
-
-    // ------------------------------------------------------------------ actions
+    public string StatusTitle { get => _statusTitle; private set => SetProperty(ref _statusTitle, value); }
+    public string StatusDetail { get => _statusDetail; private set => SetProperty(ref _statusDetail, value); }
+    /// <summary>For the status mark: "Good" while a game runs, "Busy" while recording, "Info" otherwise.</summary>
+    public string StatusLevel { get => _statusLevel; private set => SetProperty(ref _statusLevel, value); }
+    /// <summary>The game shown at the top of the page (recorded, running or chosen); null when watching all with none running.</summary>
+    public GameProfile? CurrentGame => _snapshot.Game;
+    public ImageSource? CurrentIcon => CurrentGame == null ? null : IconFor(CurrentGame);
+    public bool HasCurrentIcon => CurrentIcon != null;
+    public string CurrentMonogram => CurrentGame == null ? "" : GameIcons.MonogramOf(CurrentGame.Id, CurrentGame.DisplayName);
+    public bool HasCurrentGame => CurrentGame != null;
 
     private void Start()
     {
-        Timeline.Clear();
         if (_monitor.Start(out var message))
         {
             IsMonitoring = true;
-            _sessionStart = DateTime.UtcNow;
             _clock.Start();
             SessionMessage = "";
-            ActionMessage = "Monitoring started. You can leave NetPulse running; it will pick up the game when it launches.";
+            SoFar = null;
+            ActionMessage = _monitor.RecordedGame == null
+                ? "Recording. Start your game: the recording is about the first of your games that starts."
+                : $"Recording {_monitor.RecordedGame.DisplayName}.";
         }
         else
         {
@@ -390,76 +388,226 @@ public sealed class GameMonitorViewModel : ViewModelBase
 
     private void Stop()
     {
-        var session = _monitor.Stop(out var error);
+        var session = _monitor.Stop(out _);
         IsMonitoring = false;
         _clock.Stop();
-        _sessionStart = null;
-
-        if (session == null) SessionMessage = "No session was being recorded.";
+        if (session == null) SessionMessage = "Nothing was being recorded.";
         // otherwise OnSessionSaved reports the result (it also covers recordings stopped automatically)
         ActionMessage = "";
         QueueRefresh();
     }
 
+    private void MarkLag()
+    {
+        ActionMessage = _monitor.MarkLag() ? $"Lag marked at {DateTime.Now:HH:mm:ss}." : "Start a recording first.";
+    }
+
     private void OnSessionSaved(SessionSavedEventArgs e)
     {
         var session = e.Session;
+        if (!session.IsGameRecording)
+        {
+            _ = LoadRecentAsync();
+            return;    // a plain network recording, saved from History
+        }
+        SoFar = null;
         if (e.Error == null)
         {
             _lastSavedId = session.Id;
-            SessionMessage = $"Recording saved: {session.Name}. {session.Samples.Count:N0} probes, {session.Connections.Count} connections, {session.Events.Count} events, "
-                + $"{session.Gaps.Count} monitoring gaps, {session.LagMarkers.Count} lag markers. Open it in History & reports to see the graph and findings.";
+            SessionMessage = $"Recording saved: {session.Name}.";
         }
         else
         {
             _lastSavedId = null;
             SessionMessage = $"The session was recorded but could not be saved: {e.Error}";
         }
+        _ = ShowLastVerdictAsync(session);
+        _ = LoadRecentAsync();
         CommandManager.InvalidateRequerySuggested();
     }
 
-    private void MarkLag()
+    // ------------------------------------------------------------------ verdicts
+
+    /// <summary>How the recording in progress has gone so far (worked out every few seconds while the page is shown).</summary>
+    public VerdictViewModel? SoFar { get => _soFar; private set { if (SetProperty(ref _soFar, value)) { OnPropertyChanged(nameof(HasSoFar)); OnPropertyChanged(nameof(CardDetail)); } } }
+    public bool HasSoFar => _soFar != null;
+
+    /// <summary>The verdict of the last game session (this run, or the newest one saved).</summary>
+    public VerdictViewModel? LastVerdict { get => _lastVerdict; private set { if (SetProperty(ref _lastVerdict, value)) { OnPropertyChanged(nameof(HasLastVerdict)); OnPropertyChanged(nameof(CardDetail)); } } }
+    public bool HasLastVerdict => _lastVerdict != null;
+    public string LastVerdictTitle { get => _lastVerdictTitle; private set => SetProperty(ref _lastVerdictTitle, value); }
+
+    private double BusyBps => _host.Settings.HeavyTrafficMbps > 0 ? _host.Settings.HeavyTrafficMbps * 1_000_000.0 : SessionAnalysis.DefaultBusyBps;
+
+    private async Task ShowLastVerdictAsync(MonitoringSession s)
     {
-        ActionMessage = _monitor.MarkLag() ? "Lag marked at the current time." : "Start monitoring first.";
+        try
+        {
+            double busy = BusyBps;
+            var vm = await Task.Run(() => new VerdictViewModel(SessionVerdict.Build(s, busy), SessionAnalysis.Compute(s, busy)));
+            LastVerdict = vm;
+            var start = s.StartedUtc.ToLocalTime();
+            LastVerdictTitle = $"{s.GameDisplayName ?? "Game session"}  ·  {Day(start)} {start:HH:mm}";
+            if (_lastSavedId == null) _lastSavedId = s.Id;
+            CommandManager.InvalidateRequerySuggested();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            ErrorLog.Write("Session verdict", ex);
+        }
     }
 
-    private void Measure(EndpointMethod method)
+    private async Task LoadRecentAsync()
     {
-        if (SelectedConnection == null) return;
-        _monitor.MeasureEndpoint(SelectedConnection.Id, method, out var message);
-        ActionMessage = message;
+        try
+        {
+            string? recording = _host.Recorder.CurrentId;   // its checkpoint is on disk, but it is not finished
+            var list = await Task.Run(() => _host.Sessions.List().Where(x => x.IsGameRecording && x.Id != recording).Take(6).ToList());
+            RecentSessions.Clear();
+            foreach (var s in list) RecentSessions.Add(new RecentSessionItem(s, s.GameId == null ? null : IconFor(new GameProfile { Id = s.GameId, DisplayName = s.GameDisplayName ?? "", ProcessRules = Array.Empty<ProcessRule>() })));
+            OnPropertyChanged(nameof(HasRecentSessions));
+            if (LastVerdict == null && list.FirstOrDefault() is { } newest)
+            {
+                var session = await Task.Run(() => _host.Sessions.Load(newest.Id));
+                if (session != null && LastVerdict == null) await ShowLastVerdictAsync(session);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            // the list is a convenience; History shows the details
+        }
     }
 
-    private void StopMeasuring()
+    public bool HasRecentSessions => RecentSessions.Count > 0;
+
+    private void UpdateSoFar()
     {
-        if (SelectedMeasured == null) return;
-        _monitor.StopMeasuring(SelectedMeasured.Id);
+        if (!IsMonitoring || !IsVisible || _verdictBusy || DateTime.UtcNow - _lastSoFar < TimeSpan.FromSeconds(5)) return;
+        _verdictBusy = true;
+        _lastSoFar = DateTime.UtcNow;
+        double busy = BusyBps;
+        Task.Run(() =>
+        {
+            var snap = _host.Recorder.Snapshot();
+            return snap == null ? null : new VerdictViewModel(SessionVerdict.Build(snap, busy), SessionAnalysis.Compute(snap, busy));
+        }).ContinueWith(t =>
+        {
+            _verdictBusy = false;
+            if (t.Status == TaskStatus.RanToCompletion && IsMonitoring) SoFar = t.Result;
+        }, TaskScheduler.FromCurrentSynchronizationContext());
     }
+
+    // ------------------------------------------------------------------ live tiles
+
+    public string RouterPing { get => _routerPing; private set => SetProperty(ref _routerPing, value); }
+    public string InternetPing { get => _internetPing; private set => SetProperty(ref _internetPing, value); }
+    public string Jitter { get => _jitter; private set => SetProperty(ref _jitter, value); }
+    public string Loss { get => _loss; private set => SetProperty(ref _loss, value); }
+    public string Traffic { get => _traffic; private set => SetProperty(ref _traffic, value); }
+    public string Processor { get => _processor; private set => SetProperty(ref _processor, value); }
+    public string RouterLevel { get => _routerLevel; private set { if (SetProperty(ref _routerLevel, value)) OnPropertyChanged(nameof(RouterBadge)); } }
+    public string InternetLevel { get => _internetLevel; private set { if (SetProperty(ref _internetLevel, value)) OnPropertyChanged(nameof(InternetBadge)); } }
+    public string JitterLevel { get => _jitterLevel; private set { if (SetProperty(ref _jitterLevel, value)) OnPropertyChanged(nameof(JitterBadge)); } }
+    public string LossLevel { get => _lossLevel; private set { if (SetProperty(ref _lossLevel, value)) OnPropertyChanged(nameof(LossBadge)); } }
+    public string TrafficLevel { get => _trafficLevel; private set { if (SetProperty(ref _trafficLevel, value)) OnPropertyChanged(nameof(TrafficBadge)); } }
+    public string ProcessorLevel { get => _processorLevel; private set { if (SetProperty(ref _processorLevel, value)) OnPropertyChanged(nameof(ProcessorBadge)); } }
+    public string RouterBadge => Words(_routerLevel, "Steady", "Slow", "Trouble");
+    public string InternetBadge => Words(_internetLevel, "Normal", "Higher", "No reply");
+    public string JitterBadge => Words(_jitterLevel, "Steady", "Uneven", "Jumpy");
+    public string LossBadge => Words(_lossLevel, "None", "Some", "High");
+    public string TrafficBadge => Words(_trafficLevel, "Light", "Heavy", "Heavy");
+    public string ProcessorBadge => Words(_processorLevel, "Fine", "Busy", "Flat out");
+
+    private static string Words(string level, string good, string fair, string poor) => level switch
+    {
+        "Good" => good,
+        "Fair" => fair,
+        "Poor" => poor,
+        _ => ""
+    };
+    public string RouterCaption { get => _routerCaption; private set => SetProperty(ref _routerCaption, value); }
+    public string InternetCaption { get => _internetCaption; private set => SetProperty(ref _internetCaption, value); }
+    public string TrafficCaption { get => _trafficCaption; private set => SetProperty(ref _trafficCaption, value); }
+    public string ProcessorCaption { get => _processorCaption; private set => SetProperty(ref _processorCaption, value); }
+
+    private void UpdateTiles()
+    {
+        var metrics = _host.Engine.GetCurrentMetrics();
+        var nic = _host.Engine.CurrentNic;
+        var gw = metrics.FirstOrDefault(m => m.IsGateway);
+        if (gw == null || gw.TotalProbes == 0) { RouterPing = "-"; RouterLevel = "Unknown"; RouterCaption = "your router"; }
+        else
+        {
+            RouterPing = gw.IsReachable ? $"{gw.CurrentLatency:F0}" : "no reply";
+            bool slow = gw.IsReachable && gw.CurrentLatency > (nic?.IsWifi == true ? 25 : 6);
+            RouterLevel = !gw.IsReachable || gw.PacketLossPercent > 4 ? "Poor" : slow || gw.PacketLossPercent > 0 ? "Fair" : "Good";
+            RouterCaption = nic?.IsWifi == true ? $"over Wi-Fi{(nic.WifiSignalPercent is int s ? $", signal {s}%" : "")}" : "over cable";
+        }
+
+        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && m.Protocol == NetworkProtocol.Icmp && m.TotalProbes > 0).ToList();
+        var answering = refs.Where(m => m.IsReachable && m.ReplyCount > 0).ToList();
+        if (answering.Count == 0)
+        {
+            InternetPing = refs.Count == 0 ? "-" : "no reply"; InternetLevel = refs.Count == 0 ? "Unknown" : "Poor";
+            Jitter = "-"; JitterLevel = "Unknown"; Loss = "-"; LossLevel = refs.Count == 0 ? "Unknown" : "Poor";
+            InternetCaption = "reference servers, not the game's";
+        }
+        else
+        {
+            var ping = answering.Select(m => m.CurrentLatency).OrderBy(x => x).ElementAt(answering.Count / 2);
+            InternetPing = $"{ping:F0}";
+            bool elevated = answering.Count(m => m.IsLatencyElevated) * 2 > answering.Count;
+            InternetLevel = elevated ? "Fair" : "Good";
+            InternetCaption = elevated ? "higher than usual · not the game's server" : "reference servers, not the game's";
+            double jitter = answering.Average(m => m.Jitter);
+            Jitter = $"{jitter:F0}";
+            JitterLevel = jitter < 10 ? "Good" : jitter < 30 ? "Fair" : "Poor";
+            double loss = refs.Average(m => m.PacketLossPercent);
+            Loss = loss < 0.05 ? "0" : $"{loss:F1}";
+            LossLevel = loss < 0.5 ? "Good" : loss < 3 ? "Fair" : "Poor";
+        }
+
+        var a = _host.InternetAdapterActivity()?.Latest;
+        if (a == null) { Traffic = "-"; TrafficLevel = "Unknown"; TrafficCaption = "this PC"; }
+        else
+        {
+            double heavy = BusyBps;
+            Traffic = AdapterActivityMonitor.FormatBps(Math.Max(a.RxBps, a.TxBps)).Split(' ')[0];
+            TrafficCaption = $"{AdapterActivityMonitor.FormatBps(a.RxBps)} down, {AdapterActivityMonitor.FormatBps(a.TxBps)} up";
+            TrafficLevel = Math.Max(a.RxBps, a.TxBps) >= heavy ? "Fair" : "Good";
+            _trafficUnit = AdapterActivityMonitor.FormatBps(Math.Max(a.RxBps, a.TxBps)).Split(' ').Skip(1).FirstOrDefault() ?? "";
+            OnPropertyChanged(nameof(TrafficUnit));
+        }
+
+        if (_host.ProcessorPercent is double cpu)
+        {
+            Processor = $"{cpu:F0}";
+            ProcessorLevel = cpu < 80 ? "Good" : cpu < SessionVerdict.ProcessorBusyPercent ? "Fair" : "Poor";
+            ProcessorCaption = cpu >= SessionVerdict.ProcessorBusyPercent ? "flat out: can stutter like lag" : "of all cores";
+        }
+        else { Processor = "-"; ProcessorLevel = "Unknown"; ProcessorCaption = "of all cores"; }
+    }
+
+    private string _trafficUnit = "";
+    public string TrafficUnit => _trafficUnit;
+
+    // ------------------------------------------------------------------ status page
+
+    /// <summary>The game whose official status page can be opened: the one shown at the top, else the one chosen.</summary>
+    public GameProfile? StatusPageGame => new[] { _snapshot.Game, SelectedGame?.Profile }.FirstOrDefault(p => p?.HasStatusPage == true);
+    public bool HasStatusPage => StatusPageGame != null;
+    public string StatusPageText => StatusPageGame is { } g ? $"Is {g.DisplayName} itself down? Check its official status page." : "";
 
     private void OpenStatusPage()
     {
-        if (string.IsNullOrEmpty(_statusPageUrl)) return;
+        if (StatusPageGame?.StatusPage.Url is not { } url) return;
         try
         {
-            // opens in the user's browser on explicit request; NetPulse itself does not contact this page
-            SafeOpen.WebPage(_statusPageUrl);
+            SafeOpen.WebPage(url);   // opens in the browser on request; NetPulse itself does not contact the page
         }
         catch (Exception ex)
         {
             ActionMessage = $"Could not open the status page: {ex.Message}";
-        }
-    }
-
-    private void OpenSessionsFolder()
-    {
-        try
-        {
-            Directory.CreateDirectory(_host.Sessions.Directory);
-            SafeOpen.Folder(_host.Sessions.Directory);
-        }
-        catch (Exception ex)
-        {
-            ActionMessage = $"Could not open the sessions folder: {ex.Message}";
         }
     }
 
@@ -475,192 +623,114 @@ public sealed class GameMonitorViewModel : ViewModelBase
         }, DispatcherPriority.Background);
     }
 
-    private void RenderProfile(GameProfile? p)
-    {
-        if (p == null)
-        {
-            ProfileSummary = "";
-            LimitationsText = "";
-            StatusPageText = "";
-            _statusPageUrl = null;
-            return;
-        }
-
-        ProfileSummary = $"{p.DisplayName} - {GameProfileItem.StatusLabel(p.Status)}. {p.StatusExplanation}"
-            + (p.ProcessNamesVerified ? "" : " Process names for this game have not been confirmed on a real installation, so detection may fail.");
-        LimitationsText = string.Join("\n", p.Limitations.Select(l => "• " + l));
-        _statusPageUrl = p.StatusPage.Url;
-        StatusPageText = p.StatusPage.Url != null ? $"Official status: {p.StatusPage.Url}" : p.StatusPage.Note;
-        CommandManager.InvalidateRequerySuggested();
-    }
-
-    /// <summary>The first time the selected game (or its launcher) is seen running, its program's icon becomes the game's icon.</summary>
-    private void CaptureIcon(GameMonitorSnapshot snap)
-    {
-        var item = SelectedProfile;
-        if (item == null || item.HasIcon || item.IconTried || snap.Process == null || snap.Profile?.Id != item.Id) return;
-        var exe = snap.Process.GameProcesses.Concat(snap.Process.CompanionProcesses)
-            .FirstOrDefault(p => !string.IsNullOrEmpty(p.ExecutablePath) && p.Role is ProcessRole.Game or ProcessRole.Launcher)?.ExecutablePath;
-        if (exe == null) return;
-        item.IconTried = true;
-        _ = CaptureIconAsync(item, exe);
-    }
-
-    private async System.Threading.Tasks.Task CaptureIconAsync(GameProfileItem item, string exe)
-    {
-        var icon = await GameIcons.CaptureAsync(_host.DataDirectory, item.Id, exe);
-        if (icon != null) item.Icon = icon;
-    }
-
     private void Refresh()
     {
-        _snapshot = _monitor.Snapshot(_groupRepeats);
+        var before = _snapshot;
+        _snapshot = _monitor.Snapshot();
         var snap = _snapshot;
-        CaptureIcon(snap);
-
-        // process status
-        if (snap.Profile == null)
-        {
-            ProcessStatus = "Choose a game to begin.";
-            ProcessBrush = System.Windows.Media.Brushes.Gray;
-        }
-        else if (snap.Process == null)
-        {
-            ProcessStatus = $"Checking whether {snap.Profile.DisplayName} is running...";
-            ProcessBrush = System.Windows.Media.Brushes.Gray;
-        }
-        else
-        {
-            ProcessStatus = snap.Process.Message + (SelectedAdvanced && snap.Process.State == GameRunState.Running
-                ? $"  [PIDs: {string.Join(", ", snap.Process.GameProcesses.Select(p => p.Pid))}; confidence {snap.Process.Confidence}]" : "");
-            ProcessBrush = snap.Process.State switch
-            {
-                GameRunState.Running => RunningBrush,
-                GameRunState.NotRunning => System.Windows.Media.Brushes.Gray,
-                _ => WaitingBrush
-            };
-        }
 
         bool wasMonitoring = IsMonitoring;
         IsMonitoring = snap.IsMonitoring;
-        if (!wasMonitoring && snap.IsMonitoring && _monitor.StartedAutomatically)
+        if (!wasMonitoring && snap.IsMonitoring)
         {
-            Timeline.Clear();
             SessionMessage = "";
-            ActionMessage = $"{snap.Profile?.DisplayName} started, so recording started automatically. It is saved once the game has been closed for 20 seconds.";
+            SoFar = null;
             _clock.Start();
+            if (snap.StartedAutomatically) ActionMessage = $"{snap.Game?.DisplayName} started, so recording started by itself. It is saved once the game has been closed for 20 seconds.";
         }
         else if (wasMonitoring && !snap.IsMonitoring)
         {
             _clock.Stop();
         }
 
-        if (!IsVisible)
-        {
-            UpdateElapsed();
-            return; // the tables below are rebuilt when the page is shown again
-        }
-
-        // connections: update rows in place so selection survives
-        var seen = new HashSet<string>();
-        foreach (var v in snap.Connections)
-        {
-            string key = _groupRepeats ? ConnectionRow.KeyOf(v) : v.Id;
-            if (!seen.Add(key)) continue;
-            if (_connectionRows.TryGetValue(key, out var row)) row.Update(v);
-            else { row = new ConnectionRow(v); _connectionRows[key] = row; Connections.Add(row); }
-        }
-        foreach (var gone in _connectionRows.Keys.Where(k => !seen.Contains(k)).ToList())
-        {
-            Connections.Remove(_connectionRows[gone]);
-            _connectionRows.Remove(gone);
-        }
-        OnPropertyChanged(nameof(ShowConnectionsEmptyText));
-
-        EndpointSummary = snap.IsMonitoring
-            ? $"{snap.DistinctRemoteEndpoints} internet endpoint(s), of which {snap.WebServiceCount} web/API connection(s); {snap.UdpSocketCount} UDP socket(s) whose server Windows does not reveal."
-            : "";
-        MatchTrafficHidden = snap.MatchTrafficHidden;
-
-        ConnectionsEmptyText = EmptyText(snap);
-
-        // measured endpoints (game-process endpoints chosen by the user) and reference targets
-        var measuredIds = snap.Measured.Select(m => m.TargetId).ToHashSet();
-        var metrics = _host.Engine.GetCurrentMetrics();
-        SyncRows(MeasuredEndpoints, _measuredRows, snap.Measured.Select(m => (m.TargetId, (Func<MeasurementRow>)(() =>
-            new MeasurementRow(m.TargetId, m.Name, m.Method, "Endpoint observed on the game process - role unknown",
-                m.Caveat + (m.ConnectionStillObserved ? "" : " (the game connection is no longer observed)"))))).ToList());
-        foreach (var m in metrics)
-        {
-            if (_measuredRows.TryGetValue(m.TargetId, out var mr)) mr.Update(m);
-        }
-
-        var refs = metrics.Where(m => !m.IsGameEndpoint).ToList();
-        SyncRows(ReferenceTargets, _referenceRows, refs.Select(m => (m.TargetId, (Func<MeasurementRow>)(() =>
-            new MeasurementRow(m.TargetId, m.TargetName, m.Protocol.ToString().ToUpperInvariant(),
-                m.IsGateway ? "Your router" : m.IsDnsResolver ? "DNS lookup" : "Public reference endpoint - not a game server", "")))).ToList());
-        foreach (var m in refs)
-        {
-            if (_referenceRows.TryGetValue(m.TargetId, out var rr)) rr.Update(m);
-        }
-
-        // findings: rebuilt only when they change, so an expanded "details" section does not snap shut every second
-        string signature = string.Join("\u001f", snap.Findings.Select(f => f.Title + "|" + f.Confidence + "|" + string.Join("|", f.Observations) + "|" + string.Join("|", f.Evidence)));
-        if (signature != _findingsSignature)
-        {
-            _findingsSignature = signature;
-            Findings.Clear();
-            foreach (var f in snap.Findings) Findings.Add(new FindingItem(f));
-        }
-        OnPropertyChanged(nameof(HasNoFindings));
-        OnPropertyChanged(nameof(NoFindingsText));
-
-        WarningText = snap.Warnings.Count == 0 ? "" : "Some connection information is unavailable: " + string.Join(" ", snap.Warnings);
+        UpdateStatus(snap);
+        // a running game not on the list yet (a built-in game Windows has not listed) joins it
+        if (snap.Running.Any(r => Games.All(g => g.Id != r.Id))) RebuildGames();
+        if (before.Game?.Id != snap.Game?.Id) NotifyCard();
+        OnPropertyChanged(nameof(RecordingGameName));
+        OnPropertyChanged(nameof(CardTitle));
+        OnPropertyChanged(nameof(CardDetail));
+        OnPropertyChanged(nameof(StatusPageGame));
+        OnPropertyChanged(nameof(HasStatusPage));
+        OnPropertyChanged(nameof(StatusPageText));
         UpdateElapsed();
+
+        if (!IsVisible) return;
+        UpdateTiles();
+        UpdateSoFar();
     }
 
-    private bool SelectedAdvanced => Application.Current?.MainWindow?.DataContext is MainViewModel vm && vm.IsAdvancedMode;
-
-    private string EmptyText(GameMonitorSnapshot snap)
+    private void NotifyCard()
     {
-        if (snap.Profile == null) return "Choose a game, then press Start monitoring.";
-        if (!snap.IsMonitoring) return Connections.Count > 0 ? "" : "Press Start monitoring to record this game's connections.";
-        return snap.Process?.State switch
-        {
-            GameRunState.Running => "The game is running, but no network sockets are visible for it yet.",
-            GameRunState.LauncherOnly => $"Waiting for {snap.Profile.DisplayName} itself to start (only its launcher/helper is running).",
-            GameRunState.Uncertain => "A look-alike process was found but is not confirmed as the game, so its connections are not tracked.",
-            _ => $"Waiting for {snap.Profile.DisplayName} to start. Monitoring is already running; you can launch the game now."
-        };
+        OnPropertyChanged(nameof(CurrentGame));
+        OnPropertyChanged(nameof(CurrentIcon));
+        OnPropertyChanged(nameof(HasCurrentIcon));
+        OnPropertyChanged(nameof(CurrentMonogram));
+        OnPropertyChanged(nameof(HasCurrentGame));
     }
 
-    private static void SyncRows(ObservableCollection<MeasurementRow> list, Dictionary<string, MeasurementRow> index, List<(string Id, Func<MeasurementRow> Create)> wanted)
+    private void UpdateStatus(GameMonitorSnapshot snap)
     {
-        var ids = wanted.Select(w => w.Id).ToHashSet();
-        foreach (var w in wanted)
+        bool all = snap.Watching == GameMonitorService.AllGames;
+        string auto = AutoRecord ? "It is saved by itself once the game has been closed for 20 seconds." : "Press Stop & save when you are done.";
+        if (snap.IsMonitoring && snap.Game != null && snap.Process?.State == GameRunState.Running)
         {
-            if (index.ContainsKey(w.Id)) continue;
-            var row = w.Create();
-            index[w.Id] = row;
-            list.Add(row);
+            StatusTitle = $"Recording {snap.Game.DisplayName}";
+            StatusDetail = $"NetPulse is measuring your connection while you play. {auto}";
+            StatusLevel = "Busy";
         }
-        foreach (var gone in index.Keys.Where(k => !ids.Contains(k)).ToList())
+        else if (snap.IsMonitoring && snap.Game != null)
         {
-            list.Remove(index[gone]);
-            index.Remove(gone);
+            StatusTitle = $"Recording {snap.Game.DisplayName}";
+            StatusDetail = snap.Process?.State == GameRunState.LauncherOnly
+                ? $"{snap.Process.Message} The recording goes on."
+                : $"{snap.Game.DisplayName} is not running at the moment; the recording goes on.";
+            StatusLevel = "Busy";
+        }
+        else if (snap.IsMonitoring)
+        {
+            StatusTitle = "Recording: waiting for a game";
+            StatusDetail = "Start any of your games; the recording is about the first one that starts.";
+            StatusLevel = "Busy";
+        }
+        else if (snap.Game != null && snap.Process?.State == GameRunState.Running)
+        {
+            StatusTitle = $"{snap.Game.DisplayName} is running";
+            StatusDetail = _host.Recorder.IsRecording
+                ? "Not recording it: a network recording is running (History & reports)."
+                : !AutoRecord ? "Not recording. Press Record now to record this session."
+                : _monitor.NotRecordingAgain == snap.Game.Id ? "Not recording: you stopped the recording while it runs. Press Record now to record again; it records by itself the next time it starts."
+                : "Not recording yet.";
+            StatusLevel = "Good";
+        }
+        else if (!all && snap.Process != null)
+        {
+            StatusTitle = snap.Process.Message;
+            StatusDetail = AutoRecord ? $"NetPulse starts recording when {snap.Game?.DisplayName} starts." : "Automatic recording is off: press Record now when you play.";
+            StatusLevel = snap.Process.State == GameRunState.LauncherOnly ? "Info" : "Unknown";
+        }
+        else
+        {
+            StatusTitle = "No game running";
+            StatusDetail = AutoRecord ? "NetPulse starts recording when one of your games starts, and saves it when the game closes." : "Automatic recording is off: press Record now when you play.";
+            StatusLevel = "Info";
         }
     }
 
     private void UpdateElapsed()
     {
-        var start = _snapshot.StartedUtc ?? _sessionStart;
+        var start = _snapshot.StartedUtc;
         Elapsed = start.HasValue && IsMonitoring ? (DateTime.UtcNow - start.Value).ToString(@"hh\:mm\:ss") : "00:00:00";
+        if (IsMonitoring) OnPropertyChanged(nameof(CardDetail));
     }
 
-    private void OnEvent(ConnectionEvent e)
-    {
-        if (!IsMonitoring) return;
-        Timeline.Insert(0, e);
-        while (Timeline.Count > 300) Timeline.RemoveAt(Timeline.Count - 1);
-    }
+    // ------------------------------------------------------------------ Overview card
+
+    public string CardTitle => IsMonitoring ? $"Recording {RecordingGameName}"
+        : CurrentGame != null && _snapshot.Process?.State == GameRunState.Running ? $"{CurrentGame.DisplayName} is running"
+        : _snapshot.Watching is { } w && w != GameMonitorService.AllGames && CurrentGame != null ? $"Watching for {CurrentGame.DisplayName}"
+        : "Watching for your games";
+    public string CardDetail => IsMonitoring
+        ? (SoFar is { } v ? $"{Elapsed} so far: {v.Headline.ToLowerInvariant()}." : $"{Elapsed} so far.")
+        : LastVerdict is { } last ? $"Last session: {last.Headline}." : StatusDetail;
 }

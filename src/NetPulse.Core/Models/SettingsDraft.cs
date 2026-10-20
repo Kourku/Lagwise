@@ -89,6 +89,7 @@ public sealed class SettingsDraft
     public bool GameStartCheck { get; set; }
     public bool ReportsIncludeAddresses { get; set; }
     public int RecordingRetentionDays { get; set; }
+    public int AutoRecordingsKept { get; set; }
     public List<TargetDraft> Targets { get; set; } = new();
 
     private static readonly HashSet<string> BuiltInIds = AppSettings.CreateDefault().Targets.Select(t => t.Id).ToHashSet();
@@ -115,6 +116,7 @@ public sealed class SettingsDraft
         GameStartCheck = s.GameStartCheck,
         ReportsIncludeAddresses = s.ReportsIncludeAddresses,
         RecordingRetentionDays = s.RecordingRetentionDays,
+        AutoRecordingsKept = s.AutoRecordingsKept,
         Targets = s.Targets.Select(t => new TargetDraft
         {
             Id = t.Id, Name = t.Name, Host = t.Host, Protocol = t.Protocol, Port = t.Port, Enabled = t.IsEnabled,
@@ -133,6 +135,7 @@ public sealed class SettingsDraft
         if (!Targets.Any(t => t.Enabled && !t.IsGateway && !t.IsDnsResolver)) errors.Add("Keep at least one reference server enabled; without one NetPulse has nothing to compare your router against.");
         if (!HotkeyGesture.TryParse(MarkLagHotkey, out _)) errors.Add("The Mark lag shortcut is not a valid key combination.");
         if (RecordingRetentionDays < 0 || RecordingRetentionDays > 3650) errors.Add("Recordings can be kept for at most 10 years.");
+        if (AutoRecordingsKept < 0 || AutoRecordingsKept > 10_000) errors.Add("Keep between 0 (all) and 10,000 automatic recordings.");
         if (Targets.Count > TargetValidator.MaxTargets) errors.Add($"At most {TargetValidator.MaxTargets} targets can be monitored.");
         return errors;
     }
@@ -163,6 +166,7 @@ public sealed class SettingsDraft
         settings.GameStartCheck = GameStartCheck;
         settings.ReportsIncludeAddresses = ReportsIncludeAddresses;
         settings.RecordingRetentionDays = RecordingRetentionDays;
+        settings.AutoRecordingsKept = AutoRecordingsKept;
 
         var existing = settings.Targets.ToDictionary(t => t.Id);
         var merged = new List<TargetConfig>();

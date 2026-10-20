@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -19,20 +20,25 @@ public interface IProcessSource
 
 /// <summary>
 /// Reads the process list through the normal .NET/Win32 APIs; needs no administrator rights. Expensive details
-/// (start time, image path) are only read for processes whose name appears in <c>interestingNames</c>.
+/// (start time, image path) are only read for processes whose name belongs to a known game.
 /// </summary>
 public sealed class SystemProcessSource : IProcessSource
 {
     private const uint ProcessQueryLimitedInformation = 0x1000;
-    private readonly HashSet<string> _interesting;
+    private volatile HashSet<string> _interesting;
 
     public SystemProcessSource(IEnumerable<string> interestingNames)
     {
         _interesting = new HashSet<string>(interestingNames, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>Replaces the names worth a closer look (the game list changed). Safe to call while another thread reads.</summary>
+    public void SetInterestingNames(IEnumerable<string> names) =>
+        _interesting = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlyList<ProcessInfo> GetProcesses()
     {
+        var interesting = _interesting;
         var result = new List<ProcessInfo>();
         foreach (var p in Process.GetProcesses())
         {
@@ -42,7 +48,7 @@ public sealed class SystemProcessSource : IProcessSource
                 try { name = p.ProcessName; }
                 catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) { continue; }
 
-                if (!_interesting.Contains(name))
+                if (!interesting.Contains(name))
                 {
                     result.Add(new ProcessInfo(p.Id, name));
                     continue;
@@ -58,7 +64,7 @@ public sealed class SystemProcessSource : IProcessSource
         return result;
     }
 
-    private static string? TryGetImagePath(int pid)
+    public static string? TryGetImagePath(int pid)
     {
         if (!OperatingSystem.IsWindows()) return null;
 
@@ -89,10 +95,10 @@ public sealed class SystemProcessSource : IProcessSource
 public enum GameRunState
 {
     NotRunning,
-    /// <summary>Only launcher/helper/anti-cheat/crash-reporter processes exist; the game itself is not running.</summary>
+    /// <summary>Only the game's own client or launcher is running; the game itself is not.</summary>
     LauncherOnly,
     Running,
-    /// <summary>A process with the game's name exists but its install path does not match, so it is not claimed as the game.</summary>
+    /// <summary>A process with the game's name exists but its location does not match, so it is not claimed as the game.</summary>
     Uncertain
 }
 
@@ -110,11 +116,10 @@ public sealed class GameProcessState
     public GameRunState State { get; init; }
     /// <summary>Processes with role Game that are accepted as the game.</summary>
     public IReadOnlyList<DetectedProcess> GameProcesses { get; init; } = Array.Empty<DetectedProcess>();
-    /// <summary>Launcher/helper/anti-cheat/crash-reporter processes (never counted as the game).</summary>
+    /// <summary>Client/launcher/helper/crash-reporter processes (never counted as the game).</summary>
     public IReadOnlyList<DetectedProcess> CompanionProcesses { get; init; } = Array.Empty<DetectedProcess>();
-    /// <summary>Name-matching processes whose path contradicted the profile.</summary>
+    /// <summary>Name-matching processes whose location contradicted the profile.</summary>
     public IReadOnlyList<DetectedProcess> UnconfirmedProcesses { get; init; } = Array.Empty<DetectedProcess>();
-    public DetectionConfidence Confidence { get; init; }
     public string Message { get; init; } = string.Empty;
 
     /// <summary>Oldest game process, normally the parent in a multi-process game.</summary>
@@ -126,9 +131,7 @@ public static class GameProcessDetector
 {
     public static GameProcessState Detect(GameProfile profile, IEnumerable<ProcessInfo> processes)
     {
-        var rules = profile.ProcessRules
-            .GroupBy(r => r.ExecutableName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var rules = profile.ProcessRules.ToLookup(r => r.ExecutableName, StringComparer.OrdinalIgnoreCase);
 
         var games = new List<DetectedProcess>();
         var companions = new List<DetectedProcess>();
@@ -137,32 +140,19 @@ public static class GameProcessDetector
         foreach (var p in processes)
         {
             string name = p.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? p.Name[..^4] : p.Name;
-            if (!rules.TryGetValue(name, out var rule)) continue;
+            if (!rules.Contains(name)) continue;
 
-            bool hasHints = rule.PathHints is { Length: > 0 };
-            bool pathKnown = !string.IsNullOrEmpty(p.ExecutablePath);
-            bool pathMatches = hasHints && pathKnown && rule.PathHints!.Any(h => p.ExecutablePath!.Contains(h, StringComparison.OrdinalIgnoreCase));
-            var detected = new DetectedProcess(p.Pid, name, rule.Role, p.StartTimeUtc, p.ExecutablePath, PathConfirmed: pathMatches);
+            var (rule, verdict) = Match(rules[name], p.ExecutablePath);
+            if (rule == null) continue;     // a program of the same name in another place: another program, not a look-alike
+            var detected = new DetectedProcess(p.Pid, name, rule.Role, p.StartTimeUtc, p.ExecutablePath, verdict == PathVerdict.Confirmed);
 
-            if (rule.Role != ProcessRole.Game)
-            {
-                companions.Add(detected);
-            }
-            else if (hasHints && pathKnown && !pathMatches)
-            {
-                unconfirmed.Add(detected);
-            }
-            else
-            {
-                games.Add(detected);
-            }
+            if (verdict == PathVerdict.Contradicted) unconfirmed.Add(detected);
+            else if (rule.Role == ProcessRole.Game) games.Add(detected);
+            else companions.Add(detected);
         }
 
         if (games.Count > 0)
         {
-            // Confidence is lower when the profile expects a path hint but the path could not be read (e.g. protected process).
-            bool allConfirmed = games.All(g => g.PathConfirmed || !(rules[g.Name].PathHints is { Length: > 0 }));
-            var confidence = allConfirmed ? profile.DetectionConfidence : Lower(profile.DetectionConfidence);
             return new GameProcessState
             {
                 Profile = profile,
@@ -170,11 +160,7 @@ public static class GameProcessDetector
                 GameProcesses = games,
                 CompanionProcesses = companions,
                 UnconfirmedProcesses = unconfirmed,
-                Confidence = confidence,
-                Message = (games.Count == 1
-                    ? $"{profile.DisplayName} is running (process {games[0].Name}, PID {games[0].Pid})."
-                    : $"{profile.DisplayName} is running ({games.Count} game processes).")
-                    + (allConfirmed ? "" : " The install folder could not be verified, so confidence is reduced.")
+                Message = $"{profile.DisplayName} is running."
             };
         }
 
@@ -186,26 +172,20 @@ public static class GameProcessDetector
                 State = GameRunState.Uncertain,
                 CompanionProcesses = companions,
                 UnconfirmedProcesses = unconfirmed,
-                Confidence = DetectionConfidence.Low,
-                Message = $"A process named {unconfirmed[0].Name} is running, but it is not in the expected {profile.DisplayName} install folder, so it was not treated as the game."
+                Message = unconfirmed[0].ExecutablePath == null
+                    ? $"A program named {unconfirmed[0].Name} is running, but Windows does not say where it is, so it is not taken for {profile.DisplayName}."
+                    : $"A program named {unconfirmed[0].Name} is running from another folder, so it is not taken for {profile.DisplayName}."
             };
         }
 
-        if (companions.Count > 0)
+        if (companions.Any(c => c.Role == ProcessRole.Launcher))
         {
-            string roles = string.Join(", ", companions.Select(c => c.Role switch
-            {
-                ProcessRole.CrashReporter => "crash reporter",
-                ProcessRole.AntiCheat => "anti-cheat",
-                _ => c.Role.ToString().ToLowerInvariant()
-            }).Distinct());
             return new GameProcessState
             {
                 Profile = profile,
                 State = GameRunState.LauncherOnly,
                 CompanionProcesses = companions,
-                Confidence = profile.DetectionConfidence,
-                Message = $"Only {profile.DisplayName} support programs ({roles}) are running; the game itself is not."
+                Message = $"The {profile.DisplayName} client is open, but no match or game is running yet."
             };
         }
 
@@ -213,14 +193,42 @@ public static class GameProcessDetector
         {
             Profile = profile,
             State = GameRunState.NotRunning,
-            Confidence = profile.DetectionConfidence,
+            CompanionProcesses = companions,
             Message = $"{profile.DisplayName} is not running."
         };
     }
 
-    private static DetectionConfidence Lower(DetectionConfidence c) => c switch
+    private enum PathVerdict { Confirmed, Accepted, Contradicted }
+
+    /// <summary>The rule a process of this name satisfies, judged by where it runs from.</summary>
+    private static (ProcessRule? Rule, PathVerdict Verdict) Match(IEnumerable<ProcessRule> candidates, string? path)
     {
-        DetectionConfidence.High => DetectionConfidence.Medium,
-        _ => DetectionConfidence.Low
-    };
+        ProcessRule? contradicted = null;
+        foreach (var rule in candidates)
+        {
+            if (rule.ExactPath != null)
+            {
+                if (path == null) { contradicted ??= rule; continue; }               // cannot tell: not claimed
+                if (SamePath(path, rule.ExactPath)) return (rule, PathVerdict.Confirmed);
+                continue;                                                            // same file name, another program
+            }
+            if (rule.PathHints is not { Length: > 0 }) return (rule, PathVerdict.Accepted);
+            if (path == null) return (rule, PathVerdict.Accepted);                   // protected process: the name has to do
+            if (rule.PathHints.Any(h => path.Contains(h, StringComparison.OrdinalIgnoreCase))) return (rule, PathVerdict.Confirmed);
+            contradicted ??= rule;
+        }
+        return contradicted == null ? (null, PathVerdict.Contradicted) : (contradicted, PathVerdict.Contradicted);
+    }
+
+    public static bool SamePath(string a, string b)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }

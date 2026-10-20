@@ -18,6 +18,8 @@ public sealed record SelfTestCheck(string Name, bool Passed, string Detail);
 public sealed class SelfTestReport
 {
     public string Version { get; set; } = string.Empty;
+    /// <summary>The .NET runtime inside the executable (a published build carries its own and is not patched by Windows Update).</summary>
+    public string Runtime { get; set; } = Environment.Version.ToString();
     public string ExecutablePath { get; set; } = string.Empty;
     public string DataDirectory { get; set; } = string.Empty;
     public bool Ok => Checks.All(c => c.Passed);
@@ -54,10 +56,12 @@ public static class SelfTest
             }
         }
 
-        Check("Seven game profiles, none Supported without live validation", () =>
+        Check("Built-in games and Windows' game list are read", () =>
         {
-            bool ok = GameProfiles.All.Count == 7 && GameProfiles.All.All(p => p.Status != SupportStatus.Supported);
-            return (ok, string.Join(", ", GameProfiles.All.Select(p => $"{p.Id}={p.Status}")));
+            var windows = OperatingSystem.IsWindows() ? new WindowsGameListSource().Read() : Array.Empty<WindowsGameEntry>();
+            var library = GameLibrary.Build(GameProfiles.All, windows, Array.Empty<string>());
+            bool ok = GameProfiles.All.Count == 7 && library.Count >= GameProfiles.All.Count && windows.All(w => Path.IsPathFullyQualified(w.ExePath));
+            return (ok, $"{GameProfiles.All.Count} built-in games; Windows lists {windows.Count} program(s); {library.Count} game(s) in the library");
         });
 
         Check("Data directory is outside the executable folder", () =>
@@ -95,45 +99,43 @@ public static class SelfTest
             return (tcp && udpFound, $"{snap.Connections.Count} sockets total, {mine.Count} owned by this process; tcp={tcp} udp={udpFound}; warnings={snap.Warnings.Count}");
         });
 
-        Check("Game Monitor records a session using real process and socket APIs", () =>
+        Check("A game is detected by its exact path and recorded automatically, with real process and socket APIs", () =>
         {
-            var profile = new GameProfile
-            {
-                Id = "selftest", DisplayName = "NetPulse self-test (stand-in game)", Publisher = "n/a",
-                ProcessRules = new[] { new ProcessRule(selfName, ProcessRole.Game) },
-                Capabilities = new GameCapabilities(true, true, true, true, false),
-                StatusPage = new StatusResource(null, false, "n/a"),
-                Limitations = new[] { "Self-test profile: this application's own process stands in for a game." }
-            };
+            // this program stands in for a game the user added: found by its exact location, like any game on any PC
+            string exe = Environment.ProcessPath ?? "";
+            var library = GameLibrary.Build(Array.Empty<GameProfile>(), Array.Empty<WindowsGameEntry>(), new[] { exe });
+            if (library.Count != 1) return (false, $"the stand-in game was not built from {exe}");
 
-            using var host = new NetPulseHost(dataDirectory, profiles: new[] { profile });
+            using var host = new NetPulseHost(dataDirectory, profiles: Array.Empty<GameProfile>(), gameList: new NoGames());
+            host.Settings.AutoRecordGame = true;
             var monitor = host.GameMonitor;
-            monitor.Select("selftest", out _);
-            if (!monitor.Start(out var startMsg)) return (false, startMsg);
+            monitor.SetLibrary(library);
+            monitor.Select(GameMonitorService.AllGames, out _);
 
-            monitor.PollOnce();
+            monitor.PollOnce();                                   // the game is running: recording starts by itself
+            bool autoStarted = monitor.IsMonitoring && monitor.StartedAutomatically;
             Thread.Sleep(2200);
             monitor.PollOnce();
             monitor.MarkLag("self-test marker");
 
             var snap = monitor.Snapshot();
-            bool running = snap.Process?.State == GameRunState.Running;
-            bool sawTcp = snap.Connections.Any(c => c.Protocol == "TCP" && c.Remote.Contains(listenPort.ToString()));
-            bool sawUdp = snap.Connections.Any(c => c.Protocol == "UDP" && c.Local.Contains(udpPort.ToString()));
-            bool refusedLoopback = false;
-            var loop = snap.Connections.FirstOrDefault(c => c.HasRemote && c.Scope.StartsWith("This PC"));
-            if (loop != null) refusedLoopback = !monitor.MeasureEndpoint(loop.Id, EndpointMethod.Icmp, out _);
+            bool running = snap.Process?.State == GameRunState.Running && snap.Game?.Source == GameSource.AddedByYou;
+            bool online = snap.UdpSockets >= 1;
 
             var session = monitor.Stop(out var error);
             if (session == null || error != null) return (false, $"stop failed: {error}");
 
             var saved = host.Sessions.Load(session.Id);
-            bool persisted = saved is { IsComplete: true } && saved.LagMarkers.Count == 1 && saved.Connections.Count > 0
-                && saved.Connections.All(c => c.Role == "Unknown") && saved.GameProcesses.Count == 1 && saved.Limitations.Count > 0;
+            bool tcp = saved?.Connections.Any(c => c.Protocol == "TCP" && c.Remote != null && c.Remote.Contains(listenPort.ToString())) == true;
+            bool udp = saved?.Connections.Any(c => c.Protocol == "UDP" && c.Local.Contains(udpPort.ToString())) == true;
+            bool persisted = saved is { IsComplete: true, Automatic: true } && saved.LagMarkers.Count == 1 && saved.GameProcesses.Count == 1
+                && saved.GameDisplayName == library[0].DisplayName;
+            var summary = host.Sessions.List().FirstOrDefault(x => x.Id == session.Id);
+            bool verdict = summary?.Verdict != null && !string.IsNullOrEmpty(summary.VerdictHeadline);
 
-            return (running && sawTcp && sawUdp && refusedLoopback && persisted,
-                $"running={running} tcp={sawTcp} udp={sawUdp} loopbackRefused={refusedLoopback} persisted={persisted} " +
-                $"(samples={saved?.Samples.Count}, connections={saved?.Connections.Count}, file under {host.Sessions.Directory})");
+            return (autoStarted && running && online && tcp && udp && persisted && verdict,
+                $"autoStarted={autoStarted} running={running} online={online} tcp={tcp} udp={udp} persisted={persisted} verdict={summary?.Verdict} " +
+                $"(game \"{library[0].DisplayName}\", connections={saved?.Connections.Count}, file under {host.Sessions.Directory})");
         });
 
         Check("Settings persist across restarts", () =>
@@ -152,10 +154,15 @@ public static class SelfTest
         return report;
     }
 
+    private sealed class NoGames : IGameListSource
+    {
+        public IReadOnlyList<WindowsGameEntry> Read() => Array.Empty<WindowsGameEntry>();
+    }
+
     public static string ToJson(SelfTestReport report) =>
         JsonSerializer.Serialize(new
         {
-            report.Ok, report.Version, report.ExecutablePath, report.DataDirectory,
+            report.Ok, report.Version, report.Runtime, report.ExecutablePath, report.DataDirectory,
             Checks = report.Checks.Select(c => new { c.Name, c.Passed, c.Detail })
         }, new JsonSerializerOptions { WriteIndented = true });
 }

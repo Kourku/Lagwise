@@ -1,17 +1,20 @@
 <#
 .SYNOPSIS
-    Launches a published NetPulse.exe against an isolated data folder and drives the Game Monitor workflow through UI Automation.
+    Launches a published NetPulse.exe against an isolated data folder and drives it through UI Automation.
 .DESCRIPTION
-    Requires an interactive desktop. Verifies: the window opens and stays responsive, the live graph is shown, the Game Monitor
-    tab works, a game can be selected, monitoring can be started, lag can be marked with the button and with the system-wide
-    shortcut, the session is saved and opens in History, and a changed setting is applied and written.
+    Requires an interactive desktop. Verifies: the window opens and stays responsive, the live graph is shown, and the whole
+    Game Monitor workflow with a stand-in game (tests/NetPulse.FakeGame, added as a game the way a user adds one): NetPulse
+    finds it, records automatically when it starts, takes lag marks by button and by the system-wide shortcut, saves when it
+    closes, shows the session's verdict, and opens it in History. Then the other pages, and a changed setting is applied and written.
     The process is started with NETPULSE_DATA_DIR pointing at -DataDir so the user's real settings and recordings are untouched.
     Exit code 0 = all checks passed.
 #>
 param(
     [Parameter(Mandatory)][string]$Exe,
     [Parameter(Mandatory)][string]$DataDir,
-    [string]$Out
+    [string]$Out,
+    # the stand-in game (StandInGame.exe from tests/NetPulse.FakeGame)
+    [string]$FakeGame
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +38,12 @@ function Check($name, $ok, $detail) {
 
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 $env:NETPULSE_DATA_DIR = $DataDir
+# the stand-in game is added the way a user adds a game; automatic recording is on (the default)
+if (-not $FakeGame) { $FakeGame = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\tests\NetPulse.FakeGame\bin\Release\net10.0\StandInGame.exe' }
+$FakeGame = [System.IO.Path]::GetFullPath($FakeGame)
+if (-not (Test-Path $FakeGame)) { Write-Host "Stand-in game not found: $FakeGame" -ForegroundColor Red; exit 1 }
+[pscustomobject]@{ UserGames = @($FakeGame); AutoRecordGame = $true } | ConvertTo-Json | Set-Content -Path (Join-Path $DataDir 'settings.json') -Encoding UTF8
+$game = $null
 # results "from earlier runs": the Speed test and Bufferbloat pages must show them after a start
 @(
     @{ T = '2026-10-10T10:00:00Z'; Kind = 'Speed'; Connection = 'Wired'; DownMbps = 400; UpMbps = 40 },
@@ -120,46 +129,50 @@ try {
     Click-Element (Find-Like 'Game Monitor')
     Check 'Game Monitor tab shows its heading' ($null -ne (Wait-For { Find-Named 'Game Monitor' 'ControlType.Text' } 5)) ''
 
-    $combo = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ComboBox' } | Select-Object -First 1
-    Check 'Game selector present' ($null -ne $combo) ''
-    ($combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)).Expand()
+    # the game list: all games, plus the stand-in game added in Settings (and whatever Windows lists on this PC)
+    $combo = Find-Named 'Watch for' 'ControlType.ComboBox'
+    Check 'Game list present' ($null -ne $combo) ''
+    if ($combo) { ($combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)).Expand() }
     Start-Sleep -Milliseconds 800
     $items = All | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.ListItem' }
-    Check 'All seven game profiles are listed' ($items.Count -ge 7) "$($items.Count) entries"
-    Check 'No profile claims to be Supported' (-not ($items | Where-Object { $_.Current.Name -match '\(Supported\)' })) ''
-    $lol = $items | Where-Object { $_.Current.Name -match 'League of Legends' } | Select-Object -First 1
-    Click-Element $lol
+    $names = ($items | ForEach-Object { $_.Current.Name }) -join ', '
+    Check 'The game list offers all games and the added game' ((Find-Like '^All my games$') -and (Find-Like '^Stand-in Game$')) "$($items.Count) entries"
+    if ($combo) { ($combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)).Collapse() }
+    Start-Sleep -Milliseconds 400
+    Check 'With no game running, the page says so' ($null -ne (Wait-For { Find-Like '^No game running$' } 10)) ''
+    Check 'The live connection tiles are shown' (($null -ne (Find-Like '^Router\.')) -and ($null -ne (Find-Like '^Processor\.'))) ''
 
-    $status = Wait-For { Find-Like 'League of Legends (is running|is not running|support programs|process named)' } 15
-    Check 'Process status for the selected game is shown' ($null -ne $status) $(if ($status) { $status.Current.Name })
-
-    $start = Find-Named 'Start monitoring' 'ControlType.Button'
-    Check 'Start monitoring is enabled' ($start.Current.IsEnabled) ''
-    Click-Element $start
+    # the game starts: NetPulse finds it by its file and records by itself
+    $game = Start-Process -FilePath $FakeGame -ArgumentList '300' -PassThru
+    Check 'Starting the game starts a recording by itself' ($null -ne (Wait-For { Find-Like '^Recording Stand-in Game$' } 20)) ''
     Check 'Monitoring state is displayed' ($null -ne (Wait-For { All | Where-Object { $_.Current.Name -cmatch 'RECORDING$' } | Select-Object -First 1 } 10)) ''
     Start-Sleep -Seconds 6
     Click-Element (Find-Named 'Mark lag' 'ControlType.Button')
-    Check 'Lag marker accepted' ($null -ne (Wait-For { Find-Like 'Lag marked' } 5)) ''
+    Check 'Lag marker accepted' ($null -ne (Wait-For { Find-Like '^Lag marked at' } 5)) ''
 
     # the default system-wide shortcut (Ctrl+Shift+F9) must mark lag too
     [NpMouse]::keybd_event(0x11, 0, 0, 0); [NpMouse]::keybd_event(0x10, 0, 0, 0); [NpMouse]::keybd_event(0x78, 0, 0, 0)
     Start-Sleep -Milliseconds 80
     [NpMouse]::keybd_event(0x78, 0, 2, 0); [NpMouse]::keybd_event(0x10, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
     Check 'The Mark lag shortcut adds a marker' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
-    Check 'The footer shows what is being recorded' ($null -ne (Find-Like '^Recording League of Legends')) ''
-    Check 'Beginner Game Monitor summarises the connections' ($null -ne (Find-Like '^What the game is connected to$')) ''
+    Check 'The footer shows what is being recorded' ($null -ne (Find-Like '^Recording Stand-in Game  ')) ''
+    Check 'The session so far gets a verdict while recording' ($null -ne (Wait-For { Find-Like '^This session so far$' } 15)) ''
 
-    Click-Element (Find-Named 'Stop & save' 'ControlType.Button')
-    $saved = Wait-For { Find-Like '^Recording saved:' } 10
-    Check 'Session saved message shows the file location' ($null -ne $saved) $(if ($saved) { ($saved.Current.Name -split "`n")[0] })
+    # the game closes: the recording is saved by itself once the game has stayed closed for 20 s
+    if ($game -and -not $game.HasExited) { $game.Kill(); $game.WaitForExit(5000) | Out-Null }
+    $saved = Wait-For { Find-Like '^Recording saved:' } 45
+    Check 'Closing the game saves the recording by itself' ($null -ne $saved) $(if ($saved) { $saved.Current.Name })
+    Check 'The last session shows its verdict' ($null -ne (Wait-For { Find-Like '^Verdict: ' } 10)) $(if ($v = Find-Like '^Verdict: ') { $v.Current.Name })
 
     $file = Get-ChildItem (Join-Path $DataDir 'sessions') -Filter '*.session.json' -ErrorAction SilentlyContinue | Select-Object -First 1
     Check 'Session file exists under the data folder' ($null -ne $file) $(if ($file) { $file.FullName })
     if ($file) {
         $j = Get-Content $file.FullName -Raw | ConvertFrom-Json
         Check 'Session is complete with samples and both lag markers' ($j.isComplete -and $j.samples.Count -gt 0 -and $j.lagMarkers.Count -eq 2) "samples=$($j.samples.Count), markers=$($j.lagMarkers.Count)"
-        Check 'Session records game, support status and limitations' ($j.gameDisplayName -eq 'League of Legends' -and $j.gameSupportStatus -eq 'ReferenceOnly' -and $j.limitations.Count -gt 0) "$($j.gameDisplayName) / $($j.gameSupportStatus)"
+        Check 'Session records the game, that it started by itself, and the game being online' ($j.gameDisplayName -eq 'Stand-in Game' -and $j.automatic -and $j.gameRecording -and @($j.connections | Where-Object { $_.protocol -eq 'UDP' }).Count -ge 1 -and $j.gameProcesses.Count -ge 1) "$($j.gameDisplayName), connections=$($j.connections.Count)"
+        Check 'Session keeps this PC''s processor load with its traffic' (@($j.throughput | Where-Object { $null -ne $_.cpu }).Count -gt 0) ''
     }
+    Check 'Recent game sessions lists it' ($null -ne (Wait-For { Find-Like '^Recent game sessions$' } 5)) ''
 
     # ---- History & reports: the recording just saved opens straight from the Game Monitor ----
     $open = Find-Named 'Open this recording' 'ControlType.Button'
@@ -169,6 +182,7 @@ try {
     Check 'History lists the saved recording' ($null -ne $row) ''
     # wait for the recording itself (the top bar also has an "Export report" button, so wait for detail-only elements)
     Check 'The recording opens with its summary and graph sections' (($null -ne (Wait-For { Find-Named 'Graph' 'ControlType.Text' } 15)) -and ($null -ne (Find-Like '^Moments you marked as laggy$'))) ''
+    Check 'The recording shows whether it was your connection' (($null -ne (Find-Like '^Was it your connection\?$')) -and ($null -ne (Find-Like '^Verdict: '))) ''
     Check 'The recording offers its report and CSV export' ($null -ne (Wait-For { Find-Named 'Export probe data (CSV)' 'ControlType.Button' | Where-Object { $_.Current.IsEnabled } } 5)) ''
     Check 'The recording graph is drawn' ($null -ne (Find-Like '^Recording graph$')) ''
     # the recording kept this PC's traffic: its "Network activity" view draws it
@@ -277,13 +291,14 @@ try {
     if ($beg) { ($beg.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 600 }
 
     $settingsFile = Join-Path $DataDir 'settings.json'
-    Check 'Settings were written to the data folder' ((Test-Path $settingsFile) -and ((Get-Content $settingsFile -Raw) -match '"LastGameId": "lol"' -and (Get-Content $settingsFile -Raw) -match '"MonitoringIntervalMs": 2000')) $settingsFile
+    Check 'Settings were written to the data folder' ((Test-Path $settingsFile) -and ((Get-Content $settingsFile -Raw) -match 'StandInGame\.exe' -and (Get-Content $settingsFile -Raw) -match '"MonitoringIntervalMs": 2000')) $settingsFile
     Check 'Application still responsive at the end' ((Get-Process -Id $proc.Id).Responding) ''
 }
 catch {
     Check 'Verification completed without an unexpected error' $false $_.Exception.Message
 }
 finally {
+    if ($game -and -not $game.HasExited) { $game.Kill() }
     if (-not $proc.HasExited) { $null = $proc.CloseMainWindow(); Start-Sleep -Seconds 2; if (-not $proc.HasExited) { $proc.Kill() } }
 }
 

@@ -29,7 +29,6 @@ public class TargetMetrics
     public bool IsGateway { get; set; }
     public bool IsDnsResolver { get; set; }
     public MeasurementKind Kind { get; set; } = MeasurementKind.ReferenceEndpoint;
-    public bool IsGameEndpoint => Kind == MeasurementKind.GameProcessEndpoint;
     /// <summary>Probes that received a reply (TotalProbes - FailedProbes).</summary>
     public int ReplyCount => TotalProbes - FailedProbes;
 

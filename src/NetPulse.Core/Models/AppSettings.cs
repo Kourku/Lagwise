@@ -5,7 +5,23 @@ namespace NetPulse.Core.Models;
 
 public class AppSettings
 {
-    public int SchemaVersion { get; set; } = 1;
+    /// <summary>Version of the settings layout; older files are upgraded once on load (see <see cref="Upgrade"/>).</summary>
+    public int SchemaVersion { get; set; } = CurrentSchema;
+    public const int CurrentSchema = 2;
+
+    /// <summary>
+    /// Brings settings written by an older NetPulse up to date. 2 (NetPulse 1.0): the Game Monitor watches all games
+    /// rather than the one game that had to be picked before, and records by itself (its new default), once.
+    /// </summary>
+    public void Upgrade()
+    {
+        if (SchemaVersion < 2)
+        {
+            LastGameId = Games.GameMonitorService.AllGames;
+            AutoRecordGame = true;
+        }
+        SchemaVersion = CurrentSchema;
+    }
 
     public int MonitoringIntervalMs { get; set; } = 1000;
     public int HistoryWindowMinutes { get; set; } = 15;
@@ -32,12 +48,18 @@ public class AppSettings
     public bool IsBeginnerMode { get; set; } = true;
     /// <summary>False until the user has answered the "how much detail?" welcome card once.</summary>
     public bool ModeChosen { get; set; } = false;
-    /// <summary>Last game profile chosen in the Game Monitor.</summary>
+    /// <summary>What the Game Monitor watches: "*" (all games, also when unset) or one game's id.</summary>
     public string? LastGameId { get; set; }
 
     // Game Monitor behaviour
-    /// <summary>Start recording when the selected game starts, and stop and save once it has been closed for a short while.</summary>
-    public bool AutoRecordGame { get; set; } = false;
+    /// <summary>Start recording when a watched game starts, and stop and save once it has been closed for a short while.</summary>
+    public bool AutoRecordGame { get; set; } = true;
+    /// <summary>Programs added as games (full paths to .exe files).</summary>
+    public List<string> UserGames { get; set; } = new();
+    /// <summary>Games taken off the list (ids), so NetPulse does not watch for them.</summary>
+    public List<string> IgnoredGames { get; set; } = new();
+    /// <summary>Automatic recordings kept (the newest; ones with marked lag are always kept); 0 keeps all.</summary>
+    public int AutoRecordingsKept { get; set; } = 50;
     /// <summary>System-wide shortcut that marks lag while a recording runs (see <see cref="HotkeyGesture"/>); "Off" disables it.</summary>
     public string MarkLagHotkey { get; set; } = "Ctrl+Shift+F9";
     /// <summary>Play a short sound when lag is marked with the shortcut, so the player knows it worked without leaving the game.</summary>
@@ -89,6 +111,7 @@ public class AppSettings
     public List<TargetConfig> Targets { get; set; } = new();
 
     public const int MaxSiteCheckHosts = 30;
+    public const int MaxUserGames = 50;
 
     /// <summary>Clamps persisted values to safe ranges and restores defaults for anything unusable.</summary>
     public void Normalize()
@@ -105,6 +128,11 @@ public class AppSettings
             .Select(Sites.SiteCatalog.NormalizeHost).Where(h => h != null).Select(h => h!).Distinct().Take(MaxSiteCheckHosts).ToList();
         LatencySpikeNotifyThreshold = System.Math.Clamp(LatencySpikeNotifyThreshold, 5, 10_000);
         RecordingRetentionDays = System.Math.Clamp(RecordingRetentionDays, 0, 3650);
+        AutoRecordingsKept = System.Math.Clamp(AutoRecordingsKept, 0, 10_000);
+        UserGames = (UserGames ?? new List<string>()).Where(Games.GameLibrary.IsUsableExePath)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase).Take(MaxUserGames).ToList();
+        IgnoredGames = (IgnoredGames ?? new List<string>()).Where(id => !string.IsNullOrWhiteSpace(id) && id.Length <= 100)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase).Take(1000).ToList();
         if (Theme is not ("Dark" or "Light" or "System")) Theme = "Dark";
         if (string.IsNullOrWhiteSpace(Accent)) Accent = "Indigo";
         UiScalePercent = System.Math.Clamp(UiScalePercent, 90, 130);

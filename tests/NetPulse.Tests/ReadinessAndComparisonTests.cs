@@ -104,15 +104,4 @@ public class ReadinessAndComparisonTests
         Assert.Empty(r.Targets);
         Assert.Contains("cannot be compared", r.Summary);
     }
-
-    [Theory]
-    [InlineData(TransportProtocol.Tcp, AddressScope.Public, 443, ConnectionState.Established, ConnectionKind.WebService)]
-    [InlineData(TransportProtocol.Tcp, AddressScope.Public, 5222, ConnectionState.Established, ConnectionKind.OtherTcp)]
-    [InlineData(TransportProtocol.Tcp, AddressScope.Loopback, 63346, ConnectionState.Established, ConnectionKind.LocalOnly)]
-    [InlineData(TransportProtocol.Tcp, AddressScope.Loopback, null, ConnectionState.Listen, ConnectionKind.Listening)]
-    [InlineData(TransportProtocol.Udp, AddressScope.Unspecified, null, ConnectionState.NotApplicable, ConnectionKind.UdpSocket)]
-    public void ConnectionKinds_FollowPortAndScopeConventions(TransportProtocol p, AddressScope scope, int? port, ConnectionState state, ConnectionKind expected)
-    {
-        Assert.Equal(expected, ConnectionKinds.Describe(p, scope, port, state).Kind);
-    }
 }

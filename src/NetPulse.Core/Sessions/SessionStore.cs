@@ -82,7 +82,7 @@ public class SessionStore
                     string key = info.Name;
                     long ticks = info.LastWriteTimeUtc.Ticks;
 
-                    if (index.TryGetValue(key, out var entry) && entry.Length == info.Length && entry.WriteTicks == ticks)
+                    if (index.TryGetValue(key, out var entry) && entry.Length == info.Length && entry.WriteTicks == ticks && entry.Version == IndexVersion)
                     {
                         fresh[key] = entry;
                         result.Add(entry.Summary);
@@ -93,7 +93,7 @@ public class SessionStore
                     changed = true;
                     if (s == null) continue;
                     var summary = SessionSummary.From(s, info.Length);
-                    fresh[key] = new IndexEntry { Length = info.Length, WriteTicks = ticks, Summary = summary };
+                    fresh[key] = new IndexEntry { Length = info.Length, WriteTicks = ticks, Summary = summary, Version = IndexVersion };
                     result.Add(summary);
                 }
                 catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -130,8 +130,34 @@ public class SessionStore
         return deleted;
     }
 
+    /// <summary>
+    /// Keeps the newest <paramref name="keep"/> automatic recordings and deletes older ones, except recordings in which
+    /// lag was marked (the ones worth keeping) and interrupted ones. Returns the number deleted.
+    /// </summary>
+    public int PruneAutomatic(int keep, string? exceptId = null)
+    {
+        if (keep <= 0) return 0;
+        int deleted = 0;
+        foreach (var s in List().Where(s => s.Automatic && s.IsComplete && s.LagMarkerCount == 0 && s.Id != exceptId).Skip(keep))
+        {
+            try
+            {
+                if (Delete(s.Id)) deleted++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // kept until the next save
+            }
+        }
+        return deleted;
+    }
+
+    /// <summary>Bumped when <see cref="SessionSummary"/> gains a field, so older index entries are worked out again.</summary>
+    private const int IndexVersion = 3;
+
     private sealed class IndexEntry
     {
+        public int Version { get; set; }
         public long Length { get; set; }
         public long WriteTicks { get; set; }
         public SessionSummary Summary { get; set; } = new();

@@ -31,7 +31,6 @@ public class MeasurementEngine
 
     private readonly ConcurrentDictionary<string, TargetMetrics> _metrics = new();
     private readonly ConcurrentDictionary<string, double> _previousLatencies = new();
-    private readonly ConcurrentDictionary<string, TargetConfig> _dynamicTargets = new();
     private readonly Dictionary<string, RollingWindow> _windows = new();
     private readonly Dictionary<string, int> _consecutiveFailures = new();
     private readonly Dictionary<string, DateTime> _firstFailureUtc = new();
@@ -78,7 +77,6 @@ public class MeasurementEngine
         if (Baselines == null) return;
         foreach (var m in _metrics.Values)
         {
-            if (m.IsGameEndpoint) continue;
             int replies;
             double median;
             lock (m)
@@ -156,38 +154,12 @@ public class MeasurementEngine
         _cts = null;
     }
 
-    /// <summary>Targets added at runtime (endpoints observed on a game process). Not persisted in settings.</summary>
-    public IReadOnlyList<TargetConfig> DynamicTargets => _dynamicTargets.Values.ToList();
-
-    public bool AddDynamicTarget(TargetConfig target) => _dynamicTargets.TryAdd(target.Id, target);
-
-    public bool RemoveDynamicTarget(string targetId)
-    {
-        if (!_dynamicTargets.TryRemove(targetId, out _)) return false;
-
-        lock (_ingestLock)
-        {
-            _metrics.TryRemove(targetId, out _);
-            _previousLatencies.TryRemove(targetId, out _);
-            _windows.Remove(targetId);
-            _consecutiveFailures.Remove(targetId);
-            _firstFailureUtc.Remove(targetId);
-            foreach (var prefix in new[] { "outage|", "loss|", "endpoint|" }) _episodes.Remove(prefix + targetId);
-        }
-        return true;
-    }
-
-    public void ClearDynamicTargets()
-    {
-        foreach (var id in _dynamicTargets.Keys.ToList()) RemoveDynamicTarget(id);
-    }
-
     /// <summary>Forgets statistics of targets that were removed in Settings so they stop appearing in the UI. Call after changing Settings.Targets.</summary>
     public void SyncTargets()
     {
         lock (_ingestLock)
         {
-            var keep = Settings.Targets.Select(t => t.Id).Concat(_dynamicTargets.Keys).ToHashSet();
+            var keep = Settings.Targets.Select(t => t.Id).ToHashSet();
             foreach (var id in _metrics.Keys.Where(k => !keep.Contains(k)).ToList())
             {
                 _metrics.TryRemove(id, out _);
@@ -195,15 +167,14 @@ public class MeasurementEngine
                 _windows.Remove(id);
                 _consecutiveFailures.Remove(id);
                 _firstFailureUtc.Remove(id);
-                foreach (var prefix in new[] { "outage|", "loss|", "endpoint|" }) _episodes.Remove(prefix + id);
+                foreach (var prefix in new[] { "outage|", "loss|" }) _episodes.Remove(prefix + id);
             }
         }
 
         MetricsUpdated?.Invoke(this, _metrics.Values.ToList());
     }
 
-    private TargetConfig? FindConfig(string id) =>
-        Settings.Targets.FirstOrDefault(t => t.Id == id) ?? (_dynamicTargets.TryGetValue(id, out var d) ? d : null);
+    private TargetConfig? FindConfig(string id) => Settings.Targets.FirstOrDefault(t => t.Id == id);
 
     private void UpdateGatewayTarget(NetworkInterfaceInfo nic)
     {
@@ -224,7 +195,7 @@ public class MeasurementEngine
                 var cycleStart = DateTime.UtcNow;
 
                 // 1. Probe all enabled targets asynchronously
-                var enabledTargets = Settings.Targets.Where(t => t.IsEnabled).Concat(_dynamicTargets.Values).ToList();
+                var enabledTargets = Settings.Targets.Where(t => t.IsEnabled).ToList();
                 var probeTasks = enabledTargets.Select(t => ProbeSingleTargetAsync(t, ct)).ToList();
 
                 var measurements = await Task.WhenAll(probeTasks);
@@ -270,7 +241,7 @@ public class MeasurementEngine
 
             var gwMetrics = _metrics.Values.FirstOrDefault(m => m.IsGateway);
             var dnsMetrics = _metrics.Values.FirstOrDefault(m => m.IsDnsResolver);
-            var internetMetrics = _metrics.Values.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint).ToList();
+            var internetMetrics = _metrics.Values.Where(m => !m.IsGateway && !m.IsDnsResolver).ToList();
 
             CurrentDiagnosis = _diagnosticEngine.Analyze(CurrentNic, gwMetrics, internetMetrics, dnsMetrics);
         }
@@ -463,24 +434,7 @@ public class MeasurementEngine
             }
         }
 
-        if (metrics.IsGameEndpoint)
-        {
-            // An endpoint that never answered is "not responding to this method" (it may filter probes), not an outage.
-            // Only an endpoint that previously answered and then goes silent is reported.
-            var transition = _episodes.Update("endpoint|" + m.TargetId, metrics.ReplyCount > 0 && failures >= 3, now, out var duration);
-            if (transition == EpisodeTransition.Started)
-            {
-                _eventLogService.LogEvent("GameEndpointUnreachable", "Warning",
-                    $"{m.TargetName} stopped answering probes ({failures} in a row) after previously answering. The connection may have ended or changed, or the endpoint may be filtering probes.",
-                    m.TargetName, timestamp: now);
-            }
-            else if (transition == EpisodeTransition.Ended)
-            {
-                _eventLogService.LogEvent("Restored", "Info", $"{m.TargetName} is answering probes again.", m.TargetName, metrics.CurrentLatency, timestamp: now);
-            }
-        }
-
-        if (Settings.NotifyOnPacketLoss && !(metrics.IsGameEndpoint && metrics.ReplyCount == 0))
+        if (Settings.NotifyOnPacketLoss)
         {
             string key = "loss|" + m.TargetId;
             double threshold = Settings.PacketLossNotifyThreshold;

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using NetPulse.Core.Games;
 using NetPulse.Core.Models;
 
 namespace NetPulse.Core.Sessions;
@@ -15,7 +14,7 @@ public enum MeasurementKind
     DnsResolution,
     /// <summary>A public reference endpoint (DNS anycast, CDN). Says nothing about a specific game server.</summary>
     ReferenceEndpoint,
-    /// <summary>An endpoint observed on the game process and measured at the user's request. Its role is unknown; it is not claimed to be the match server.</summary>
+    /// <summary>Recordings made before 1.0 only: an endpoint seen on the game process and measured at the user's request.</summary>
     GameProcessEndpoint,
     GameServer
 }
@@ -39,7 +38,7 @@ public class SessionSample
     public string? Error { get; set; }
 }
 
-/// <summary>One second of traffic on the adapter Windows uses for the internet, while recording.</summary>
+/// <summary>One second of this PC's activity while recording: traffic on the adapter Windows uses for the internet, and more.</summary>
 public class ThroughputSample
 {
     public DateTime T { get; set; }
@@ -47,6 +46,10 @@ public class ThroughputSample
     public double Rx { get; set; }
     /// <summary>Upload, bits per second.</summary>
     public double Tx { get; set; }
+    /// <summary>How busy the processor was, percent of all cores (recordings from 1.0 on).</summary>
+    public double? Cpu { get; set; }
+    /// <summary>Wi-Fi signal in percent while on Wi-Fi (recordings from 1.0 on).</summary>
+    public int? Wifi { get; set; }
 }
 
 /// <summary>A period during which NetPulse itself was not measuring (sleep, stalled engine). Not a network failure.</summary>
@@ -74,7 +77,7 @@ public class LagMarker
     public string? Note { get; set; }
 }
 
-/// <summary>A socket owned by the game process. Role is always "Unknown": observed endpoints are not claimed to be match servers.</summary>
+/// <summary>A socket owned by the game process: whether the game was online, and how (the match server itself is never known).</summary>
 public class ConnectionRecord
 {
     public string Id { get; set; } = string.Empty;
@@ -109,8 +112,15 @@ public class MonitoringSession
     public string Name { get; set; } = string.Empty;
     /// <summary>NetPulse version that recorded the session (stored findings reflect that version's analysis). Null for recordings made before 0.4.</summary>
     public string? AppVersion { get; set; }
-    /// <summary>Selected game profile id, or null when monitoring without a game selected.</summary>
+    /// <summary>The recorded game's id, or null for a network recording (or a game recording before its game started).</summary>
     public string? GameId { get; set; }
+    /// <summary>Started by itself because a game started (automatic recordings are pruned to the newest ones).</summary>
+    public bool Automatic { get; set; }
+    /// <summary>Made by the Game Monitor (also one that waited for a game that never started).</summary>
+    public bool GameRecording { get; set; }
+
+    /// <summary>A Game Monitor recording, whether or not its game was known (recordings before 1.0 only have <see cref="GameId"/>).</summary>
+    public bool IsGameRecording => GameRecording || GameId != null;
     public DateTime StartedUtc { get; set; }
     public DateTime? EndedUtc { get; set; }
     /// <summary>False for a checkpoint written during recording (or after a crash), true once the session was stopped normally.</summary>
@@ -130,14 +140,8 @@ public class MonitoringSession
 
     // ---- Game monitoring context (empty for plain network sessions) ----
     public string? GameDisplayName { get; set; }
-    /// <summary>Support status of the profile at recording time (e.g. ReferenceOnly).</summary>
-    public string? GameSupportStatus { get; set; }
-    /// <summary>Discovery/measurement limitations that applied to this recording.</summary>
-    public List<string> Limitations { get; set; } = new();
     public List<GameProcessRecord> GameProcesses { get; set; } = new();
     public List<ConnectionRecord> Connections { get; set; } = new();
-    /// <summary>Diagnostic findings computed when the session was stopped.</summary>
-    public List<GameFinding> Findings { get; set; } = new();
 
     /// <summary>True when the sample cap was hit and later samples were dropped.</summary>
     public bool SamplesTruncated { get; set; }
@@ -156,10 +160,15 @@ public class SessionSummary
     public int LagMarkerCount { get; set; }
     public string? GameDisplayName { get; set; }
     public string? AppVersion { get; set; }
+    public bool Automatic { get; set; }
+    public bool IsGameRecording { get; set; }
+    /// <summary>The recording's verdict (see <see cref="SessionVerdict"/>), worked out when it was saved or indexed.</summary>
+    public VerdictLevel? Verdict { get; set; }
+    public string? VerdictHeadline { get; set; }
     /// <summary>Size of the file on disk.</summary>
     public long SizeBytes { get; set; }
 
-    public static SessionSummary From(MonitoringSession s, long sizeBytes) => new()
+    public static SessionSummary From(MonitoringSession s, long sizeBytes) => new SessionSummary
     {
         Id = s.Id,
         Name = s.Name,
@@ -172,6 +181,23 @@ public class SessionSummary
         LagMarkerCount = s.LagMarkers.Count,
         GameDisplayName = s.GameDisplayName,
         AppVersion = s.AppVersion,
+        Automatic = s.Automatic,
+        IsGameRecording = s.IsGameRecording,
         SizeBytes = sizeBytes
-    };
+    }.WithVerdict(s);
+
+    private SessionSummary WithVerdict(MonitoringSession s)
+    {
+        try
+        {
+            var v = SessionVerdict.Build(s);
+            Verdict = v.Level;
+            VerdictHeadline = v.Headline;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            // an odd recording keeps its other details
+        }
+        return this;
+    }
 }

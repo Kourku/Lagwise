@@ -29,7 +29,7 @@ public static class StatusSummary
         if (gw != null && gw.ReplyCount > 0)
             sb.AppendLine(string.Format(inv, "Router: {0:0.#} ms typical, {1:0.#} ms variation, {2:0.#}% lost", gw.MedianLatency, gw.Jitter, gw.PacketLossPercent));
 
-        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.TotalProbes > 0)
+        var refs = metrics.Where(m => !m.IsGateway && !m.IsDnsResolver && m.TotalProbes > 0)
             .OrderBy(m => m.TargetName, StringComparer.OrdinalIgnoreCase).ToList();
         if (refs.Count > 0)
         {

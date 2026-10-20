@@ -24,20 +24,32 @@ public sealed class FakeConnectionSource : IConnectionSource
     }
 }
 
+public sealed class FakeGameList : IGameListSource
+{
+    public List<WindowsGameEntry> Entries { get; } = new();
+    public IReadOnlyList<WindowsGameEntry> Read() => Entries.ToList();
+}
+
 public class GameMonitorTests : IDisposable
 {
     private static readonly DateTime T0 = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-    private const string GamePath = @"E:\Riot Games\League of Legends\Game\League of Legends.exe";
+    private const string LeaguePath = @"C:\Games\Riot Games\League of Legends\Game\League of Legends.exe";
+    private const string OtherPath = @"D:\Library\Space Rally\Binaries\Win64\SpaceRally-Win64-Shipping.exe";
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "netpulse-monitor-tests-" + Guid.NewGuid().ToString("N"));
     private readonly FakeProcessSource _procs = new();
     private readonly FakeConnectionSource _conns = new();
     private readonly NetPulseHost _host;
-    private int _tick;
+
+    /// <summary>A game Windows lists on the test PC (any game, not a built-in one).</summary>
+    private static readonly GameProfile Rally = GameLibrary.Build(Array.Empty<GameProfile>(), Array.Empty<WindowsGameEntry>(), new[] { OtherPath },
+        exists: _ => true, versionInfo: _ => ("Space Rally", null)).Single();
 
     public GameMonitorTests()
     {
-        _host = new NetPulseHost(_dir, _procs, _conns);
+        _host = new NetPulseHost(_dir, _procs, _conns, gameList: new FakeGameList());
+        _host.Settings.AutoRecordGame = false;   // tests that want it switch it on
+        M.SetLibrary(GameProfiles.All.Append(Rally).ToList());
     }
 
     public void Dispose()
@@ -46,8 +58,9 @@ public class GameMonitorTests : IDisposable
         if (Directory.Exists(_dir)) Directory.Delete(_dir, true);
     }
 
-    private static ProcessInfo Game(int pid = 6000) => new(pid, "League of Legends", T0.AddMinutes(1), GamePath);
-    private static ProcessInfo Client() => new(5000, "LeagueClient", T0, @"E:\Riot Games\League of Legends\LeagueClient.exe");
+    private static ProcessInfo League(int pid = 6000) => new(pid, "League of Legends", T0.AddMinutes(1), LeaguePath);
+    private static ProcessInfo LeagueClient() => new(5000, "LeagueClient", T0, @"C:\Games\Riot Games\League of Legends\LeagueClient.exe");
+    private static ProcessInfo RallyProcess(int pid = 8000) => new(pid, "SpaceRally-Win64-Shipping", T0.AddMinutes(2), OtherPath);
 
     private static RawConnection Tcp(string ip, int port, int pid = 6000, int local = 50000) =>
         new(TransportProtocol.Tcp, IPAddress.Parse("192.168.1.20"), local, IPAddress.Parse(ip), port, ConnectionState.Established, pid);
@@ -57,169 +70,218 @@ public class GameMonitorTests : IDisposable
 
     private GameMonitorService M => _host.GameMonitor;
 
-    private void Poll(int times = 1) { for (int i = 0; i < times; i++) { _tick++; M.PollOnce(); } }
+    private void Poll(int times = 1) { for (int i = 0; i < times; i++) M.PollOnce(); }
 
     [Fact]
-    public void Selecting_ADetectsNothingWhenGameIsAbsent_AndReportsLauncherOnlyHonestly()
+    public void WatchingOneGame_ReportsItsClientHonestly_AndReadsNoSockets()
     {
         Assert.True(M.Select("lol", out _));
-        _procs.Current.Add(new ProcessInfo(1, "RiotClientServices", T0, @"E:\Riot Games\Riot Client\RiotClientServices.exe"));
+        _procs.Current.Add(LeagueClient());
         Poll();
 
         var snap = M.Snapshot();
+        Assert.Equal("lol", snap.Game!.Id);
         Assert.Equal(GameRunState.LauncherOnly, snap.Process!.State);
         Assert.False(snap.IsMonitoring);
-        Assert.Equal(0, _conns.Captures); // no socket enumeration unless monitoring a running game
+        Assert.Equal(0, _conns.Captures); // no socket reading unless a recorded game runs
     }
 
     [Fact]
-    public void FullWorkflow_RecordsProcessesConnectionsMeasurementsLagAndFindings()
+    public void WatchingAllGames_FindsWhicheverGameRuns_BuiltInOrNot()
+    {
+        Assert.True(M.Select(GameMonitorService.AllGames, out var msg));
+        Assert.Contains("all your games", msg);
+        Poll();
+        Assert.Null(M.Snapshot().Game);
+        Assert.Empty(M.Snapshot().Running);
+
+        _procs.Current.Add(RallyProcess());
+        Poll();
+        var snap = M.Snapshot();
+        Assert.Equal(Rally.Id, snap.Game!.Id);
+        Assert.Equal(GameRunState.Running, snap.Process!.State);
+        Assert.Equal("Space Rally", Assert.Single(snap.Running).DisplayName);
+    }
+
+    [Fact]
+    public void FullWorkflow_RecordsTheGame_ItsSockets_LagMarks_AndSaves()
     {
         M.Select("lol", out _);
         Assert.True(M.Start(out _));
         Assert.True(_host.Recorder.IsRecording);
 
-        // monitoring started before the game: waiting, nothing captured
+        // recording started before the game: nothing to read yet
         Poll();
         Assert.Equal(0, _conns.Captures);
 
-        // game launches
-        _procs.Current.AddRange(new[] { Client(), Game() });
+        _procs.Current.AddRange(new[] { LeagueClient(), League() });
         _conns.Current.AddRange(new[] { Tcp("34.1.2.3", 443), Tcp("52.9.9.9", 8393, local: 50001), Udp(7777), Tcp("127.0.0.1", 2999, local: 50002) });
         Poll(2);
 
         var snap = M.Snapshot();
         Assert.Equal(GameRunState.Running, snap.Process!.State);
-        Assert.Equal(4, snap.Connections.Count);
-        Assert.Equal(2, snap.DistinctRemoteEndpoints);        // loopback + UDP socket don't count as remote endpoints
-        Assert.Equal(1, snap.UdpSocketCount);
-        Assert.All(snap.Connections, c => Assert.Equal("Unknown role", c.Role));
-        Assert.Contains(_host.Events.GetRecentEvents(100), e => e.EventType == "GameProcess" && e.Description.Contains("detected"));
-        Assert.Contains(_host.Events.GetRecentEvents(100), e => e.EventType == "ConnectionChange");
+        Assert.Equal(1, snap.UdpSockets);
+        Assert.Equal(2, snap.InternetConnections);          // loopback and the UDP socket are not internet connections
+        Assert.Contains(_host.Events.GetRecentEvents(100), e => e.EventType == "GameProcess" && e.Description.Contains("started"));
 
-        // measuring: a public TCP endpoint is allowed, a UDP socket / loopback is refused with an explanation
-        var tcpConn = snap.Connections.Single(c => c.Remote == "34.1.2.3:443");
-        Assert.True(M.MeasureEndpoint(tcpConn.Id, EndpointMethod.Icmp, out var info));
-        Assert.Contains("filter", info);
-        Assert.False(M.MeasureEndpoint(tcpConn.Id, EndpointMethod.Icmp, out _)); // already measured
-        Assert.True(M.MeasureEndpoint(tcpConn.Id, EndpointMethod.TcpConnect, out _));
-
-        var udp = snap.Connections.Single(c => c.Protocol == "UDP");
-        Assert.False(M.MeasureEndpoint(udp.Id, EndpointMethod.Icmp, out var why));
-        Assert.Contains("remote peer", why);
-        var loop = snap.Connections.Single(c => c.Scope.StartsWith("This PC"));
-        Assert.False(M.MeasureEndpoint(loop.Id, EndpointMethod.Icmp, out _));
-
-        Assert.Equal(2, _host.Engine.DynamicTargets.Count);
-        Assert.Equal(2, M.Snapshot().Measured.Count);
-        Assert.Contains("ICMP", M.Snapshot().Connections.Single(c => c.Id == tcpConn.Id).MeasuredBy);
-
-        // user marks lag, a connection goes away, then the game exits
         Assert.True(M.MarkLag("rubber banding"));
-        _conns.Current.RemoveAll(c => c.RemoteAddress?.ToString() == "52.9.9.9");
-        Poll(3);
         _procs.Current.Remove(_procs.Current.Single(p => p.Name == "League of Legends"));
         _conns.Current.Clear();
         Poll(1);
         Assert.Equal(GameRunState.LauncherOnly, M.Snapshot().Process!.State);
-        Assert.DoesNotContain(M.Snapshot().Connections, c => c.IsActive);
 
         var session = M.Stop(out var error)!;
         Assert.Null(error);
         Assert.False(M.IsMonitoring);
-        Assert.Empty(_host.Engine.DynamicTargets); // measured endpoints stop being probed
         Assert.False(_host.Recorder.IsRecording);
 
-        // the saved file contains everything
         var saved = _host.Sessions.Load(session.Id)!;
         Assert.True(saved.IsComplete);
+        Assert.False(saved.Automatic);
         Assert.Equal("lol", saved.GameId);
         Assert.Equal("League of Legends", saved.GameDisplayName);
-        Assert.Equal("ReferenceOnly", saved.GameSupportStatus);
-        Assert.NotEmpty(saved.Limitations);
-        Assert.Contains(saved.Limitations, l => l.Contains("UDP"));
         Assert.Equal("rubber banding", Assert.Single(saved.LagMarkers).Note);
-        Assert.Contains(saved.Events, e => e.EventType == "LagMarker");
-        Assert.Contains(saved.Events, e => e.EventType == "GameProcess" && e.Description.Contains("no longer running"));
+        Assert.Contains(saved.Events, e => e.EventType == "GameProcess" && e.Description.Contains("was closed"));
         Assert.Equal(4, saved.Connections.Count);
-        Assert.All(saved.Connections, c => { Assert.Equal("Unknown", c.Role); Assert.NotNull(c.EndedUtc); });
+        Assert.All(saved.Connections, c => Assert.NotNull(c.EndedUtc));
         Assert.Contains(saved.Connections, c => c.Protocol == "UDP" && c.Remote == null);
-        var proc = Assert.Single(saved.GameProcesses);
-        Assert.Equal(6000, proc.Pid);
-        Assert.NotNull(proc.ExitedUtc);
-        Assert.Equal(2, saved.Targets.Count(t => t.Kind == MeasurementKind.GameProcessEndpoint));
-        Assert.DoesNotContain(saved.Targets, t => t.Kind == MeasurementKind.GameServer);
-        Assert.NotNull(saved.Findings);
+        Assert.NotNull(Assert.Single(saved.GameProcesses).ExitedUtc);
+        Assert.DoesNotContain(saved.Targets, t => t.Kind is MeasurementKind.GameServer or MeasurementKind.GameProcessEndpoint);
     }
 
     [Fact]
-    public void ProcessRestartDuringMonitoring_StartsANewConnectionSet()
+    public void ARecordingStartedBeforeAnyGame_TakesTheFirstGameThatStarts()
     {
-        M.Select("lol", out _);
-        M.Start(out _);
-        _procs.Current.Add(Game(6000));
-        _conns.Current.Add(Tcp("34.1.2.3", 443, 6000));
-        Poll(2);
+        M.Select(GameMonitorService.AllGames, out _);
+        Assert.True(M.Start(out var msg));
+        Assert.Contains("whenever you are ready", msg);
+        Assert.Null(M.RecordedGame);
+        Assert.StartsWith(SessionRecorder.WaitingName, _host.Recorder.Snapshot()!.Name);
 
-        _procs.Current.Clear(); _conns.Current.Clear();
-        Poll(1);
-        _procs.Current.Add(new ProcessInfo(7000, "League of Legends", T0.AddMinutes(9), GamePath));
-        _conns.Current.Add(Tcp("34.1.2.3", 443, 7000, local: 50999));
-        Poll(2);
+        _procs.Current.Add(RallyProcess());
+        Poll();
+        Assert.Equal(Rally.Id, M.RecordedGame!.Id);
 
-        var snap = M.Snapshot(groupRepeats: false);
-        Assert.Equal(7000, snap.Process!.Primary!.Pid);
-        Assert.Equal(1, snap.Connections.Count(c => c.IsActive));
-        Assert.Equal(2, snap.Connections.Count);
+        // a second game starting later does not take the recording over
+        _procs.Current.Add(League());
+        Poll();
+        Assert.Equal(Rally.Id, M.RecordedGame!.Id);
 
-        // grouped (the default view): the reconnect to the same endpoint is one active row standing for both
-        var grouped = Assert.Single(M.Snapshot().Connections);
-        Assert.True(grouped.IsActive);
-        Assert.Equal(2, grouped.Occurrences);
-        Assert.Equal(ConnectionKind.WebService, grouped.Kind);
-        var session = M.Stop(out _)!;
-        Assert.Equal(2, _host.Sessions.Load(session.Id)!.GameProcesses.Count);
+        var saved = M.Stop(out _)!;
+        Assert.Equal(Rally.Id, saved.GameId);
+        Assert.Equal("Space Rally", saved.GameDisplayName);
+        Assert.StartsWith("Space Rally ", saved.Name);
     }
 
     [Fact]
-    public void RunningGameWithUdpSockets_ReportsThatMatchTrafficIsHidden()
+    public void AutomaticRecording_WithAllGames_StartsForAnyGame_AndStopsWhenItCloses()
     {
-        M.Select("lol", out _);
-        M.Start(out _);
-        _procs.Current.Add(Game());
-        _conns.Current.AddRange(new[] { Tcp("104.16.56.40", 443), Udp(49701) });
-        Poll(2);
+        var now = T0;
+        using var host = new NetPulseHost(_dir + "-auto", _procs, _conns, gameList: new FakeGameList());
+        var saved = new List<MonitoringSession>();
+        host.SessionSaved += (_, e) => saved.Add(e.Session);
+        var monitor = host.GameMonitor;
+        Assert.True(host.Settings.AutoRecordGame);          // on unless the user turned it off
+        monitor.SetLibrary(GameProfiles.All.Append(Rally).ToList());
+        monitor.Select(GameMonitorService.AllGames, out _);
 
-        var snap = M.Snapshot();
-        Assert.True(snap.MatchTrafficHidden);
-        Assert.Equal(1, snap.WebServiceCount);
-        Assert.Contains(snap.Connections, c => c.Kind == ConnectionKind.UdpSocket && c.KindLabel.Contains("hidden"));
-        Assert.All(snap.Connections, c => Assert.Equal("Unknown role", c.Role)); // a hint is never an identification
+        monitor.PollOnce();
+        Assert.False(monitor.IsMonitoring);
+
+        _procs.Current.Add(RallyProcess());
+        monitor.PollOnce();
+        Assert.True(monitor.IsMonitoring);
+        Assert.True(monitor.StartedAutomatically);
+        Assert.Equal(Rally.Id, monitor.RecordedGame!.Id);
+
+        _procs.Current.Clear();
+        monitor.AutoStopGrace = TimeSpan.Zero;
+        monitor.PollOnce();
+        Assert.False(monitor.IsMonitoring);
+        var session = Assert.Single(saved);
+        Assert.True(session.Automatic);
+        Assert.Equal("Space Rally", session.GameDisplayName);
+        host.Dispose();
+        Directory.Delete(_dir + "-auto", true);
     }
 
     [Fact]
-    public void DiscoveryWarnings_AreVisibleAndLoggedOnce()
+    public void StoppingByHand_WhileTheGameRuns_IsNotUndoneByAutomaticRecording_UntilTheGameClosesAndStartsAgain()
+    {
+        _host.Settings.AutoRecordGame = true;
+        M.Select(GameMonitorService.AllGames, out _);
+        _procs.Current.Add(RallyProcess());
+        Poll();
+        Assert.True(M.IsMonitoring);
+
+        M.Stop(out _);
+        Poll(3);
+        Assert.False(M.IsMonitoring);                 // the player stopped it: no new recording two seconds later
+        Assert.Equal(Rally.Id, M.NotRecordingAgain);
+
+        _procs.Current.Clear();
+        Poll();
+        Assert.Null(M.NotRecordingAgain);
+        _procs.Current.Add(RallyProcess(8100));
+        Poll();
+        Assert.True(M.IsMonitoring);                  // the next time it starts, it is recorded again
+        M.Stop(out _);
+    }
+
+    [Fact]
+    public void GameLaunched_IsRaisedForAGameThatStartsWhileWatched_NotForOneAlreadyRunning()
+    {
+        var launched = new List<string>();
+        M.GameLaunched += (_, p) => launched.Add(p.Id);
+        _procs.Current.Add(League());
+        M.Select(GameMonitorService.AllGames, out _);
+        Poll();
+        Assert.Empty(launched);                 // already running when watching began
+
+        _procs.Current.Add(RallyProcess());
+        Poll();
+        Assert.Equal(new[] { Rally.Id }, launched);
+    }
+
+    [Fact]
+    public void NewLibrary_KeepsWhatIsRunning_WithoutAFalseStart()
+    {
+        var launched = 0;
+        M.GameLaunched += (_, _) => launched++;
+        M.Select(GameMonitorService.AllGames, out _);
+        Poll();
+        _procs.Current.Add(League());
+        Poll(2);
+        Assert.Equal(1, launched);
+
+        M.SetLibrary(GameProfiles.All.Append(Rally).ToList());   // found again (start-up refresh, a game added)
+        Poll();
+        Assert.Equal(1, launched);
+        Assert.Equal("lol", M.Snapshot().Game!.Id);
+    }
+
+    [Fact]
+    public void ConnectionReadingProblems_AreNotedOnce()
     {
         M.Select("lol", out _);
         M.Start(out _);
-        _procs.Current.Add(Game());
+        _procs.Current.Add(League());
         _conns.Warnings.Add("IPv6 UDP table could not be read (Windows error 5).");
         Poll(3);
 
-        Assert.Single(M.Snapshot().Warnings);
-        Assert.Single(_host.Events.GetRecentEvents(100), e => e.Description.Contains("Connection discovery limited"));
+        Assert.Single(_host.Events.GetRecentEvents(100), e => e.Description.Contains("could not be read"));
     }
 
     [Fact]
-    public void CannotChangeGameWhileMonitoring_AndCannotStartWithoutAGame()
+    public void CannotChangeGameWhileRecording_AndCannotStartWithNothingWatched()
     {
         Assert.False(M.Start(out var msg));
-        Assert.Contains("Select a game", msg);
+        Assert.Contains("Choose a game", msg);
 
         M.Select("lol", out _);
         M.Start(out _);
         Assert.False(M.Select("fortnite", out var why));
-        Assert.Contains("Stop monitoring", why);
+        Assert.Contains("Stop recording", why);
         Assert.False(M.Start(out _));
         M.Stop(out _);
         Assert.True(M.Select("fortnite", out _));
@@ -237,40 +299,31 @@ public class GameMonitorTests : IDisposable
     }
 
     [Fact]
-    public void MeasuringRequiresMonitoring_AndStopMeasuringRemovesTheTarget()
+    public void MarkLag_NeedsARecording()
     {
         M.Select("lol", out _);
-        Assert.False(M.MeasureEndpoint("x", EndpointMethod.Icmp, out _));
         Assert.False(M.MarkLag());
-
         M.Start(out _);
-        _procs.Current.Add(Game());
-        _conns.Current.Add(Tcp("34.1.2.3", 443));
-        Poll(2);
-        var c = M.Snapshot().Connections.Single();
-        Assert.True(M.MeasureEndpoint(c.Id, EndpointMethod.Icmp, out _));
-        var targetId = M.Snapshot().Measured.Single().TargetId;
-
-        Assert.True(M.StopMeasuring(targetId));
-        Assert.Empty(_host.Engine.DynamicTargets);
-        Assert.False(M.StopMeasuring(targetId));
+        Assert.True(M.MarkLag());
+        M.Stop(out _);
     }
 
     [Fact]
-    public void ShutdownWhileMonitoring_SavesTheSessionAndStopsCleanly()
+    public void ShutdownWhileRecording_SavesTheSessionAndStopsCleanly()
     {
         string sessionId;
-        using (var host = new NetPulseHost(_dir + "-shutdown", _procs, _conns))
+        using (var host = new NetPulseHost(_dir + "-shutdown", _procs, _conns, gameList: new FakeGameList()))
         {
+            host.Settings.AutoRecordGame = false;
             host.GameMonitor.Select("lol", out _);
             host.GameMonitor.Start(out _);
-            _procs.Current.Add(Game());
+            _procs.Current.Add(League());
             _conns.Current.Add(Tcp("34.1.2.3", 443));
             host.GameMonitor.PollOnce();
             host.GameMonitor.PollOnce();
             host.GameMonitor.MarkLag("before shutdown");
             sessionId = host.Sessions.List().Single().Id; // checkpoint written at start
-            // dispose with the monitor still running
+            // dispose with the monitor still recording
         }
 
         var store = new SessionStore(Path.Combine(_dir + "-shutdown", "sessions"));
@@ -284,11 +337,12 @@ public class GameMonitorTests : IDisposable
     [Fact]
     public void BackgroundLoop_DetectsTheGame_WithoutManualPolling_AndStopsOnDispose()
     {
-        using var host = new NetPulseHost(_dir + "-loop", _procs, _conns);
+        using var host = new NetPulseHost(_dir + "-loop", _procs, _conns, gameList: new FakeGameList());
+        host.Settings.AutoRecordGame = false;
         host.GameMonitor.IdlePollInterval = TimeSpan.FromMilliseconds(500);
-        host.GameMonitor.Select("lol", out _);
+        host.GameMonitor.Select(GameMonitorService.AllGames, out _);
 
-        _procs.Current.Add(Game());
+        _procs.Current.Add(League());
         var deadline = DateTime.UtcNow.AddSeconds(6);
         while (DateTime.UtcNow < deadline && host.GameMonitor.Snapshot().Process?.State != GameRunState.Running) Thread.Sleep(100);
         Assert.Equal(GameRunState.Running, host.GameMonitor.Snapshot().Process?.State);
@@ -296,10 +350,6 @@ public class GameMonitorTests : IDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
         host.GameMonitor.Dispose();
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), $"shutdown took {sw.Elapsed}");
-
-        int calls = _conns.Captures;
-        Thread.Sleep(800);
-        Assert.Equal(calls, _conns.Captures); // loop really stopped
         if (Directory.Exists(_dir + "-loop")) Directory.Delete(_dir + "-loop", true);
     }
 
@@ -326,5 +376,40 @@ public class GameMonitorTests : IDisposable
         Assert.Single(session.Gaps);
         Assert.Empty(session.Disconnects);
         Assert.Contains(session.Events, e => e.EventType == "MonitoringGap" && e.Description.Contains("not a network outage"));
+    }
+
+    [Fact]
+    public void Host_FindsGamesFromWindowsList_AddedGames_AndHonoursRemovals()
+    {
+        string exe = Path.Combine(_dir, "games", "Neon Drift", "NeonDrift.exe");
+        string added = Path.Combine(_dir, "games", "Indie", "indie.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(added)!);
+        File.WriteAllBytes(exe, new byte[] { 0x4D, 0x5A });
+        File.WriteAllBytes(added, new byte[] { 0x4D, 0x5A });
+
+        var list = new FakeGameList();
+        list.Entries.Add(new WindowsGameEntry(exe, T0, "123"));
+        using var host = new NetPulseHost(_dir + "-lib", _procs, _conns, gameList: list);
+        Assert.True(host.AddGame(added, out var err), err);
+        var library = host.RefreshGames();
+
+        Assert.Contains(library, g => g.Source == GameSource.Windows && g.DisplayName == "Neon Drift");
+        var mine = Assert.Single(library, g => g.Source == GameSource.AddedByYou);
+        Assert.Equal("Indie", mine.DisplayName);
+        Assert.Equal(library.Count, host.GameMonitor.Library.Count);
+
+        Assert.True(host.RemoveGame(library.Single(g => g.Source == GameSource.Windows), out _));
+        Assert.True(host.RemoveGame(mine, out _));
+        var after = host.RefreshGames();
+        Assert.DoesNotContain(after, g => g.Source != GameSource.BuiltIn);
+        Assert.Empty(host.Settings.UserGames);
+
+        Assert.False(host.AddGame(Path.Combine(_dir, "missing.exe"), out var why));
+        Assert.Contains(".exe", why);
+        Assert.True(host.RestoreGames(out _));
+        Assert.Contains(host.RefreshGames(), g => g.DisplayName == "Neon Drift");
+        host.Dispose();
+        Directory.Delete(_dir + "-lib", true);
     }
 }

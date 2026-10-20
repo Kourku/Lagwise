@@ -40,6 +40,12 @@ public class SessionRecorder
         get { lock (_lock) return _session?.StartedUtc; }
     }
 
+    /// <summary>The id of the recording in progress (its checkpoint file is already on disk), or null.</summary>
+    public string? CurrentId
+    {
+        get { lock (_lock) return _session?.Id; }
+    }
+
     public int SampleCount
     {
         get { lock (_lock) return _session?.Samples.Count ?? 0; }
@@ -93,13 +99,20 @@ public class SessionRecorder
         }
     }
 
-    /// <summary>Adds one second of adapter traffic (capped like samples: a day of seconds is plenty).</summary>
-    public void RecordThroughput(DateTime t, double rxBps, double txBps)
+    /// <summary>Adds one second of this PC's activity (capped like samples: a day of seconds is plenty).</summary>
+    /// <param name="cpuPercent">Processor load, percent of all cores; null when unknown.</param>
+    /// <param name="wifiPercent">Wi-Fi signal while on Wi-Fi; null otherwise.</param>
+    public void RecordThroughput(DateTime t, double rxBps, double txBps, double? cpuPercent = null, int? wifiPercent = null)
     {
         lock (_lock)
         {
             if (_session == null || _session.Throughput.Count >= 86_400) return;
-            _session.Throughput.Add(new ThroughputSample { T = t, Rx = Math.Round(rxBps), Tx = Math.Round(txBps) });
+            _session.Throughput.Add(new ThroughputSample
+            {
+                T = t, Rx = Math.Round(rxBps), Tx = Math.Round(txBps),
+                Cpu = cpuPercent is double c ? Math.Round(Math.Clamp(c, 0, 100), 1) : null,
+                Wifi = wifiPercent is int w ? Math.Clamp(w, 0, 100) : null
+            });
         }
     }
 
@@ -156,24 +169,40 @@ public class SessionRecorder
     public static MeasurementKind KindOf(TargetConfig t) =>
         t.Kind ?? (t.IsGateway ? MeasurementKind.LocalGateway : t.IsDnsResolver ? MeasurementKind.DnsResolution : MeasurementKind.ReferenceEndpoint);
 
-    /// <summary>Adds a measurement target that appeared mid-session (e.g. an endpoint the user chose to measure). Idempotent.</summary>
-    public void RecordTarget(TargetConfig t)
-    {
-        lock (_lock)
-        {
-            if (_session == null || _session.Targets.Any(x => x.Id == t.Id)) return;
-            _session.Targets.Add(new SessionTarget { Id = t.Id, Name = t.Name, Host = t.Host, Protocol = t.Protocol, Kind = KindOf(t) });
-        }
-    }
-
+    /// <summary>
+    /// The game this recording is about. A recording started before any game ran gets its game (and its name) when the
+    /// first one starts; a recording that already has a game keeps it.
+    /// </summary>
     public void SetGameContext(GameProfile profile)
     {
         lock (_lock)
         {
-            if (_session == null) return;
+            if (_session == null || (_session.GameId != null && _session.GameId != profile.Id)) return;
+            bool placeholder = _session.GameId == null && _session.Name.StartsWith(WaitingName, StringComparison.Ordinal);
+            _session.GameId = profile.Id;
             _session.GameDisplayName = profile.DisplayName;
-            _session.GameSupportStatus = profile.Status.ToString();
-            _session.Limitations = profile.Limitations.ToList();
+            if (placeholder) _session.Name = profile.DisplayName + _session.Name[WaitingName.Length..];
+        }
+    }
+
+    /// <summary>The start of a game recording's name until its game is known ("Game session 2026-10-20 20:05").</summary>
+    public const string WaitingName = "Game session";
+
+    /// <summary>The recording started by itself because a game started.</summary>
+    public void MarkAutomatic()
+    {
+        lock (_lock)
+        {
+            if (_session != null) _session.Automatic = true;
+        }
+    }
+
+    /// <summary>The recording is the Game Monitor's (its game may not be known yet).</summary>
+    public void MarkGameRecording()
+    {
+        lock (_lock)
+        {
+            if (_session != null) _session.GameRecording = true;
         }
     }
 
@@ -236,15 +265,6 @@ public class SessionRecorder
         }
     }
 
-    public void SetFindings(IEnumerable<GameFinding> findings)
-    {
-        lock (_lock)
-        {
-            if (_session == null) return;
-            _session.Findings = findings.ToList();
-        }
-    }
-
     /// <summary>Records an event and tracks "Disconnected"/"Restored" pairs for the Internet scope as disconnect periods.</summary>
     public void RecordEvent(ConnectionEvent evt)
     {
@@ -289,7 +309,10 @@ public class SessionRecorder
                 SchemaVersion = s.SchemaVersion,
                 Id = s.Id,
                 Name = s.Name,
+                AppVersion = s.AppVersion,
                 GameId = s.GameId,
+                Automatic = s.Automatic,
+                GameRecording = s.GameRecording,
                 StartedUtc = s.StartedUtc,
                 EndedUtc = null,
                 IsComplete = false,
@@ -303,12 +326,10 @@ public class SessionRecorder
                 Gaps = s.Gaps.ToList(),
                 Disconnects = s.Disconnects.Select(d => new DisconnectRecord { StartUtc = d.StartUtc, EndUtc = d.EndUtc }).ToList(),
                 LagMarkers = s.LagMarkers.ToList(),
+                Throughput = s.Throughput.ToList(),
                 GameDisplayName = s.GameDisplayName,
-                GameSupportStatus = s.GameSupportStatus,
-                Limitations = s.Limitations.ToList(),
                 GameProcesses = s.GameProcesses.Select(g => new GameProcessRecord { Pid = g.Pid, Name = g.Name, Role = g.Role, StartedUtc = g.StartedUtc, FirstSeenUtc = g.FirstSeenUtc, LastSeenUtc = g.LastSeenUtc, ExitedUtc = g.ExitedUtc }).ToList(),
-                Connections = s.Connections.Select(c => new ConnectionRecord { Id = c.Id, Protocol = c.Protocol, Local = c.Local, Remote = c.Remote, Scope = c.Scope, Role = c.Role, State = c.State, Pid = c.Pid, FirstSeenUtc = c.FirstSeenUtc, LastSeenUtc = c.LastSeenUtc, EndedUtc = c.EndedUtc }).ToList(),
-                Findings = s.Findings.ToList()
+                Connections = s.Connections.Select(c => new ConnectionRecord { Id = c.Id, Protocol = c.Protocol, Local = c.Local, Remote = c.Remote, Scope = c.Scope, Role = c.Role, State = c.State, Pid = c.Pid, FirstSeenUtc = c.FirstSeenUtc, LastSeenUtc = c.LastSeenUtc, EndedUtc = c.EndedUtc }).ToList()
             };
         }
     }

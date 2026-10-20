@@ -49,19 +49,19 @@ public sealed class GameWatcher
         {
             LaunchCount++;
             changes.Add(new(GameProcessChangeKind.GameStarted,
-                $"{Profile.DisplayName} detected: {Describe(state)} (confidence {state.Confidence}).", nowUtc));
+                $"{Profile.DisplayName} started ({Describe(state)}).", nowUtc));
         }
         else if (!running && _wasRunning)
         {
             changes.Add(new(GameProcessChangeKind.GameExited,
-                $"{Profile.DisplayName} is no longer running.", nowUtc));
+                $"{Profile.DisplayName} was closed.", nowUtc));
         }
         else if (running && !identities.SetEquals(_known))
         {
             var added = identities.Except(_known).ToList();
             var removed = _known.Except(identities).ToList();
             changes.Add(new(GameProcessChangeKind.InstancesChanged,
-                $"{Profile.DisplayName} process set changed (+{added.Count} / -{removed.Count}): now {Describe(state)}.", nowUtc));
+                $"{Profile.DisplayName} restarted or opened another process ({Describe(state)}).", nowUtc));
         }
 
         _known = identities;
@@ -71,5 +71,5 @@ public sealed class GameWatcher
     }
 
     private static string Describe(GameProcessState s) =>
-        string.Join(", ", s.GameProcesses.Select(p => $"{p.Name} PID {p.Pid}"));
+        string.Join(", ", s.GameProcesses.Select(p => $"{p.Name}.exe, process {p.Pid}"));
 }

@@ -1,14 +1,14 @@
-# ⚡ NetPulse - Real-Time Internet Connection & Path Diagnostics
+# ⚡ NetPulse - Was it my connection?
 
-> A native Windows desktop application designed to diagnose and visualize Internet connection health, identify the exact origin of network degradation, and analyze routing paths in real time.
+> A native Windows app for players and everyone else: it watches your Internet connection, records it while you play any game, and tells you afterwards whether lag came from your Wi-Fi or router, your provider, this PC, or further away. Everything stays on your PC.
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)]()
 [![Runtime](https://img.shields.io/badge/.NET-10.0%20(Self--Contained)-512BD4.svg)]()
-[![Tests](https://img.shields.io/badge/tests-423%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-481%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
-![NetPulse 0.9 Overview in Beginner mode: connection status, rated headline numbers and the Ready to play checklist](docs/screenshots/overview-0.9.png)
+![NetPulse 1.0 Game Monitor: the last game session's verdict, its lag marks and what to do](docs/screenshots/game-monitor-1.0.png)
 
 **[Download the latest portable build from the Releases page](../../releases/latest)**: extract and run, no install or admin rights needed.
 
@@ -76,8 +76,8 @@ NetPulse clearly distinguishes between:
 - **Active Adapter & Wi-Fi Telemetry:** Reports interface name, link speed, IPv4/IPv6, gateway, DNS, and native Windows Wi-Fi metrics (SSID, signal strength %, channel, 802.11 protocol).
 - **Chronological Event Timeline:** Records latency spikes, packet loss bursts, gateway degradations, route shifts, network switches and Wi-Fi access-point roaming.
 - **Desktop alerts:** a Windows notification when the connection drops and comes back, the router stops answering, packets are being lost or Windows switches network; rate-limited, background-only by default.
-- **Game Monitor (7 games, all Reference-only):** detects the game, lists the connections its process opens, records the session, and marks lag with a system-wide shortcut (default `Ctrl+Shift+F9`) that works while the game has focus. Optional automatic recording starts when the game starts and saves when it closes. See [docs/GAME_MONITOR.md](docs/GAME_MONITOR.md).
-- **History & reports:** every recording with an interactive graph (hover for exact values), per-target statistics, what was measured around each lag marker (including whether this PC was busy downloading at that moment), and Markdown/CSV export.
+- **Game Monitor, for any game:** finds your games by itself in Windows' own game list (plus seven it knows by name, and any program you add), records automatically while one runs, and marks lag with a system-wide shortcut (default `Ctrl+Shift+F9`) that works while the game has focus. Afterwards it answers **was it my connection?**: your Wi-Fi or router, beyond your router (your provider or the internet), or this PC (its own downloads, or a processor working flat out), with each stretch of trouble and every moment you marked. Live tiles and "This session so far" while you play. It never claims to measure the game's server, which Windows does not show without administrator rights. See [docs/GAME_MONITOR.md](docs/GAME_MONITOR.md).
+- **History & reports:** every recording with its verdict, an interactive graph (hover for exact values), per-target statistics, what happened around each lag mark (including whether this PC was busy downloading), and Markdown/CSV export. Older recordings get a verdict too.
 - **When is my connection worst?** History pools every recording by hour of the day, comparing each server with its own usual ping.
 - **Site check:** is a site down, or blocked between you and it? YouTube, X, Reddit, Twitch, Discord and ten more popular sites (and any you add) are checked the way a browser opens them: your DNS against public DNS over HTTPS, the connection, the secure handshake and the answer. It tells "blocked by your DNS" from "blocked on the way" (filtering by name), interception, a legal block (451) and a problem at the site, and reads the site's official status page where one is public. No account, cookie or key is used and bot checks are never solved; nothing is contacted unless you check.
 - **Security check:** is this PC and its connection safe? Windows Firewall, Public or Private network, Wi-Fi protection (open, WEP, WPA2, WPA3), programs open to the network (remote access flagged), whether your DNS answers for names that do not exist or sends you to the wrong servers, whether something opens your secure connections (antivirus or company HTTPS inspection), and UPnP on the router. Read-only, no administrator rights. See [SECURITY.md](SECURITY.md) for what NetPulse itself sends and keeps.
@@ -86,7 +86,7 @@ NetPulse clearly distinguishes between:
 - **Live ping graph** of the last minutes on the Overview, and **Copy summary**: a short text snapshot (no IP addresses or network names) to paste into a chat or support ticket.
 - **Keyboard shortcuts:** `Ctrl+1`...`Ctrl+0` for the pages, `Ctrl+Shift+C` copy summary, `Ctrl+E` export, `F1` help.
 - **Local-only privacy:** no accounts, no telemetry. Settings, recordings and an error log stay in `%LOCALAPPDATA%\NetPulse`; optional automatic clean-up of old recordings.
-- **Native Windows Desktop Integration:** tray icon with live status and quick actions (Mark lag, start/stop the Game Monitor), minimize/close to tray, start with Windows.
+- **Native Windows Desktop Integration:** tray icon with live status and quick actions (Mark lag, record a game session), minimize/close to tray, start with Windows.
 
 ---
 
@@ -98,14 +98,13 @@ NetPulse serves both players who just want an answer and people who want every n
 - **Connection status** with a plain-English verdict and a recommended next step.
 - **Headline numbers with a one-word rating**, judged against *your own* normal rather than fixed limits: ping "Usual for you" / "Higher than usual", stability "Steady" / "Some wobble" / "Unsteady", loss "None" / "A little" / "Losing packets", router "Quick" / "Slower than ideal".
 - **Ready to play?** checklist: router, packet loss, ping stability, compared with your normal, DNS, Wi-Fi signal and lag under load, each with a short reason. **Copy summary** puts a text version on the clipboard.
-- A shorter sidebar: Overview, Game Monitor (one "What the game is connected to" summary), Bufferbloat and Speed tests, Event timeline, History & reports.
+- A shorter sidebar: Overview, Game Monitor (with the verdict of your last game session), Bufferbloat and Speed tests, Site and Security checks, Event timeline, Connection diary, History & reports.
 - `ℹ` buttons on every metric explain the term without jargon.
 
 ### Advanced: everything, plus the evidence
 - **Per-server statistics** on the Overview: now vs usual latency, 95th percentile, variation, loss and state.
 - **Targets & probes** with an HTTPS timing breakdown (DNS, TCP connect, TLS handshake, first byte).
 - **Route trace** (continuous hop-by-hop MTR with ASN lookup and route comparison), **Adapter & Wi-Fi** details, and a live **Probe log** of every measurement, filterable and pausable.
-- The full Game Monitor connection tables, with the option to measure an endpoint the game opened.
 - The measured evidence behind each verdict, and how each glossary term is measured.
 
 ---
@@ -193,16 +192,14 @@ dotnet test tests/NetPulse.Tests/NetPulse.Tests.csproj
 
 ## 📚 Documentation Links
 
-- [Game Monitor: what it does and what is verified](docs/GAME_MONITOR.md)
-- [Architecture & Design Document](docs/ARCHITECTURE.md)
-- [Measurement Methodology & Statistical Definitions](docs/METHODOLOGY.md)
+- [Game Monitor: what it does and how it is verified](docs/GAME_MONITOR.md)
+- [How every build is verified](docs/VERIFICATION.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Measurement methodology, including the session verdict](docs/METHODOLOGY.md)
+- [Security: what NetPulse sends, reads and keeps](SECURITY.md)
 - [Release notes](RELEASE_NOTES.md)
 
 ---
 
 *NetPulse Diagnostics • Built for precision, clarity, and reliability.*
 
-
-## Game Monitor
-
-See [docs/GAME_MONITOR.md](docs/GAME_MONITOR.md) for exactly what the Game Monitor does, its limitations, and what has and has not been verified. User data (settings, recordings) is stored in `%LOCALAPPDATA%\NetPulse`, never beside the executable.

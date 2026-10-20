@@ -115,6 +115,105 @@
                 <TextBlock Text="{Binding CountText}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </DataTemplate>
+
+        <!-- "Was it my connection?": a recording's verdict (VerdictViewModel), on the Game Monitor and in History -->
+        <DataTemplate x:Key="VerdictBody">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <controls:StatusMark Level="{Binding Level}" Width="36" Height="36" GlyphSize="16" VerticalAlignment="Top" Margin="0,1,14,0" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Headline}" FontSize="19" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"
+                                   AutomationProperties.Name="{Binding Headline, StringFormat='Verdict: {0}'}" />
+                        <TextBlock Text="{Binding Summary}" FontSize="14" LineHeight="20" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Numbers}" FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Layers}" Margin="0,16,0,0" AutomationProperties.Name="Parts of the connection">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource BgSidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,8,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                        <controls:StatusMark Level="{Binding Level}" Width="16" Height="16" GlyphSize="8" VerticalAlignment="Center" Margin="0,0,7,0" />
+                                        <TextBlock Text="{Binding Rating}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Text}" FontSize="12.5" LineHeight="17" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Margin="0,16,0,0" Visibility="{Binding HasEpisodes, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="When it happened" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                    <ItemsControl ItemsSource="{Binding Episodes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentAmberBrush}" VerticalAlignment="Center" Margin="2,0,9,0" />
+                                    <TextBlock Text="{Binding}" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding MoreEpisodes}" Style="{StaticResource CaptionText}" />
+                </StackPanel>
+                <StackPanel Margin="0,16,0,0" Visibility="{Binding HasLagMarks, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Moments you marked as laggy" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8" />
+                    <ItemsControl ItemsSource="{Binding LagMarks}" AutomationProperties.Name="Lag marks">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource BgSidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <controls:StatusMark Level="{Binding Level}" Width="18" Height="18" VerticalAlignment="Top" Margin="0,1,11,0" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock FontSize="14" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap">
+                                                <Run Text="{Binding TimeText, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Headline, Mode=OneWay}" FontWeight="SemiBold" />
+                                            </TextBlock>
+                                            <TextBlock x:Name="note" Text="{Binding Note}" FontSize="12.5" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Detail}" FontSize="13" LineHeight="18" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Note}" Value=""><Setter TargetName="note" Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <Border Background="{DynamicResource BlueSoftBrush}" BorderBrush="{DynamicResource BlueEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="16,12" Margin="0,12,0,0"
+                        Visibility="{Binding HasAdvice, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="&#xE82F;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentBlueHoverBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="What to do" FontSize="13.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Advice}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontSize="13" LineHeight="18" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,2,0,2" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
@@ -326,6 +425,9 @@
                             <StackPanel>
                                 <TextBlock Text="Welcome to NetPulse. How much detail do you want?" Style="{StaticResource CardTitle}" FontSize="17" />
                                 <TextBlock Text="You can change this any time with the Beginner / Advanced switch at the top." Style="{StaticResource CardSubtitle}" />
+                                <TextBlock Style="{StaticResource CaptionText}" Margin="0,8,0,12" TextWrapping="Wrap">
+                                    <Run Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentBlueHoverBrush}" /><Run Text="  When you play, NetPulse records your connection by itself and tells you afterwards whether lag came from your side. The Game Monitor page shows it, and turns it off." />
+                                </TextBlock>
                                 <UniformGrid Columns="2">
                                     <Button Command="{Binding ChooseModeCommand}" CommandParameter="Beginner" Margin="0,0,8,0" Cursor="Hand" AutomationProperties.Name="Choose Beginner">
                                         <Button.Template>
@@ -348,7 +450,7 @@
                                                 <Border x:Name="bd" Background="{DynamicResource BgInputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1.5" CornerRadius="10" Padding="16,14">
                                                     <StackPanel>
                                                         <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"><Run FontFamily="{StaticResource IconFont}" Text="&#xE9D9;" Foreground="{DynamicResource AccentBlueBrush}" /><Run Text="  Advanced" /></TextBlock>
-                                                        <TextBlock Text="Everything: per-server statistics, raw connection tables, route tracing, adapter details, HTTPS timings and a live log of every probe." FontSize="13" LineHeight="18" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                                        <TextBlock Text="Everything: per-server statistics and the evidence behind each verdict, route tracing, adapter details, HTTPS timings and a live log of every probe." FontSize="13" LineHeight="18" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
                                                     </StackPanel>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
@@ -544,9 +646,9 @@
                                     <Grid Width="40" Height="40" VerticalAlignment="Top" Margin="0,0,14,0">
                                         <Border CornerRadius="10" Background="{DynamicResource BlueSoftBrush}" />
                                         <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   Visibility="{Binding GameMonitor.SelectedProfile.HasIcon, Converter={StaticResource InverseBoolToVis}, FallbackValue=Visible}" />
-                                        <Image Source="{Binding GameMonitor.SelectedProfile.Icon}" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality"
-                                               Visibility="{Binding GameMonitor.SelectedProfile.HasIcon, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                                                   Visibility="{Binding GameMonitor.HasCurrentIcon, Converter={StaticResource InverseBoolToVis}, FallbackValue=Visible}" />
+                                        <Image Source="{Binding GameMonitor.CurrentIcon}" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality"
+                                               Visibility="{Binding GameMonitor.HasCurrentIcon, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
                                     </Grid>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="Game Monitor" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" />
@@ -697,271 +799,302 @@
 
                     <StackPanel DataContext="{Binding GameMonitor}">
                         <controls:PageHeader Title="Game Monitor" Glyph="&#xE7FC;"
-                                             Subtitle="Watches a game on this PC, lists the connections its process opens, and records how your connection behaves while you play. Nothing leaves your PC." />
+                                             Subtitle="Records how your connection behaves while you play, for any game, and tells you afterwards whether lag came from your side. Nothing leaves your PC." />
 
-                        <!-- Game selection + process status -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                        <!-- now: the game, what NetPulse is doing, and the controls -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Grid Grid.Column="0" Width="300" VerticalAlignment="Center">
-                                        <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
-                                                  IsEnabled="{Binding IsIdle}" AutomationProperties.Name="Game">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <Grid Width="22" Height="22" Margin="0,0,9,0">
-                                                            <Border CornerRadius="6" Background="{DynamicResource BlueSoftBrush}" Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}">
-                                                                <TextBlock Text="{Binding Monogram}" FontSize="8.5" FontWeight="Bold" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                            </Border>
-                                                            <Image Source="{Binding Icon}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality" Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
-                                                        </Grid>
-                                                        <TextBlock VerticalAlignment="Center" TextWrapping="NoWrap"><Run Text="{Binding Name, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding StatusText, Mode=OneWay, StringFormat=({0})}" Foreground="{DynamicResource TextTertiaryBrush}" /></TextBlock>
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                        <TextBlock Text="Choose a game..." Foreground="{DynamicResource TextTertiaryBrush}" FontSize="14" Margin="13,0,36,0" VerticalAlignment="Center" IsHitTestVisible="False"
-                                                   Visibility="{Binding HasProfile, Converter={StaticResource InverseBoolToVis}}" />
-                                    </Grid>
-                                    <DockPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
-                                        <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{Binding ProcessBrush}" Margin="0,5,10,0" VerticalAlignment="Top" />
-                                        <TextBlock Text="{Binding ProcessStatus}" FontSize="14" FontWeight="SemiBold" LineHeight="19" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
-                                    </DockPanel>
-                                </Grid>
-                                <TextBlock Text="{Binding ProfileSummary}" FontSize="13.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,0" TextWrapping="Wrap" />
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding HasProfile, Converter={StaticResource BoolToVis}}">
-                                    <Button Content="Open official status page" Command="{Binding OpenStatusPageCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5" />
-                                    <TextBlock Text="{Binding StatusPageText}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
-                                </StackPanel>
-                                <Expander Header="Known limitations for this game" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,0" FontSize="13.5"
-                                          Visibility="{Binding HasProfile, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="{Binding LimitationsText}" FontSize="13.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
-                                </Expander>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Controls -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Command="{Binding StartCommand}" Padding="16,8" AutomationProperties.Name="Start monitoring">
-                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" /><TextBlock Text="Start monitoring" /></StackPanel>
-                                    </Button>
-                                    <Button Content="Stop &amp; save" Command="{Binding StopCommand}" Style="{StaticResource OutlineButton}" Padding="16,8" Margin="8,0,0,0" />
-                                    <Button Command="{Binding MarkLagCommand}" Style="{StaticResource OutlineButton}" Padding="16,8" Margin="8,0,0,0" AutomationProperties.Name="Mark lag"
-                                            ToolTip="Press when you notice lag so it can be matched against the measurements">
-                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7C1;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource AccentAmberBrush}" /><TextBlock Text="Mark lag" /></StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding OpenSessionsFolderCommand}" Style="{StaticResource GhostButton}" Padding="12,8" Margin="4,0,0,0" ToolTip="Open the folder where recordings are saved" AutomationProperties.Name="Open sessions folder">
-                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE838;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextSecondaryBrush}" /><TextBlock Text="Open folder" /></StackPanel>
-                                    </Button>
-                                    <Border Margin="16,0,0,0">
-                                        <Border.Style>
-                                            <Style TargetType="Border" BasedOn="{StaticResource Pill}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
-                                                        <Setter Property="Background" Value="{DynamicResource RedSoftBrush}" />
-                                                        <Setter Property="BorderBrush" Value="{DynamicResource RedEdgeBrush}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <TextBlock FontWeight="SemiBold" FontSize="12.5" TextWrapping="NoWrap">
+                                    <Grid Width="58" Height="58" VerticalAlignment="Top" Margin="0,0,16,0">
+                                        <Border CornerRadius="14" Background="{DynamicResource BlueSoftBrush}" BorderBrush="{DynamicResource BlueEdgeBrush}" BorderThickness="1" />
+                                        <Image Source="{Binding CurrentIcon}" Width="36" Height="36" RenderOptions.BitmapScalingMode="HighQuality"
+                                               Visibility="{Binding HasCurrentIcon, Converter={StaticResource BoolToVis}}" />
+                                        <TextBlock Text="{Binding CurrentMonogram}" FontFamily="{StaticResource DisplayFont}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource AccentBlueHoverBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="NoWrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="Not recording" />
-                                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                    <Setter Property="Visibility" Value="Collapsed" />
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
-                                                            <Setter Property="Text" Value="● RECORDING" />
-                                                            <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}" />
-                                                        </DataTrigger>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding HasCurrentGame}" Value="True" />
+                                                                <Condition Binding="{Binding HasCurrentIcon}" Value="False" />
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </MultiDataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                    </Border>
-                                    <TextBlock Text="{Binding Elapsed}" VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="12,0,0,0" Typography.NumeralAlignment="Tabular" ToolTip="Time recorded" />
+                                        <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="24" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Visibility="{Binding HasCurrentGame, Converter={StaticResource InverseBoolToVis}}" />
+                                    </Grid>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <controls:StatusMark Level="{Binding StatusLevel}" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,9,0" />
+                                            <TextBlock Text="{Binding StatusTitle}" FontSize="19" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                                       AutomationProperties.Name="{Binding StatusTitle}" />
+                                            <Border CornerRadius="9" Padding="8,2,9,3" Background="{DynamicResource RedSoftBrush}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                    Visibility="{Binding IsMonitoring, Converter={StaticResource BoolToVis}}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentRedBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                    <TextBlock Text="{Binding Elapsed}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}" Typography.NumeralAlignment="Tabular"
+                                                               AutomationProperties.Name="{Binding Elapsed, StringFormat='{}{0} RECORDING'}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding StatusDetail}" FontSize="13.5" LineHeight="19" Foreground="{DynamicResource TextSecondaryBrush}" Margin="27,5,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                        <Button Command="{Binding StartCommand}" Padding="16,8" MinHeight="40" AutomationProperties.Name="Record now"
+                                                Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE7C8;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <TextBlock Text="Record now" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Command="{Binding MarkLagCommand}" Style="{StaticResource OutlineButton}" Padding="14,8" MinHeight="40" AutomationProperties.Name="Mark lag"
+                                                Visibility="{Binding IsMonitoring, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE7C1;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <TextBlock Text="Mark lag" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Content="Stop &amp; save" Command="{Binding StopCommand}" Style="{StaticResource DangerButton}" Padding="14,8" MinHeight="40" Margin="8,0,0,0"
+                                                Visibility="{Binding IsMonitoring, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,18,0,16" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Watch for" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                        <WrapPanel>
+                                            <ComboBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}" IsEnabled="{Binding IsIdle}" Width="340" MaxDropDownHeight="420"
+                                                      AutomationProperties.Name="Watch for" VerticalAlignment="Center" Margin="0,0,10,6">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,2">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid Width="30" Height="30" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                                <Border CornerRadius="8" Background="{DynamicResource BlueSoftBrush}" />
+                                                                <Image Source="{Binding Icon}" Width="22" Height="22" RenderOptions.BitmapScalingMode="HighQuality"
+                                                                       Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                                                <TextBlock x:Name="mono" Text="{Binding Monogram}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource AccentBlueHoverBrush}"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                                                <TextBlock x:Name="all" Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentBlueHoverBrush}"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                                                            </Grid>
+                                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Name}" FontSize="14" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                                <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                        <DataTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter TargetName="mono" Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsAll}" Value="True">
+                                                                <Setter TargetName="mono" Property="Visibility" Value="Collapsed" />
+                                                                <Setter TargetName="all" Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </DataTemplate.Triggers>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <Button Command="{Binding AddGameCommand}" Style="{StaticResource GhostButton}" VerticalAlignment="Center" Margin="0,0,4,6" AutomationProperties.Name="Add a game"
+                                                    ToolTip="Choose a game's program (.exe) that NetPulse should watch for">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,7,0" />
+                                                    <TextBlock Text="Add a game..." VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Command="{Binding RemoveGameCommand}" Style="{StaticResource GhostButton}" VerticalAlignment="Center" Margin="0,0,4,6" AutomationProperties.Name="Take this game off the list"
+                                                    ToolTip="Not a game, or not one to watch? NetPulse stops watching for it."
+                                                    Visibility="{Binding SelectedGame.CanRemove, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE738;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,7,0" />
+                                                    <TextBlock Text="Take off the list" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,2,0,0" TextWrapping="Wrap">
+                                            <Run Text="{Binding GamesFoundText, Mode=OneWay}" />
+                                            <Hyperlink Command="{Binding RefreshGamesCommand}" Foreground="{DynamicResource AccentBlueHoverBrush}"><Run Text="Look again" /></Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,2,0,0" Visibility="{Binding HasIgnoredGames, Converter={StaticResource BoolToVis}}">
+                                            <Hyperlink Command="{Binding RestoreGamesCommand}" Foreground="{DynamicResource AccentBlueHoverBrush}"><Run Text="Show all games again" /></Hyperlink>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="20,0,0,0" MaxWidth="330">
+                                        <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AutoRecord, Mode=TwoWay}" Content="Record automatically" FontSize="14"
+                                                  AutomationProperties.Name="Record automatically" Margin="0,18,0,0" />
+                                        <TextBlock Text="Starts when a game starts, saves when it closes." Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                    <TextBlock Text="&#xE765;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding MarkLagShortcutText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
                                 </StackPanel>
-                                <TextBlock Text="{Binding ActionMessage}" Style="{StaticResource MessageText}" Foreground="{DynamicResource AccentBlueHoverBrush}" Margin="0,12,0,0" />
-                                <controls:Callout Kind="Success" Text="{Binding SessionMessage}" Margin="0,12,0,0">
-                                    <controls:Callout.Style>
-                                        <Style TargetType="controls:Callout" BasedOn="{StaticResource {x:Type controls:Callout}}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SessionMessage}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </controls:Callout.Style>
-                                </controls:Callout>
-                                <Button Content="Open this recording" Command="{Binding OpenRecordingCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" FontSize="12.5"
-                                        HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="{Binding IsEnabled, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToVis}}" />
-                                <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,16,0,14" />
-                                <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding AutoRecord, Mode=TwoWay}"
-                                          Content="Record automatically: start when the game starts, save when it closes" />
-                                <TextBlock Margin="52,4,0,0" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"><Run FontFamily="{StaticResource IconFont}" Text="&#xE765;" /><Run Text="  " /><Run Text="{Binding MarkLagShortcutText, Mode=OneWay}" /></TextBlock>
-                                <controls:Callout Kind="Warning" Text="{Binding WarningText}" Margin="0,10,0,0" Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding ActionMessage}" Style="{StaticResource MessageText}" Margin="0,10,0,0"
+                                           Visibility="{Binding HasActionMessage, Converter={StaticResource BoolToVis}}" />
+                                <Grid Margin="0,10,0,0" Visibility="{Binding HasSessionMessage, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding SessionMessage}" Style="{StaticResource MessageText}" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Content="Open this recording" Command="{Binding OpenRecordingCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" MinHeight="32" FontSize="12.5" Margin="12,0,0,0" />
+                                </Grid>
+                                <Grid Margin="0,12,0,0" Visibility="{Binding HasStatusPage, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding StatusPageText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Command="{Binding OpenStatusPageCommand}" Style="{StaticResource GhostButton}" Margin="12,0,0,0" AutomationProperties.Name="Open the official status page">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Official status page" VerticalAlignment="Center" />
+                                            <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource IconFont}" FontSize="11" VerticalAlignment="Center" Margin="7,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <!-- Beginner: what the game is connected to, in one card -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsBeginnerMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                        <!-- your connection right now -->
+                        <TextBlock Text="Your connection right now" Style="{StaticResource SectionLabel}" Margin="2,0,0,8" />
+                        <UniformGrid Columns="3" Margin="0,0,0,16">
+                            <controls:StatTile Margin="0,0,8,12" Label="Router" Glyph="&#xE701;" Value="{Binding RouterPing}" Unit="ms" Caption="{Binding RouterCaption}"
+                                               Badge="{Binding RouterBadge}" BadgeLevel="{Binding RouterLevel}" Info="How fast your own router answers. Slow or missing answers mean trouble between this PC and the router: Wi-Fi, the cable, or the router itself." />
+                            <controls:StatTile Margin="8,0,8,12" Label="Internet" Glyph="&#xE774;" Value="{Binding InternetPing}" Unit="ms" Caption="{Binding InternetCaption}"
+                                               Badge="{Binding InternetBadge}" BadgeLevel="{Binding InternetLevel}" Info="Ping to well-known internet servers (the middle one of them), judged against their own usual ping. Not the game's server." />
+                            <controls:StatTile Margin="8,0,0,12" Label="Variation" Glyph="&#xE9D2;" Value="{Binding Jitter}" Unit="ms" Caption="between replies"
+                                               Badge="{Binding JitterBadge}" BadgeLevel="{Binding JitterLevel}" Info="How much consecutive replies differ. Big swings feel like stutter even when the average ping is fine." />
+                            <controls:StatTile Margin="0,0,8,0" Label="Lost" Glyph="&#xE7BA;" Value="{Binding Loss}" Unit="%" Caption="of recent probes"
+                                               Badge="{Binding LossBadge}" BadgeLevel="{Binding LossLevel}" Info="Share of recent pings to the internet servers that got no answer." />
+                            <controls:StatTile Margin="8,0,8,0" Label="This PC's traffic" Glyph="&#xE968;" Value="{Binding Traffic}" Unit="{Binding TrafficUnit}" Caption="{Binding TrafficCaption}"
+                                               Badge="{Binding TrafficBadge}" BadgeLevel="{Binding TrafficLevel}" Info="Download or upload on this PC right now, whichever is higher. Heavy traffic (above the limit in Settings) competes with the game." />
+                            <controls:StatTile Margin="8,0,0,0" Label="Processor" Glyph="&#xE950;" Value="{Binding Processor}" Unit="%" Caption="{Binding ProcessorCaption}"
+                                               Badge="{Binding ProcessorBadge}" BadgeLevel="{Binding ProcessorLevel}" Info="How busy this PC's processor is, as Task Manager shows it. A PC working flat out stutters in a way that feels like lag." />
+                        </UniformGrid>
+
+                        <!-- the session being recorded, so far -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Visibility="{Binding HasSoFar, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Text="What the game is connected to" Style="{StaticResource CardTitle}" />
-                                <TextBlock Text="{Binding EndpointSummary}" Style="{StaticResource MessageText}" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,6,0,0" />
-                                <TextBlock Text="{Binding ConnectionsEmptyText}" Style="{StaticResource MessageText}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0"
-                                           Visibility="{Binding ShowConnectionsEmptyText, Converter={StaticResource BoolToVis}}" />
-                                <controls:Callout Kind="Warning" Title="The match itself is not in the list" Text="{Binding MatchTrafficText}" Margin="0,10,0,0"
-                                                  Visibility="{Binding MatchTrafficHidden, Converter={StaticResource BoolToVis}}" />
-                                <TextBlock Text="Advanced mode lists every connection, what it probably is, and lets you measure one yourself." Style="{StaticResource CaptionText}" Margin="0,10,0,0" />
+                                <TextBlock Text="This session so far" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="Worked out every few seconds from what NetPulse has measured since the recording started." Style="{StaticResource CardSubtitle}" Margin="0,3,0,16" />
+                                <ContentPresenter Content="{Binding SoFar}" ContentTemplate="{StaticResource VerdictBody}" />
                             </StackPanel>
                         </Border>
 
-                        <!-- Game connections -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                        <!-- the last game session -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Visibility="{Binding HasLastVerdict, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Text="Connections opened by the game" Style="{StaticResource CardTitle}" />
-                                <TextBlock Text="Every address is labelled 'Unknown role': a game also talks to login, matchmaking, telemetry, voice and download services, so none of these is assumed to be the match server."
-                                           Style="{StaticResource CardSubtitle}" />
-                                <controls:Callout Kind="Warning" Title="The match itself is not in this list" Text="{Binding MatchTrafficText}" Margin="0,0,0,12"
-                                                  Visibility="{Binding MatchTrafficHidden, Converter={StaticResource BoolToVis}}" />
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Your last game session: was it your connection?" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="{Binding LastVerdictTitle}" Style="{StaticResource CardSubtitle}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Graph and full report" Command="{Binding OpenRecordingCommand}" Style="{StaticResource OutlineButton}" Padding="12,5" MinHeight="32" FontSize="12.5" VerticalAlignment="Top" />
+                                </Grid>
+                                <ContentPresenter Content="{Binding LastVerdict}" ContentTemplate="{StaticResource VerdictBody}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Margin="0,0,0,16">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource CardPanel}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding HasLastVerdict}" Value="False" />
+                                                <Condition Binding="{Binding HasSoFar}" Value="False" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <controls:EmptyState Glyph="&#xE7FC;" Title="No game sessions yet"
+                                                 Text="Play a game with automatic recording on, or press Record now. Afterwards NetPulse tells you here whether lag came from your Wi-Fi, your provider, this PC, or further away." />
+                        </Border>
+
+                        <!-- recent game sessions -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Visibility="{Binding HasRecentSessions, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
                                 <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding EndpointSummary}" Style="{StaticResource MessageText}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-                                    <CheckBox Grid.Column="1" Style="{StaticResource SwitchToggle}" IsChecked="{Binding GroupRepeats, Mode=TwoWay}" Content="Group repeated connections" FontSize="13"
-                                              ToolTip="Games reconnect to the same web services every minute or two. Grouped, each endpoint is one row with a count." Margin="16,0,0,0" />
+                                    <TextBlock Text="Recent game sessions" Style="{StaticResource CardTitle}" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Content="All recordings" Command="{Binding OpenHistoryCommand}" Style="{StaticResource GhostButton}" />
                                 </Grid>
-                                <Grid>
-                                    <DataGrid ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedConnection, Mode=TwoWay}" IsReadOnly="True"
-                                              AutoGenerateColumns="False" SelectionMode="Single" MaxHeight="300" MinHeight="170">
-                                        <DataGrid.RowStyle>
-                                            <!-- web/API rows are quieter: they are very unlikely to be the match -->
-                                            <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsWebService}" Value="True"><Setter Property="Opacity" Value="0.6" /></DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsActive}" Value="False"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </DataGrid.RowStyle>
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="80" />
-                                            <DataGridTextColumn Header="Remote endpoint" Binding="{Binding Remote}" Width="190" />
-                                            <DataGridTemplateColumn Header="What it probably is" Width="190">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding Kind}" ToolTip="{Binding KindExplanation}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Cursor="Help" />
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                            <DataGridTextColumn Header="Seen" Binding="{Binding OccurrencesText}" Width="55" />
-                                            <DataGridTextColumn Header="Where" Binding="{Binding Scope}" Width="110" />
-                                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
-                                            <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="80" />
-                                            <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="80" />
-                                            <DataGridTextColumn Header="Measured by" Binding="{Binding MeasuredBy}" Width="110" />
-                                            <DataGridTextColumn Header="Local endpoint" Binding="{Binding Local}" Width="170" />
-                                            <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                    <controls:EmptyState Glyph="&#xE7FC;" Title="No connections yet" Text="{Binding ConnectionsEmptyText}" Margin="20,40,20,0"
-                                                         Visibility="{Binding ShowConnectionsEmptyText, Converter={StaticResource BoolToVis}}" />
-                                </Grid>
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                    <Button Content="Measure selected with ICMP ping" Command="{Binding MeasureIcmpCommand}" Padding="12,6" FontSize="12.5" />
-                                    <Button Content="Measure selected with TCP connect" Command="{Binding MeasureTcpCommand}" Style="{StaticResource OutlineButton}" Padding="12,6" FontSize="12.5" Margin="8,0,0,0" />
-                                </StackPanel>
-                                <TextBlock Text="{Binding SelectedConnectionHint}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Measured endpoints -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="Endpoints you chose to measure" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
-                                <Grid>
-                                    <DataGrid ItemsSource="{Binding MeasuredEndpoints}" SelectedItem="{Binding SelectedMeasured, Mode=TwoWay}" IsReadOnly="True"
-                                              AutoGenerateColumns="False" SelectionMode="Single" MaxHeight="180" MinHeight="50">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Endpoint" Binding="{Binding Name}" Width="170" />
-                                            <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="90" />
-                                            <DataGridTextColumn Header="Latency" Binding="{Binding Latency}" Width="80" />
-                                            <DataGridTextColumn Header="Variation" Binding="{Binding Variation}" Width="80" />
-                                            <DataGridTextColumn Header="Packet loss (recent window)" Binding="{Binding Loss}" Width="220" />
-                                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </Grid>
-                                <TextBlock Text="No endpoint is being measured. Start monitoring, select a connection above, then choose a method." FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                                <Button Content="Stop measuring selected" Command="{Binding StopMeasuringCommand}" Style="{StaticResource OutlineButton}" Padding="12,6" FontSize="12.5" HorizontalAlignment="Left" Margin="0,8,0,0" />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Reference measurements -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12" Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="Reference measurements (not game-server ping)" Style="{StaticResource CardTitle}" />
-                                <TextBlock Text="{Binding MeasurementNote}" Style="{StaticResource CardSubtitle}" />
-                                <DataGrid ItemsSource="{Binding ReferenceTargets}" IsReadOnly="True" AutoGenerateColumns="False" MaxHeight="220">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Target" Binding="{Binding Name}" Width="190" />
-                                        <DataGridTextColumn Header="What it is" Binding="{Binding Kind}" Width="230" />
-                                        <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
-                                        <DataGridTextColumn Header="Latency" Binding="{Binding Latency}" Width="80" />
-                                        <DataGridTextColumn Header="Variation" Binding="{Binding Variation}" Width="80" />
-                                        <DataGridTextColumn Header="Packet loss (recent window)" Binding="{Binding Loss}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Findings -->
-                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="What the measurements suggest" Style="{StaticResource CardTitle}" />
-                                <TextBlock Text="Possibilities backed by measurements, not verdicts. Each shows how confident NetPulse is and what to test next." Style="{StaticResource CardSubtitle}" />
-                                <ItemsControl ItemsSource="{Binding Findings}">
+                                <ItemsControl ItemsSource="{Binding RecentSessions}" AutomationProperties.Name="Recent game sessions">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="{Binding Brush}" BorderThickness="3,0,0,0" Background="{DynamicResource BgInputBrush}" Padding="14,10" Margin="0,0,0,8" CornerRadius="6">
-                                                <StackPanel>
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
-                                                        <TextBlock Text="{Binding ConfidenceText, StringFormat='   ({0})'}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                            <Button Command="{Binding DataContext.OpenSessionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                    Cursor="Hand" AutomationProperties.Name="{Binding Title}" HorizontalContentAlignment="Stretch" Margin="0,0,0,2">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="row" Background="Transparent" CornerRadius="8" Padding="10,8">
+                                                            <ContentPresenter />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="row" Property="Background" Value="{DynamicResource BgSidebarBrush}" /></Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="260" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid Width="32" Height="32" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                        <Border CornerRadius="8" Background="{DynamicResource BlueSoftBrush}" />
+                                                        <Image Source="{Binding Icon}" Width="22" Height="22" RenderOptions.BitmapScalingMode="HighQuality" Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                                        <TextBlock Text="{Binding Monogram}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource AccentBlueHoverBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   TextWrapping="NoWrap" Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}" />
+                                                    </Grid>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                        <TextBlock Text="{Binding When}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
                                                     </StackPanel>
-                                                    <TextBlock Text="{Binding Observations}" FontSize="13.5" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding NextTest, StringFormat='Next test: {0}'}" FontSize="13.5" Foreground="{DynamicResource AccentBlueBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding Details}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                                               Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
-                                                </StackPanel>
-                                            </Border>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                                                        <controls:StatusMark Level="{Binding Level}" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,9,0" />
+                                                        <TextBlock Text="{Binding Headline}" FontSize="13.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="3" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Button>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Text="{Binding NoFindingsText}" FontSize="13.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
-                                           Visibility="{Binding HasNoFindings, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Border>
 
-                        <!-- Timeline -->
-                        <Border Style="{StaticResource CardPanel}">
-                            <StackPanel>
-                                <TextBlock Text="Session timeline" Style="{StaticResource CardTitle}" Margin="0,0,0,12" />
-                                <DataGrid RowHeight="NaN" MinRowHeight="40" ItemsSource="{Binding Timeline}" IsReadOnly="True" AutoGenerateColumns="False" MaxHeight="260" MinHeight="50">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, Converter={StaticResource LocalTime}}" Width="80" />
-                                        <DataGridTextColumn Header="What happened" Binding="{Binding EventType, Converter={StaticResource EventLabel}}" Width="170" />
-                                        <DataGridTextColumn Header="Details" Binding="{Binding Description}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                                <TextBlock Text="Game start/exit, connection changes, your lag markers, monitoring gaps and network events appear here while monitoring." FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
+                        <controls:Callout Kind="Info" Title="What NetPulse measures, and what it cannot"
+                                          Text="NetPulse measures your side of the connection while you play: this PC, your Wi-Fi or cable and router, and your provider, against well-known internet servers. It cannot show the ping to the game's own server: games send the match over UDP, and Windows only lets programs with administrator rights see where that goes. When NetPulse says your side was fine but the game lagged, the cause was further away (the game's server or the route to it); the game's own ping display shows that part."
+                                          Margin="0,0,0,16" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -2027,9 +2160,9 @@
                             <StackPanel>
                                 <TextBlock Text="Beginner and Advanced" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
                                 <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="21" Foreground="{DynamicResource TextPrimaryBrush}">
-                                    <Run FontWeight="SemiBold" Text="Beginner" /><Run Text=" keeps to plain-language verdicts: the connection status, the 'Ready to play?' checklist, headline numbers with a one-word rating, the Game Monitor summary, Bufferbloat and Speed tests, the event timeline and your recordings." />
+                                    <Run FontWeight="SemiBold" Text="Beginner" /><Run Text=" keeps to plain-language verdicts: the connection status, the 'Ready to play?' checklist, headline numbers with a one-word rating, the Game Monitor with its &quot;was it my connection?&quot; verdicts, Bufferbloat and Speed tests, the event timeline and your recordings." />
                                     <LineBreak /><LineBreak />
-                                    <Run FontWeight="SemiBold" Text="Advanced" /><Run Text=" adds per-server statistics (usual latency, 95th percentile, variation), the measured evidence behind each verdict, every connection the game opens with the option to measure it, route tracing, adapter and Wi-Fi details, HTTPS timing breakdowns, the live probe log, and how each glossary term is measured." />
+                                    <Run FontWeight="SemiBold" Text="Advanced" /><Run Text=" adds per-server statistics (usual latency, 95th percentile, variation), the measured evidence behind each verdict, route tracing, adapter and Wi-Fi details, HTTPS timing breakdowns, the live probe log, and how each glossary term is measured." />
                                 </TextBlock>
                             </StackPanel>
                         </Border>
@@ -2256,6 +2389,16 @@
                                             <DataGridTextColumn Header="Recording" Binding="{Binding Name}" Width="*" MinWidth="220" />
                                             <DataGridTextColumn Header="Started" Binding="{Binding StartedText}" Width="150" />
                                             <DataGridTextColumn Header="Length" Binding="{Binding DurationText}" Width="100" />
+                                            <DataGridTemplateColumn Header="Verdict" Width="290">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding VerdictText}">
+                                                            <controls:StatusMark Level="{Binding VerdictLevel}" Width="15" Height="15" GlyphSize="8" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                            <TextBlock Text="{Binding VerdictText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Probes" Binding="{Binding SamplesText}" Width="110" />
                                             <DataGridTextColumn Header="Events" Binding="{Binding EventsText}" Width="90" />
                                             <DataGridTextColumn Header="Lag marked" Binding="{Binding LagText}" Width="105" />
@@ -2346,6 +2489,21 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- Was it your connection? -->
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Was it your connection?" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="Worked out by this version of NetPulse from the recording's own measurements: your router, internet servers and this PC." Style="{StaticResource CardSubtitle}" Margin="0,3,0,16" />
+                                    <ContentPresenter Content="{Binding Verdict}" ContentTemplate="{StaticResource VerdictBody}" />
+                                    <TextBlock Text="No lag marks in this recording. Press Mark lag (or its keyboard shortcut) while recording to flag a moment." Style="{StaticResource CaptionText}" Margin="0,14,0,0"
+                                               Visibility="{Binding HasNoLagMarkers, Converter={StaticResource BoolToVis}}" />
+                                    <controls:Callout Kind="Info" Title="Lag and this PC's own traffic" Text="{Binding LagTrafficSummary}" Margin="0,12,0,0"
+                                                      Visibility="{Binding HasLagTrafficSummary, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding GameText}" Style="{StaticResource CaptionText}" Margin="0,12,0,0"
+                                               Visibility="{Binding HasGameText, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                            </Border>
 
                             <!-- Graph -->
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
@@ -2466,66 +2624,6 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Lag markers -->
-                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
-                                <StackPanel>
-                                    <TextBlock Text="Moments you marked as laggy" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                                    <TextBlock Text="For each marker, what the measurements showed in the seconds around it, compared with each target's own normal." Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
-                                    <TextBlock Text="No lag markers in this recording. Press Mark lag while recording to flag a moment." Style="{StaticResource CaptionText}"
-                                               Visibility="{Binding HasNoLagMarkers, Converter={StaticResource BoolToVis}}" />
-                                    <controls:Callout Kind="Info" Title="Lag and this PC's own traffic" Text="{Binding LagTrafficSummary}" Margin="0,0,0,10"
-                                                      Visibility="{Binding HasLagTrafficSummary, Converter={StaticResource BoolToVis}}" />
-                                    <ItemsControl ItemsSource="{Binding LagMarkers}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Background="{DynamicResource BgSidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
-                                                    <StackPanel>
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentAmberBrush}" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                                            <TextBlock Text="{Binding TimeText}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                                            <TextBlock Text="{Binding Note, StringFormat='  -  {0}'}" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                                        </StackPanel>
-                                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource BodyText}" FontSize="13.5" Margin="0,6,0,0" />
-                                                    </StackPanel>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Findings -->
-                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
-                                <StackPanel>
-                                    <TextBlock Text="What the measurements suggested" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                                    <TextBlock Text="Possibilities backed by measurements, each with how sure NetPulse is and what to test next." Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
-                                    <TextBlock Text="No findings were stored with this recording (findings are produced for Game Monitor recordings)." Style="{StaticResource CaptionText}"
-                                               Visibility="{Binding HasNoFindings, Converter={StaticResource BoolToVis}}" />
-                                    <Border Background="{DynamicResource BgInputBrush}" CornerRadius="6" Padding="12,8" Margin="0,0,0,10"
-                                            Visibility="{Binding HasVersionNote, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="{Binding VersionNote}" Style="{StaticResource CaptionText}" />
-                                    </Border>
-                                    <ItemsControl ItemsSource="{Binding Findings}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border BorderBrush="{Binding Brush}" BorderThickness="3,0,0,0" Background="{DynamicResource BgSidebarBrush}" Padding="14,10" Margin="0,0,0,8" CornerRadius="4">
-                                                    <StackPanel>
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                                            <TextBlock Text="{Binding ConfidenceText, StringFormat='   ({0})'}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
-                                                        </StackPanel>
-                                                        <TextBlock Text="{Binding Observations}" Style="{StaticResource BodyText}" FontSize="13.5" Margin="0,4,0,0" />
-                                                        <TextBlock Text="{Binding NextTest, StringFormat='Next test: {0}'}" FontSize="13.5" Foreground="{DynamicResource AccentBlueHoverBrush}" Margin="0,4,0,0" />
-                                                        <TextBlock Text="{Binding Details}" Style="{StaticResource CaptionText}" Margin="0,6,0,0"
-                                                                   Visibility="{Binding DataContext.IsAdvancedMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
-                                                    </StackPanel>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
                             <!-- Events and notes -->
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                                 <StackPanel>
@@ -2548,10 +2646,6 @@
                                             </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
-                                    <TextBlock Text="{Binding ConnectionsText}" Style="{StaticResource CaptionText}" Margin="0,10,0,0" />
-                                    <Expander Header="Limitations that applied to this recording" Margin="0,10,0,0">
-                                        <TextBlock Text="{Binding LimitationsText}" Style="{StaticResource CaptionText}" Margin="0,8,0,0" />
-                                    </Expander>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -2926,6 +3020,14 @@
                                             <TextBlock Text="Older recordings are deleted when NetPulse starts. Interrupted recordings are always kept." Style="{StaticResource CaptionText}" />
                                         </StackPanel>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding RetentionChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding RecordingRetentionDays, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Keep recordings" />
+                                    </Grid>
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="300" /></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Keep automatic game recordings" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Recordings made by themselves when a game starts. Older ones go when a new one is saved; one in which you marked lag is always kept." Style="{StaticResource CaptionText}" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding AutoKeepChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding AutoRecordingsKept, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Keep automatic game recordings" />
                                     </Grid>
                                 </StackPanel>
                             </Border>

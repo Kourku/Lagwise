@@ -197,8 +197,10 @@ public class TracerouteService
                 try
                 {
                     var entry = await Dns.GetHostEntryAsync(hop.IpAddress);
-                    hop.Hostname = entry.HostName;
-                    HostnameCache[hop.IpAddress] = entry.HostName;
+                    // whoever owns the address chooses this name: keep it only when it is a valid host name
+                    string name = UntrustedText.HostName(entry.HostName);
+                    hop.Hostname = name;
+                    HostnameCache[hop.IpAddress] = name;
                 }
                 catch
                 {

@@ -13,14 +13,13 @@ public class SessionAnalysisTests
     {
         var s = new MonitoringSession
         {
-            Name = "test", GameId = "lol", GameDisplayName = "League of Legends", GameSupportStatus = "ReferenceOnly",
+            Name = "test", GameId = "lol", GameDisplayName = "League of Legends",
             StartedUtc = T0, EndedUtc = T0.AddMinutes(10), IsComplete = true, ActiveInterface = "Ethernet", InterfaceType = "Ethernet",
             Targets =
             {
                 new SessionTarget { Id = "gw", Name = "Router", Host = "192.168.0.1", Kind = MeasurementKind.LocalGateway, Protocol = NetworkProtocol.Icmp },
                 new SessionTarget { Id = "ref", Name = "Reference", Host = "1.1.1.1", Kind = MeasurementKind.ReferenceEndpoint, Protocol = NetworkProtocol.Icmp }
-            },
-            Limitations = { "UDP peers are not visible." }
+            }
         };
         // 10 minutes at 1 probe/s: router steady at 1 ms; reference steady at 25 ms except 20 s around minute 5
         for (int sec = 0; sec < 600; sec++)
@@ -109,22 +108,17 @@ public class SessionAnalysisTests
             x.Gaps.Add(new MonitoringGap { StartUtc = T0.AddSeconds(10), EndUtc = T0.AddSeconds(70), Reason = "x" });
             x.Events.Add(new ConnectionEvent { EventType = "LatencySpike", Timestamp = T0.AddSeconds(300), Description = "spike a|b", TargetName = "Reference" });
             x.Connections.Add(new ConnectionRecord { Id = "c", Protocol = "TCP", Remote = "34.1.2.3:443", Scope = "Public", FirstSeenUtc = T0, LastSeenUtc = T0.AddMinutes(5) });
+            x.Connections.Add(new ConnectionRecord { Id = "u", Protocol = "UDP", Local = "0.0.0.0:7777", Scope = "Unspecified", FirstSeenUtc = T0, LastSeenUtc = T0.AddMinutes(5) });
             x.GameProcesses.Add(new GameProcessRecord { Pid = 1, Name = "League of Legends", FirstSeenUtc = T0, LastSeenUtc = T0.AddMinutes(9) });
-            x.Findings.Add(new GameFinding
-            {
-                Title = "Possible thing", Confidence = FindingConfidence.Low,
-                Observations = { "obs" }, PossibleExplanations = { "maybe" }, Evidence = { "ev" }, Contradictions = { "but" }, NextTest = "do this"
-            });
         });
         var md = SessionReportBuilder.BuildMarkdown(s, SessionAnalysis.Compute(s));
 
         foreach (var expected in new[]
         {
-            "League of Legends", "ReferenceOnly", "## What was measured", "ICMP ping", "## Latency, variation and probe loss", "| Router |",
-            "## Gaps and outages", "not a network outage", "## Lag markers", "stutter", "median", "## Findings", "**Observed:** obs",
-            "**Possible explanation:** maybe", "**Next test:** do this", "(confidence: Low)", "## Events", "Latency spike", "spike a/b",
-            "## Game processes and connections", "role is **unknown**", "34.1.2.3:443", "## Route information", "## Limitations",
-            "UDP peers are not visible.", "nothing was uploaded"
+            "League of Legends", "## Verdict:", "| Home network |", "## What was measured", "ICMP ping", "## Latency, variation and probe loss", "| Router |",
+            "## Gaps and outages", "not a network outage", "### Moments you marked as laggy", "stutter", "## Events", "Latency spike", "spike a/b",
+            "## The game", "ran for 9 min", "1 UDP socket", "1 connection to internet services", "## Limitations",
+            "cannot measure a game's own server", "nothing was uploaded"
         })
         {
             Assert.Contains(expected, md);

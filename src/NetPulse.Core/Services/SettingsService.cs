@@ -55,7 +55,11 @@ public class SettingsService
                 try
                 {
                     var parsed = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
-                    if (parsed != null) loaded = parsed;
+                    if (parsed != null)
+                    {
+                        if (parsed.SchemaVersion < AppSettings.CurrentSchema) parsed.Upgrade();
+                        loaded = parsed;
+                    }
                 }
                 catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
                 {

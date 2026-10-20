@@ -24,20 +24,20 @@ public class StorageService
 
         foreach (var m in measurements)
         {
-            string httpsInfo = m.HttpsBreakdown != null ? $"\"{m.HttpsBreakdown}\"" : "";
-            string error = !string.IsNullOrEmpty(m.ErrorMessage) ? $"\"{m.ErrorMessage.Replace("\"", "\"\"")}\"" : "";
-            string targetName = $"\"{m.TargetName.Replace("\"", "\"\"")}\"";
+            // every text field quoted, and nothing a spreadsheet would run as a formula
+            string httpsInfo = m.HttpsBreakdown != null ? UntrustedText.CsvField(m.HttpsBreakdown.ToString()) : "";
+            string error = !string.IsNullOrEmpty(m.ErrorMessage) ? UntrustedText.CsvField(m.ErrorMessage) : "";
 
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "{0:O},{1},{2},{3},{4},{5},{6:F2},{7},{8},{9}",
                 m.Timestamp,
-                m.TargetId,
-                targetName,
-                m.TargetHost,
+                UntrustedText.CsvField(m.TargetId),
+                UntrustedText.CsvField(m.TargetName),
+                UntrustedText.CsvField(m.TargetHost),
                 m.Protocol,
                 m.Success,
                 m.RttMs,
-                m.ResolvedIp ?? "",
+                UntrustedText.CsvField(m.ResolvedIp),
                 error,
                 httpsInfo));
         }

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A stand-in "game" for the automated GUI check of the Game Monitor (scripts/Verify-Gui.ps1). Never shipped. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>StandInGame</AssemblyName>
+    <Product>Stand-in Game</Product>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

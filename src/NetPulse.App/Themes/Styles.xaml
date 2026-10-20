@@ -846,7 +846,7 @@
                             <Border x:Name="badge" CornerRadius="10" Padding="7,1,9,2" BorderThickness="1" BorderBrush="{TemplateBinding BadgeBrush}" Background="{DynamicResource BgInputBrush}" HorizontalAlignment="Left" Margin="0,2,0,6">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="badgeGlyph" Text="&#xE712;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{TemplateBinding BadgeBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
-                                    <TextBlock Text="{TemplateBinding Badge}" FontSize="12" FontWeight="SemiBold" Foreground="{TemplateBinding BadgeBrush}" TextWrapping="NoWrap" />
+                                    <TextBlock x:Name="badgeText" Text="{TemplateBinding Badge}" FontSize="12" FontWeight="SemiBold" Foreground="{TemplateBinding BadgeBrush}" TextWrapping="NoWrap" />
                                 </StackPanel>
                             </Border>
                             <TextBlock Text="{TemplateBinding Caption}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="17" />
@@ -868,6 +868,36 @@
                             <Setter TargetName="badgeGlyph" Property="Text" Value="&#xE711;" />
                             <Setter TargetName="badge" Property="Background" Value="{DynamicResource RedSoftBrush}" />
                         </Trigger>
+                        <!-- no colour given: the level's own -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="BadgeLevel" Value="Good" />
+                                <Condition Property="BadgeBrush" Value="{x:Null}" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="badgeGlyph" Property="Foreground" Value="{DynamicResource AccentGreenBrush}" />
+                            <Setter TargetName="badgeText" Property="Foreground" Value="{DynamicResource AccentGreenBrush}" />
+                            <Setter TargetName="badge" Property="BorderBrush" Value="{DynamicResource AccentGreenBrush}" />
+                        </MultiTrigger>
+                        <!-- no colour given: the level's own -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="BadgeLevel" Value="Fair" />
+                                <Condition Property="BadgeBrush" Value="{x:Null}" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="badgeGlyph" Property="Foreground" Value="{DynamicResource AccentAmberBrush}" />
+                            <Setter TargetName="badgeText" Property="Foreground" Value="{DynamicResource AccentAmberBrush}" />
+                            <Setter TargetName="badge" Property="BorderBrush" Value="{DynamicResource AccentAmberBrush}" />
+                        </MultiTrigger>
+                        <!-- no colour given: the level's own -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="BadgeLevel" Value="Poor" />
+                                <Condition Property="BadgeBrush" Value="{x:Null}" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="badgeGlyph" Property="Foreground" Value="{DynamicResource AccentRedBrush}" />
+                            <Setter TargetName="badgeText" Property="Foreground" Value="{DynamicResource AccentRedBrush}" />
+                            <Setter TargetName="badge" Property="BorderBrush" Value="{DynamicResource AccentRedBrush}" />
+                        </MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

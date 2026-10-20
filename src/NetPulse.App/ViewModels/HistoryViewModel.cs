@@ -26,16 +26,22 @@ public sealed class SessionRow
     {
         Id = s.Id;
         Name = s.Name;
-        Game = string.IsNullOrEmpty(s.GameId) ? "Network only" : (s.GameDisplayName ?? Core.Games.GameProfiles.Find(s.GameId)?.DisplayName ?? s.GameId);
+        Game = !s.IsGameRecording ? "Network only" : s.GameDisplayName ?? Core.Games.GameProfiles.Find(s.GameId)?.DisplayName ?? s.GameId ?? "No game started";
         StartedText = s.StartedUtc.ToLocalTime().ToString("ddd d MMM, HH:mm");
         var end = s.EndedUtc;
         DurationText = end.HasValue ? FormatDuration(end.Value - s.StartedUtc) : "-";
         SamplesText = $"{s.SampleCount:N0} probes";
-        EventsText = $"{s.EventCount} events";
+        EventsText = s.EventCount == 1 ? "1 event" : $"{s.EventCount} events";
         LagText = s.LagMarkerCount == 0 ? "" : $"{s.LagMarkerCount} lag mark{(s.LagMarkerCount == 1 ? "" : "s")}";
         IsComplete = s.IsComplete;
         Status = s.IsComplete ? "Saved" : "Interrupted";
+        VerdictLevel = s.Verdict is { } v ? VerdictViewModel.LevelOf(v) : "Unknown";
+        VerdictText = s.VerdictHeadline ?? "";
     }
+
+    /// <summary>"Good", "Fair", "Poor" or "Unknown", for the list's status mark.</summary>
+    public string VerdictLevel { get; }
+    public string VerdictText { get; }
 
     public string Id { get; }
     public string Name { get; }
@@ -79,29 +85,6 @@ public sealed class TargetStatRow
     private static string Ms(double? v) => v.HasValue ? $"{v.Value:F1} ms" : "-";
 }
 
-public sealed class LagRow
-{
-    public LagRow(LagCorrelation c)
-    {
-        TimeText = c.MarkerUtc.ToLocalTime().ToString("HH:mm:ss");
-        Note = string.IsNullOrEmpty(c.Note) ? "Lag marked" : c.Note;
-        var sb = new StringBuilder();
-        var affected = c.Affected.ToList();
-        if (affected.Count == 0 && c.NearbyEvents.Count == 0 && c.Traffic?.Busy != true)
-            sb.AppendLine($"Nothing unusual was measured within {SessionAnalysis.LagWindowSeconds} s. The lag may have been on the game's side or on a path these targets do not share.");
-        if (c.Traffic != null) sb.AppendLine($"• {c.Traffic.Describe()}");
-        foreach (var a in affected)
-            sb.AppendLine($"• {a.Name}: {(a.WindowMedianMs.HasValue ? $"{a.WindowMedianMs:F0} ms" : "no replies")} around this moment, normally {a.SessionMedianMs:F0} ms; {a.WindowFailures} of {a.WindowProbes} probes unanswered.");
-        foreach (var e in c.NearbyEvents.Take(4))
-            sb.AppendLine($"• {e.Timestamp.ToLocalTime():HH:mm:ss} {Lexicon.EventLabel(e.EventType)}: {e.Description}");
-        Detail = sb.ToString().TrimEnd();
-    }
-
-    public string TimeText { get; }
-    public string Note { get; }
-    public string Detail { get; }
-}
-
 public sealed class LegendItem : ViewModelBase
 {
     private bool _isOn = true;
@@ -136,8 +119,8 @@ public sealed class HistoryViewModel : ViewModelBase
     private string _message = "";
     private string _detailTitle = "";
     private string _detailSubtitle = "";
-    private string _limitationsText = "";
-    private string _connectionsText = "";
+    private string _gameText = "";
+    private VerdictViewModel? _verdict;
     private ChartData? _chart;
     private int _modeIndex;
     private string _sessionsFolderText = "";
@@ -164,8 +147,6 @@ public sealed class HistoryViewModel : ViewModelBase
 
     public ObservableCollection<SessionRow> Sessions { get; } = new();
     public ObservableCollection<TargetStatRow> TargetStats { get; } = new();
-    public ObservableCollection<LagRow> LagMarkers { get; } = new();
-    public ObservableCollection<FindingItem> Findings { get; } = new();
     public ObservableCollection<ConnectionEvent> Events { get; } = new();
     public ObservableCollection<LegendItem> Legend { get; } = new();
     public ObservableCollection<SummaryCard> Cards { get; } = new();
@@ -242,10 +223,6 @@ public sealed class HistoryViewModel : ViewModelBase
     private string _storageText = "";
     /// <summary>"3 recordings, 4.2 MB on this PC" plus the retention rule.</summary>
     public string StorageText { get => _storageText; private set => SetProperty(ref _storageText, value); }
-    private string _versionNote = "";
-    /// <summary>Explains that stored findings come from the version that recorded the session.</summary>
-    public string VersionNote { get => _versionNote; private set { if (SetProperty(ref _versionNote, value)) OnPropertyChanged(nameof(HasVersionNote)); } }
-    public bool HasVersionNote => _versionNote.Length > 0;
 
     public SessionRow? SelectedSession
     {
@@ -269,11 +246,14 @@ public sealed class HistoryViewModel : ViewModelBase
     public string Message { get => _message; private set => SetProperty(ref _message, value); }
     public string DetailTitle { get => _detailTitle; private set => SetProperty(ref _detailTitle, value); }
     public string DetailSubtitle { get => _detailSubtitle; private set => SetProperty(ref _detailSubtitle, value); }
-    public string LimitationsText { get => _limitationsText; private set => SetProperty(ref _limitationsText, value); }
-    public string ConnectionsText { get => _connectionsText; private set => SetProperty(ref _connectionsText, value); }
+    /// <summary>For a game recording: how long the game ran and whether it was online.</summary>
+    public string GameText { get => _gameText; private set { if (SetProperty(ref _gameText, value)) OnPropertyChanged(nameof(HasGameText)); } }
+    public bool HasGameText => _gameText.Length > 0;
+    /// <summary>"Was it my connection?" for the open recording, worked out by this version from its measurements.</summary>
+    public VerdictViewModel? Verdict { get => _verdict; private set { if (SetProperty(ref _verdict, value)) OnPropertyChanged(nameof(HasNoLagMarkers)); } }
     public ChartData? Chart { get => _chart; private set => SetProperty(ref _chart, value); }
     public IReadOnlyList<string> ChartTargetOrder => _session?.Targets.Select(t => t.Id).ToList() ?? new List<string>();
-    public bool HasNoLagMarkers => LagMarkers.Count == 0;
+    public bool HasNoLagMarkers => _verdict?.HasLagMarks != true;
 
     /// <summary>The heavy-traffic limit from Settings counts as "busy" around lag markers (the default when it is off).</summary>
     private double BusyBps => _host.Settings.HeavyTrafficMbps > 0 ? _host.Settings.HeavyTrafficMbps * 1_000_000.0 : SessionAnalysis.DefaultBusyBps;
@@ -282,7 +262,6 @@ public sealed class HistoryViewModel : ViewModelBase
     /// <summary>How many lag markers came while this PC was busy; empty for recordings without traffic data.</summary>
     public string LagTrafficSummary { get => _lagTrafficSummary; private set { if (SetProperty(ref _lagTrafficSummary, value)) OnPropertyChanged(nameof(HasLagTrafficSummary)); } }
     public bool HasLagTrafficSummary => _lagTrafficSummary.Length > 0;
-    public bool HasNoFindings => Findings.Count == 0;
 
     public string ChartCaption => ModeIndex switch
     {
@@ -365,10 +344,13 @@ public sealed class HistoryViewModel : ViewModelBase
         Message = "";
         try
         {
-            var (session, stats) = await Task.Run(() =>
+            double busy = BusyBps;
+            var (session, stats, verdict) = await Task.Run<(MonitoringSession?, SessionStats?, VerdictViewModel?)>(() =>
             {
                 var s = _host.Sessions.Load(id);
-                return (s, s == null ? null : SessionAnalysis.Compute(s, BusyBps));
+                if (s == null) return (null, null, null);
+                var st = SessionAnalysis.Compute(s, busy);
+                return (s, st, new VerdictViewModel(SessionVerdict.Build(s, busy), st));
             });
 
             if (cts.IsCancellationRequested) return;
@@ -376,6 +358,7 @@ public sealed class HistoryViewModel : ViewModelBase
 
             _session = session;
             _stats = stats;
+            _verdictOf = verdict;
             RenderDetail(session, stats);
         }
         catch (Exception ex)
@@ -447,10 +430,11 @@ public sealed class HistoryViewModel : ViewModelBase
     {
         _session = null;
         _stats = null;
-        TargetStats.Clear(); LagMarkers.Clear(); Findings.Clear(); Events.Clear(); Legend.Clear(); Cards.Clear();
+        TargetStats.Clear(); Events.Clear(); Legend.Clear(); Cards.Clear();
         LagTrafficSummary = "";
+        Verdict = null;
         Chart = null;
-        DetailTitle = DetailSubtitle = LimitationsText = ConnectionsText = VersionNote = "";
+        DetailTitle = DetailSubtitle = GameText = "";
         ResetCompareChoices();
         NotifyDetail();
     }
@@ -459,7 +443,6 @@ public sealed class HistoryViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasDetail));
         OnPropertyChanged(nameof(HasNoLagMarkers));
-        OnPropertyChanged(nameof(HasNoFindings));
         OnPropertyChanged(nameof(ChartTargetOrder));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -482,23 +465,13 @@ public sealed class HistoryViewModel : ViewModelBase
         TargetStats.Clear();
         foreach (var t in stats.Targets) TargetStats.Add(new TargetStatRow(t));
 
-        LagMarkers.Clear();
-        foreach (var c in stats.LagCorrelations) LagMarkers.Add(new LagRow(c));
+        Verdict = _verdictOf;
         LagTrafficSummary = stats.LagTrafficSummary;
-
-        Findings.Clear();
-        foreach (var f in s.Findings) Findings.Add(new FindingItem(f));
-        VersionNote = s.Findings.Count == 0 ? ""
-            : s.AppVersion == null ? "These findings were worked out by an older NetPulse when the recording was saved. Later versions may judge the same measurements differently; the graph and statistics above are always recalculated."
-            : s.AppVersion != Core.AppInfo.Version ? $"These findings were worked out by NetPulse {s.AppVersion} when the recording was saved. The graph and statistics above are recalculated by this version ({Core.AppInfo.Version})."
-            : "";
 
         Events.Clear();
         foreach (var e in s.Events.OrderByDescending(e => e.Timestamp).Take(200)) Events.Add(e);
 
-        LimitationsText = s.Limitations.Count == 0 ? "" : string.Join("\n", s.Limitations.Select(l => "• " + l));
-        ConnectionsText = string.IsNullOrEmpty(s.GameDisplayName) ? "" :
-            $"{s.GameProcesses.Count} game process(es) and {s.Connections.Count} sockets were recorded. Their role is unknown; none is assumed to be the match server.";
+        GameText = GameSummary(s, _verdictOf?.Verdict);
 
         Legend.Clear();
         var order = s.Targets.Select(t => t.Id).ToList();
@@ -509,6 +482,21 @@ public sealed class HistoryViewModel : ViewModelBase
         ResetCompareChoices();
         NotifyDetail();
         RebuildChart();
+    }
+
+    private VerdictViewModel? _verdictOf;
+
+    /// <summary>One line about the game in a game recording: how long it ran, and whether (and how) it was online.</summary>
+    public static string GameSummary(MonitoringSession s, SessionVerdict? v)
+    {
+        if (!s.IsGameRecording) return "";
+        if (s.GameProcesses.Count == 0) return "No game ran while this was recording.";
+        string ran = v?.GameTime is TimeSpan t ? $"{s.GameDisplayName ?? "The game"} ran for {VerdictViewModel.Duration(t)}." : $"{s.GameDisplayName ?? "The game"} ran.";
+        int udp = s.Connections.Count(c => c.Protocol == "UDP");
+        int web = s.Connections.Count(c => c.Protocol == "TCP" && c.Remote != null && c.Scope == "Public");
+        return s.Connections.Count == 0
+            ? ran + " It made no network connections NetPulse could see, so it was probably played offline."
+            : ran + $" It had {udp} UDP socket{(udp == 1 ? "" : "s")} (where games send the match itself; Windows does not show where they go) and {web} connection{(web == 1 ? "" : "s")} to internet services.";
     }
 
     private void RebuildChart()

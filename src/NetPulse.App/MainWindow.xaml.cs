@@ -72,6 +72,9 @@ public partial class MainWindow : Window
             // started by the "start with Windows" entry: begin in the tray / taskbar rather than in front of the user
             if (Environment.GetCommandLineArgs().Contains("--minimized", StringComparer.OrdinalIgnoreCase))
                 WindowState = WindowState.Minimized;
+
+            // documentation and look checks: render pages to PNG files, then close
+            if (PageSnapshots.Requested(out var spec, out int wait)) _ = PageSnapshots.RunAsync(this, vm, spec, wait);
         }
     }
 
@@ -177,7 +180,7 @@ public partial class MainWindow : Window
 
     private void UpdateTrayTooltip(MainViewModel vm)
     {
-        string state = vm.GameMonitor.IsMonitoring ? $"Recording {vm.GameMonitor.SelectedProfile?.Profile.DisplayName}" : App.Host.IsRecording ? "Recording" : "Monitoring";
+        string state = vm.GameMonitor.IsMonitoring ? $"Recording {vm.GameMonitor.RecordingGameName}" : App.Host.IsRecording ? "Recording" : "Monitoring";
         _trayManager?.SetTooltip($"NetPulse - {state}\nReference ping {vm.QuickInternetLatency:0} ms, variation {vm.QuickJitter:0} ms, probe loss {vm.QuickPacketLoss:0.#}%\n{vm.StatusCategory}");
     }
 

@@ -1,6 +1,55 @@
 # NetPulse release notes
 
-Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.10); 0.10 follows 0.9, and 1.0 is kept for the first release with a game validated live; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
+Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.16, then NetPulse-ver1.0); 0.10 follows 0.9, and 0.17 was folded into 1.0 without a release of its own; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
+
+## 1.0.0
+
+NetPulse 1.0. The Game Monitor works for any game on any PC and answers the question players actually have: **was it my connection?** Everything it does is verified automatically, without a real match. This release also makes NetPulse itself safer to run (the work planned for 0.17).
+
+![The Game Monitor in 1.0](docs/screenshots/game-monitor-1.0.png)
+
+**The Game Monitor, rebuilt for any game**
+- **Finds your games by itself.** Windows 10 and 11 keep a list of the games they have seen run on each PC (the one Game Bar and Game Mode use). NetPulse reads it, read-only, and adds its seven built-in games and any program you add with **Add a game...**. A game you do not want watched can be taken off the list.
+- **Watches all of them by default**, and **records automatically when one starts** (now on by default), saving when it has been closed for 20 seconds. Settings from an earlier version are switched to all games with automatic recording once; the switch on the Game Monitor turns it off. A recording you stop while the game runs is not restarted until the game closes and starts again. **Record now** also works before the game is running: the recording takes the first game that starts.
+- **A verdict for every session: was it my connection?** Afterwards NetPulse says whether lag came from your side and which part: your Wi-Fi or router, beyond your router (your provider or the internet), or this PC (its own downloads, or a processor working flat out). Each part gets its own rating, every stretch of trouble is listed with its time, and each moment you marked as laggy gets its own answer, with the numbers. When your side was fine, it says so: the lag was further away, at the game's server or on the route to it.
+- **Live while you play:** six tiles (router, internet, variation, loss, this PC's traffic, processor) and **This session so far**, worked out every few seconds.
+- **Your last game session and the recent ones** on the Game Monitor, each with its verdict.
+- **Recordings keep this PC's processor load and Wi-Fi signal** every second, beside its traffic.
+- **Automatic recordings stay tidy:** the newest 50 are kept (Settings > Recordings: 20, 50, 200 or all); older ones go when a new one is saved, except those in which you marked lag.
+- **Removed:** the table of the game's connections, measuring one of them, the per-game "Reference-only" labels and the findings with confidence levels. They measured the game's web services, not the match, which Windows does not show. Shared store clients (Steam, Epic Games Launcher, EA app, Battle.net) no longer count as any game's launcher.
+- Apex Legends is now found by `r5apex_dx12.exe` too, as Windows' game list showed on a real PC.
+
+**History and reports**
+- Every recording opens with **Was it your connection?**, worked out again by this version from its measurements, so older recordings get a verdict too. The list of recordings shows each one's verdict.
+- The exported report starts with the verdict: the parts of the connection, when it happened, every lag mark, and what to do.
+
+**The .NET runtime inside NetPulse is current again**
+- NetPulse carries its own .NET runtime, which Windows Update does not patch. Up to 0.16.0 it carried .NET 10.0.3, which nine later security updates fixed. This release carries .NET 10.0.13 (October 2026).
+- The build now asks Microsoft's release feed for the latest .NET 10 patch, bundles it, and refuses to finish if the exe reports another runtime. The runtime is recorded in build-info.json. Use the newest NetPulse: an old copy keeps its old runtime.
+
+**Hostile answers from the network**
+- **Text from outside** (reverse-DNS names of route hops, certificate names, status pages, redirect addresses, server messages) has control and invisible characters removed and is shortened before it is shown or put in a report. Direction overrides (U+202E) can make "gpj.exe" read as "exe.jpg". A reverse-DNS name that is not a valid host name is dropped.
+- **CSV exports** quote every text field, and a field starting with = + - @ gets an apostrophe, so Excel or another spreadsheet never runs it as a formula.
+- **Site icons** are never fetched from an address on this PC or the home network, whatever a page or a redirect names, so a website cannot use NetPulse to send requests to your router.
+- **DNS probes** count an answer only from the server asked and with the question's number, so another device cannot fake one.
+- **Size and time limits:** status and DNS-over-HTTPS answers are limited to 1 MB, and reading a page for its icon has a time limit, so a page built to be slow cannot stall it.
+- **A status page of another shape** (for example "status" as text) is now read as "no answer" instead of raising an error.
+
+**Checked, nothing to fix**
+- A running NetPulse has no open TCP port and no lasting UDP socket, and creates no firewall rule.
+- Everything it keeps is in a folder only you (and administrators) can read. No administrator rights; per-user installer; Windows tools started by full path.
+
+**Verified automatically, without a real game**
+- A stand-in game (a small program with a UDP socket and an internet connection, like an online game) is added the way a user adds one. The GUI check of the published exe starts it, then checks that:
+  - NetPulse records by itself, and lag is marked by button and by the system-wide shortcut;
+  - the live verdict appears;
+  - closing the game saves the recording, which shows its verdict on the Game Monitor and in History.
+- The published exe's self-test does the same with real Windows process and socket APIs, and reads Windows' game list.
+- New automated tests cover the game library, exact-path detection, watching all games and the verdict in every situation.
+
+**Also**
+- `NetPulse.exe --screenshot "GameMonitor=gm.png"` renders pages to image files without a screen, for documentation.
+- Stat tiles colour their rating by level on their own; the Help page and glossary describe the verdict and how games are found.
 
 ## 0.16.0
 

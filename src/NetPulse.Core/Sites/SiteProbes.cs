@@ -50,7 +50,8 @@ public sealed class SiteProbes : ISiteProbes
     {
         var client = new HttpClient(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5), PooledConnectionLifetime = TimeSpan.FromMinutes(2) })
         {
-            Timeout = TimeSpan.FromSeconds(6)
+            Timeout = TimeSpan.FromSeconds(6),
+            MaxResponseContentBufferSize = 1024 * 1024   // a status or DNS answer is a few kilobytes; never hold more than 1 MB
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd($"NetPulse/{AppInfo.Version}");
         return client;
@@ -223,7 +224,8 @@ public sealed class SiteProbes : ISiteProbes
         double handshakeMs = (sw.Elapsed - handshakeStart).TotalMilliseconds;
         if (errors != SslPolicyErrors.None)
             return new(address, TraceStage.Handshake, TraceFailure.CertificateInvalid, connectMs, handshakeMs,
-                CertificateSubject: cert?.GetNameInfo(X509NameType.SimpleName, false), CertificateIssuer: cert?.GetNameInfo(X509NameType.SimpleName, true));
+                CertificateSubject: UntrustedText.Clean(cert?.GetNameInfo(X509NameType.SimpleName, false), 120),
+                CertificateIssuer: UntrustedText.Clean(cert?.GetNameInfo(X509NameType.SimpleName, true), 120));
 
         // 3. one request for the home page; only the start of the answer is read
         string request = $"GET / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {UserAgent}\r\nAccept: text/html,application/xhtml+xml,*/*;q=0.8\r\n" +
@@ -301,11 +303,13 @@ public sealed class SiteProbes : ISiteProbes
             if (!doc.RootElement.TryGetProperty("status", out var s)) return null;
             string? indicator = s.TryGetProperty("indicator", out var i) ? i.GetString() : null;
             string? description = s.TryGetProperty("description", out var d) ? d.GetString() : null;
-            return indicator == null ? null : new StatusPageAnswer(indicator, string.IsNullOrWhiteSpace(description) ? indicator : description);
+            indicator = UntrustedText.Clean(indicator, 40);
+            description = UntrustedText.Clean(description, 160);
+            return string.IsNullOrEmpty(indicator) ? null : new StatusPageAnswer(indicator, string.IsNullOrWhiteSpace(description) ? indicator : description);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
-            return null;
+            return null;    // not the expected shape ("status" a string, say)
         }
     }
 
@@ -313,20 +317,29 @@ public sealed class SiteProbes : ISiteProbes
 
     private static readonly Regex StatusLine = new(@"^HTTP/\d(?:\.\d)?\s+(\d{3})", RegexOptions.Compiled);
     private static readonly string[] ChallengeMarkers = { "just a moment", "cf-chl", "challenge-platform", "attention required", "captcha", "are you a robot", "verify you are human" };
-    private static readonly Regex IconLink = new(@"<link\b[^>]*\brel\s*=\s*[""'](?:shortcut\s+)?icon[""'][^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex Href = new(@"\bhref\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // a page is untrusted: a time limit keeps a crafted one from keeping the regular expression busy
+    private static readonly TimeSpan RegexLimit = TimeSpan.FromMilliseconds(250);
+    private static readonly Regex IconLink = new(@"<link\b[^>]*\brel\s*=\s*[""'](?:shortcut\s+)?icon[""'][^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexLimit);
+    private static readonly Regex Href = new(@"\bhref\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexLimit);
 
     /// <summary>The icon a page names in its head (<c>&lt;link rel="icon" href="..."&gt;</c>), skipping SVG, which Windows cannot draw.</summary>
     public static string? FindIconHref(string html)
     {
-        foreach (Match link in IconLink.Matches(html))
+        try
         {
-            var href = Href.Match(link.Value);
-            if (!href.Success) continue;
-            string value = WebUtility.HtmlDecode(href.Groups[1].Value.Trim());
-            if (value.Length == 0 || value.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
-            if (value.Contains(".svg", StringComparison.OrdinalIgnoreCase) || link.Value.Contains("image/svg", StringComparison.OrdinalIgnoreCase)) continue;
-            return value;
+            foreach (Match link in IconLink.Matches(html))
+            {
+                var href = Href.Match(link.Value);
+                if (!href.Success) continue;
+                string value = WebUtility.HtmlDecode(href.Groups[1].Value.Trim());
+                if (value.Length == 0 || value.Length > 2048 || value.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+                if (value.Contains(".svg", StringComparison.OrdinalIgnoreCase) || link.Value.Contains("image/svg", StringComparison.OrdinalIgnoreCase)) continue;
+                return value;
+            }
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // a page built to be slow to read: no icon from it
         }
         return null;
     }
@@ -349,7 +362,7 @@ public sealed class SiteProbes : ISiteProbes
                          || (code is 403 or 429 or 503 && ChallengeMarkers.Any(body.Contains));
         // enough to judge: a redirect needs no body; a page needs its head (title and icon), or a few dozen kilobytes
         bool complete = code is >= 300 and < 400 || body.Contains("</head>", StringComparison.Ordinal) || body.Length > 32 * 1024;
-        return new Answer(code, Header("Location"), challenge, complete, code is >= 200 and < 300 ? FindIconHref(raw) : null);
+        return new Answer(code, UntrustedText.Clean(Header("Location"), 300), challenge, complete, code is >= 200 and < 300 ? FindIconHref(raw) : null);
     }
 
     private static TraceFailure Map(SocketError e) => e switch

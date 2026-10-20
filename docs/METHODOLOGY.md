@@ -154,3 +154,35 @@ Information lines (UPnP on, a Private network at home, programs listening) and u
 | Low ($\le 5\text{ms}$), 0% Loss | Normal ($\le 50\text{ms}$), 0% Loss | Normal | Delta $\le 15\text{ms}$ | **Optimal Connection** |
 | Interface Down or 100% Loss | 100% Loss | 100% Loss | N/A | **Disconnected** |
 | Minor fluctuations | Mild variation | Normal | Normal | **Inconclusive / Mild Variability** |
+
+## 9. Session Verdict (since 1.0)
+
+Every recording (a game session or a network recording) is judged after the fact from its own measurements: "was it my connection, and which part?" The same rules run live on the session so far, and History works them out again for older recordings.
+
+**Inputs.** The router (ICMP), the reference servers measured with plain pings (or TCP connects; an HTTPS handshake or a DNS lookup includes server work and is used only when no plain ping exists), connection drops and monitoring gaps as recorded, and each second of this PC's traffic, processor load (Windows' `GetSystemTimes`, as Task Manager shows it) and Wi-Fi signal.
+
+**Norms.** Each series is compared with its own median in the recording, never with a fixed ping. A sample is *slow* above $\max(3\,n,\; n + 30\text{ ms})$ for the router and $n + \max(50\text{ ms},\; 0.5\,n)$ for a server, where $n$ is that series' median; a lost probe is slow too.
+
+**Slots.** The recording is cut into 5-second slots. A series is unsteady in a slot when at least 40% of its probes there (at least one) were slow. A series unsteady in more than 30% of the slots it was measured in (12 or more) is noisy by nature, typically a public resolver rate-limiting pings, and takes no part. Slots inside a monitoring gap are neither trouble nor measured.
+
+**Cause of a slot**, in order:
+1. inside a recorded drop: **Outage**;
+2. the router unsteady: **Home network** (Wi-Fi or router);
+3. a strict majority of the remaining servers unsteady (1 of 1, 2 of 2, 2 of 3, 3 of 4): **Provider** (beyond the router), or **This PC's traffic** when the PC moved more than the heavy-traffic limit (Settings, 15 Mbps by default) for at least 2 seconds of the slot.
+
+Bad slots of one cause with at most one calm slot between them form one stretch.
+
+**Rating.**
+- *Not enough data* below 30 s of judged slots.
+- *Poor* with a drop of 10 s or more, trouble in at least 5% of the slots, or 12 or more stretches per hour.
+- *Some trouble* with any shorter drop, 2 or more stretches per hour, or a stretch of 15 s or more.
+- *Good* otherwise: one short spike in an hour is normal.
+
+The headline names the cause with the most time (a drop of 10 s or more always leads).
+
+**Layers.** Home network, Provider and internet, and This PC are rated separately: typical router and server ping, loss, how often and how long each part was slow, heavy traffic and processor time at 90% or more.
+
+**Lag marks** look at $[t - 20\text{ s},\; t + 5\text{ s}]$ around the key press, since the key is pressed after the stutter. The cause there (outage > home network > own traffic > provider) is reported with the worst numbers against the usual ones. With no cause:
+- a processor at 90% or more for at least a quarter of those seconds means "this PC was very busy";
+- a game with no network connections at all means "the game was not online";
+- otherwise "your connection looked normal": the lag was further away, at the game's server or on the route to it, which NetPulse cannot measure.

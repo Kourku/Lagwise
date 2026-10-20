@@ -105,7 +105,10 @@ public class LiveIntegrationTests
     public async Task TestTracerouteLive()
     {
         var traceroute = new TracerouteService();
-        var path = await traceroute.TraceRouteAsync("1.1.1.1", maxHops: 5, timeoutMs: 1500);
+        // routers rate-limit their "time exceeded" replies, so a single unanswered first hop is retried
+        RoutePath? path = null;
+        for (int attempt = 0; attempt < 3 && path?.Hops.FirstOrDefault()?.IsResponding != true; attempt++)
+            path = await traceroute.TraceRouteAsync("1.1.1.1", maxHops: 5, timeoutMs: 1500);
 
         Assert.NotNull(path);
         Assert.NotEmpty(path.Hops);

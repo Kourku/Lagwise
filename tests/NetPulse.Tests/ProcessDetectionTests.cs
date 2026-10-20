@@ -22,27 +22,21 @@ public class ProcessDetectionTests
     }
 
     [Fact]
-    public void LauncherAlone_IsNotTheGame()
+    public void ClientAlone_IsNotTheGame()
     {
-        var s = GameProcessDetector.Detect(Lol, new[]
-        {
-            P(10, "RiotClientServices", @"E:\Riot Games\Riot Client\RiotClientServices.exe"),
-            P(11, "Riot Client", @"E:\Riot Games\Riot Client\RiotClientElectron\Riot Client.exe"),
-            P(12, "RiotClientCrashHandler"),
-            P(13, "LeagueClient", ClientPath),
-        });
+        var s = GameProcessDetector.Detect(Lol, new[] { P(13, "LeagueClient", ClientPath), P(14, "LeagueClientUx", ClientPath) });
 
         Assert.Equal(GameRunState.LauncherOnly, s.State);
         Assert.Empty(s.GameProcesses);
-        Assert.Equal(4, s.CompanionProcesses.Count);
-        Assert.Contains("not", s.Message);
+        Assert.Equal(2, s.CompanionProcesses.Count);
+        Assert.Contains("client is open", s.Message);
     }
 
     [Fact]
     public void CrashReporterOrHelperAlone_IsNeverTreatedAsTheGame()
     {
         var s = GameProcessDetector.Detect(Lol, new[] { P(1, "LeagueCrashHandler64"), P(2, "LeagueClientUxRender", ClientPath) });
-        Assert.Equal(GameRunState.LauncherOnly, s.State);
+        Assert.Equal(GameRunState.NotRunning, s.State);
         Assert.Empty(s.GameProcesses);
     }
 
@@ -59,7 +53,7 @@ public class ProcessDetectionTests
         Assert.Equal(GameRunState.Running, s.State);
         Assert.Equal(6, Assert.Single(s.GameProcesses).Pid);
         Assert.Equal(2, s.CompanionProcesses.Count);
-        Assert.Equal(DetectionConfidence.High, s.Confidence);
+        Assert.Equal("League of Legends is running.", s.Message);
     }
 
     [Fact]
@@ -77,16 +71,44 @@ public class ProcessDetectionTests
         Assert.Equal(GameRunState.Uncertain, s.State);
         Assert.Empty(s.GameProcesses);
         Assert.Single(s.UnconfirmedProcesses);
-        Assert.Equal(DetectionConfidence.Low, s.Confidence);
+        Assert.Contains("another folder", s.Message);
     }
 
     [Fact]
-    public void UnreadablePath_StillDetects_ButWithReducedConfidence()
+    public void UnreadablePath_OfABuiltInGame_StillDetectsByName()
     {
+        // a protected game process can hide its location; a built-in game's own name is then enough
         var s = GameProcessDetector.Detect(Lol, new[] { P(9, "League of Legends", null) });
         Assert.Equal(GameRunState.Running, s.State);
-        Assert.Equal(DetectionConfidence.Medium, s.Confidence);
-        Assert.Contains("could not be verified", s.Message);
+        Assert.False(Assert.Single(s.GameProcesses).PathConfirmed);
+    }
+
+    // ---- games known by their exact file (Windows' game list, or added by the user) ----
+
+    private static GameProfile ByPath(string path) => new()
+    {
+        Id = "user:test", DisplayName = "Test Game", Source = GameSource.AddedByYou, ExecutablePath = path,
+        ProcessRules = new[] { new ProcessRule(Path.GetFileNameWithoutExtension(path), ProcessRole.Game, ExactPath: path) }
+    };
+
+    [Fact]
+    public void ExactPathGame_IsDetectedOnlyAtThatLocation()
+    {
+        var g = ByPath(@"D:\Games\Some Game\Game.exe");
+
+        Assert.Equal(GameRunState.Running, GameProcessDetector.Detect(g, new[] { P(1, "Game", @"d:\games\some game\GAME.EXE") }).State);
+        // another program that happens to be called Game.exe is a different program, not a look-alike
+        var other = GameProcessDetector.Detect(g, new[] { P(2, "Game", @"C:\Tools\Other\Game.exe") });
+        Assert.Equal(GameRunState.NotRunning, other.State);
+        Assert.Empty(other.UnconfirmedProcesses);
+    }
+
+    [Fact]
+    public void ExactPathGame_WithAnUnreadableLocation_IsNotClaimed()
+    {
+        var s = GameProcessDetector.Detect(ByPath(@"D:\Games\Some Game\Game.exe"), new[] { P(1, "Game", null) });
+        Assert.Equal(GameRunState.Uncertain, s.State);
+        Assert.Contains("does not say where", s.Message);
     }
 
     [Fact]
@@ -103,16 +125,18 @@ public class ProcessDetectionTests
         Assert.Equal(GameRunState.Running, s.State);
         Assert.Equal(2, s.GameProcesses.Count);
         Assert.Equal(21, s.Primary!.Pid);
-        Assert.Single(s.CompanionProcesses);
+        Assert.Empty(s.CompanionProcesses);
     }
 
     [Fact]
-    public void AntiCheatProcess_IsACompanion()
+    public void SharedStoreClients_AreNoGamesLauncher()
     {
-        var fn = GameProfiles.Find("fortnite")!;
-        var s = GameProcessDetector.Detect(fn, new[] { P(1, "EasyAntiCheat_EOS"), P(2, "EpicGamesLauncher") });
-        Assert.Equal(GameRunState.LauncherOnly, s.State);
-        Assert.All(s.CompanionProcesses, c => Assert.NotEqual(ProcessRole.Game, c.Role));
+        // Steam, the Epic Games Launcher, the EA app and Battle.net run whether or not a given game is played
+        foreach (var p in GameProfiles.All)
+        {
+            var s = GameProcessDetector.Detect(p, new[] { P(1, "steam"), P(2, "EpicGamesLauncher"), P(3, "EADesktop"), P(4, "Battle.net"), P(5, "steamwebhelper") });
+            Assert.Equal(GameRunState.NotRunning, s.State);
+        }
     }
 
     // ---- watcher: start / exit / restart / PID reuse ----
@@ -174,7 +198,7 @@ public class ProcessDetectionTests
     public void Watcher_LauncherComingAndGoing_DoesNotProduceGameEvents()
     {
         var w = new GameWatcher(Lol);
-        Assert.Empty(w.Observe(new[] { P(1, "RiotClientServices") }, T0).Changes);
+        Assert.Empty(w.Observe(new[] { P(1, "LeagueClient", ClientPath) }, T0).Changes);
         Assert.Empty(w.Observe(Array.Empty<ProcessInfo>(), T0.AddSeconds(2)).Changes);
     }
 

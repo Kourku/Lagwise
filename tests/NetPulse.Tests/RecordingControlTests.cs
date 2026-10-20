@@ -17,7 +17,7 @@ public class RecordingControlTests : IDisposable
 
     public RecordingControlTests()
     {
-        _host = new NetPulseHost(_dir, _procs, _conns);
+        _host = new NetPulseHost(_dir, _procs, _conns, gameList: new FakeGameList());
         _host.SessionSaved += (_, e) => _saved.Add(e);
     }
 
@@ -108,9 +108,10 @@ public class RecordingControlTests : IDisposable
     }
 
     [Fact]
-    public void AutoRecord_IsOffByDefault_AndNeverStopsAManualRecording()
+    public void AutoRecord_IsOnByDefault_ButNeverStopsAManualRecording()
     {
-        Assert.False(_host.Settings.AutoRecordGame);
+        Assert.True(_host.Settings.AutoRecordGame);
+        _host.Settings.AutoRecordGame = false;
         var m = _host.GameMonitor;
         m.AutoStopGrace = TimeSpan.Zero;
         m.Select("lol", out _);

@@ -69,9 +69,15 @@ public sealed class NetPulseHost : IDisposable
     /// <summary>Is this PC and its connection safe? The local part sends nothing; the network part runs when asked.</summary>
     public Security.SecurityCheckService Security { get; }
 
+    /// <summary>Windows' own list of the games it has seen on this PC (empty where there is none).</summary>
+    public IGameListSource GameList { get; }
+
     /// <param name="processSource">Override for tests; defaults to the real Windows process list.</param>
     /// <param name="connectionSource">Override for tests; defaults to the Windows TCP/UDP socket tables.</param>
-    public NetPulseHost(string? dataDirectory = null, IProcessSource? processSource = null, IConnectionSource? connectionSource = null, IReadOnlyList<GameProfile>? profiles = null)
+    /// <param name="profiles">Override for tests: the games known by name (defaults to the built-in ones).</param>
+    /// <param name="gameList">Override for tests; defaults to Windows' game list.</param>
+    public NetPulseHost(string? dataDirectory = null, IProcessSource? processSource = null, IConnectionSource? connectionSource = null,
+        IReadOnlyList<GameProfile>? profiles = null, IGameListSource? gameList = null)
     {
         DataDirectory = dataDirectory ?? SettingsService.DefaultDirectory();
         SettingsService = new SettingsService(Path.Combine(DataDirectory, "settings.json"));
@@ -140,13 +146,16 @@ public sealed class NetPulseHost : IDisposable
             $"NetPulse was not measuring for {gap.DurationSeconds:F0} s (system sleep or stalled monitoring). This is not a network outage.",
             timestamp: gap.EndUtc);
 
+        _builtInGames = profiles ?? GameProfiles.All;
+        GameList = gameList ?? (OperatingSystem.IsWindows() ? new WindowsGameListSource() : new EmptyGameList());
         GameMonitor = new GameMonitorService(
-            Engine, Recorder, Events, () => Settings,
-            processSource ?? new SystemProcessSource(GameProfiles.AllProcessNames),
+            Recorder, Events, () => Settings,
+            processSource ?? new SystemProcessSource(_builtInGames.SelectMany(p => p.AllProcessNames)),
             connectionSource ?? new WindowsConnectionSource(),
             (gameId, name) => StartSession(gameId, name),
             (out string? error) => StopSession(out error),
-            profiles: profiles);
+            library: _builtInGames);
+        _gameNames = OnlinePrograms.FromProfiles(_builtInGames);
 
         _checkpointTimer = new Timer(_ => Checkpoint(), null, CheckpointInterval, CheckpointInterval);
 
@@ -171,13 +180,78 @@ public sealed class NetPulseHost : IDisposable
                 h.Adapter, h.RxBps / 1e6);
         };
         Activity.HeavyTrafficEnded += (_, h) => OnHeavyTrafficEnded(h);
-        // while recording, keep each second of traffic on the internet adapter with the recording
+        // while recording, keep each second of this PC's activity with the recording: traffic on the internet adapter,
+        // processor load and the Wi-Fi signal
         Activity.Sampled += (_, _) =>
         {
+            double? cpu = _processor.Sample();
+            if (cpu.HasValue) ProcessorPercent = cpu;
             if (!Recorder.IsRecording) return;
             var a = InternetAdapterActivity();
-            if (a?.Latest is { } p) Recorder.RecordThroughput(p.T, p.RxBps, p.TxBps);
+            var nic = Engine.CurrentNic;
+            if (a?.Latest is { } p) Recorder.RecordThroughput(p.T, p.RxBps, p.TxBps, cpu, nic is { IsWifi: true, WifiSignalPercent: int w } ? w : null);
         };
+    }
+
+    private readonly ProcessorLoad _processor = new();
+
+    /// <summary>How busy the processor was over the last second (percent of all cores); null until measured.</summary>
+    public double? ProcessorPercent { get; private set; }
+    private readonly IReadOnlyList<GameProfile> _builtInGames;
+
+    private sealed class EmptyGameList : IGameListSource
+    {
+        public IReadOnlyList<WindowsGameEntry> Read() => Array.Empty<WindowsGameEntry>();
+    }
+
+    /// <summary>
+    /// Finds the games again: the built-in ones, the games Windows lists on this PC and those added in NetPulse, less
+    /// those taken off the list. Reads the disk and the registry, so call it off the UI thread.
+    /// </summary>
+    public IReadOnlyList<GameProfile> RefreshGames()
+    {
+        IReadOnlyList<WindowsGameEntry> windows;
+        try { windows = GameList.Read(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { windows = Array.Empty<WindowsGameEntry>(); }
+        var library = GameLibrary.Build(_builtInGames, windows, Settings.UserGames, Settings.IgnoredGames);
+        GameMonitor.SetLibrary(library);
+        _gameNames = OnlinePrograms.FromProfiles(library);
+        GamesChanged?.Invoke(this, EventArgs.Empty);
+        return library;
+    }
+
+    /// <summary>Raised after <see cref="RefreshGames"/> (from the thread that called it).</summary>
+    public event EventHandler? GamesChanged;
+
+    /// <summary>Adds a program as a game (kept in Settings). False, with the reason, when it cannot be used.</summary>
+    public bool AddGame(string exePath, out string? error)
+    {
+        error = null;
+        if (!GameLibrary.IsUsableExePath(exePath) || !File.Exists(exePath)) { error = "Choose the game's program (an .exe file)."; return false; }
+        string full = Path.GetFullPath(exePath);
+        if (string.Equals(full, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)) { error = "That is NetPulse itself."; return false; }
+        if (Settings.UserGames.Count >= AppSettings.MaxUserGames) { error = $"Up to {AppSettings.MaxUserGames} games can be added."; return false; }
+        if (!Settings.UserGames.Contains(full, StringComparer.OrdinalIgnoreCase)) Settings.UserGames.Add(full);
+        Settings.IgnoredGames.RemoveAll(id => string.Equals(id, GameLibrary.UserPrefix + GameLibrary.StableId(full), StringComparison.OrdinalIgnoreCase));
+        return SaveSettings(out error);
+    }
+
+    /// <summary>Takes a game off the list: an added one is forgotten, any other is no longer watched for (kept in Settings).</summary>
+    public bool RemoveGame(GameProfile game, out string? error)
+    {
+        error = null;
+        if (game.Source == GameSource.AddedByYou && game.ExecutablePath != null)
+            Settings.UserGames.RemoveAll(p => string.Equals(p, game.ExecutablePath, StringComparison.OrdinalIgnoreCase));
+        else if (!Settings.IgnoredGames.Contains(game.Id, StringComparer.OrdinalIgnoreCase))
+            Settings.IgnoredGames.Add(game.Id);
+        return SaveSettings(out error);
+    }
+
+    /// <summary>Puts every game taken off the list back.</summary>
+    public bool RestoreGames(out string? error)
+    {
+        Settings.IgnoredGames.Clear();
+        return SaveSettings(out error);
     }
 
     private DateTime _lastBaselineSample;
@@ -224,7 +298,7 @@ public sealed class NetPulseHost : IDisposable
     /// <summary>The plain-ping reference servers: what "your ping" means on the traffic graph and under load.</summary>
     public IReadOnlySet<string> ReferencePingIds() =>
         Engine.GetCurrentMetrics()
-            .Where(m => !m.IsGateway && !m.IsDnsResolver && !m.IsGameEndpoint && m.Protocol == NetworkProtocol.Icmp)
+            .Where(m => !m.IsGateway && !m.IsDnsResolver && m.Protocol == NetworkProtocol.Icmp)
             .Select(m => m.TargetId).ToHashSet();
 
     /// <summary>Raised after a recording has been stopped and saved (or failed to save), from any source: the History tab, the Game Monitor or automatic recording.</summary>
@@ -257,6 +331,32 @@ public sealed class NetPulseHost : IDisposable
         });
     }
 
+    /// <summary>Keeps the newest automatic recordings (Settings), in the background; ones with marked lag are always kept.</summary>
+    private void PruneAutomaticRecordings(string justSaved)
+    {
+        int keep = Settings.AutoRecordingsKept;
+        if (keep <= 0) return;
+        // one after the other, so shutdown waits for every one by waiting for the last
+        lock (_pruneLock)
+        {
+            _pruning = (_pruning ?? System.Threading.Tasks.Task.CompletedTask).ContinueWith(_ =>
+            {
+                try
+                {
+                    int n = Sessions.PruneAutomatic(keep, justSaved);
+                    if (n > 0) Events.LogEvent("Recordings", "Info", $"Deleted {n} older automatic recording(s) without marked lag, keeping the newest {keep} as set in Settings.");
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // best effort
+                }
+            }, System.Threading.Tasks.TaskScheduler.Default);
+        }
+    }
+
+    private readonly object _pruneLock = new();
+    private System.Threading.Tasks.Task? _pruning;
+
     /// <summary>Applies the heavy-traffic threshold from Settings (0 = off).</summary>
     public void ApplyActivitySettings() =>
         Activity.HeavyTrafficBps = Settings.HeavyTrafficMbps > 0 ? Settings.HeavyTrafficMbps * 1_000_000.0 : double.PositiveInfinity;
@@ -269,7 +369,7 @@ public sealed class NetPulseHost : IDisposable
         return all.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
     }
 
-    private static readonly IReadOnlyDictionary<string, (string Name, ProgramKind Kind)> GameProcessNames = OnlinePrograms.FromProfiles(GameProfiles.All);
+    private volatile IReadOnlyDictionary<string, (string Name, ProgramKind Kind)> _gameNames;
     private readonly WindowsConnectionSource _programSockets = new();
 
     /// <summary>Programs on this PC with internet connections right now (connections only: Windows does not report bytes per program).</summary>
@@ -278,7 +378,7 @@ public sealed class NetPulseHost : IDisposable
         try
         {
             var snapshot = _programSockets.Capture();
-            return OnlinePrograms.Summarize(snapshot.Connections, OnlinePrograms.ProcessName, GameProcessNames, Environment.ProcessId);
+            return OnlinePrograms.Summarize(snapshot.Connections, OnlinePrograms.ProcessName, _gameNames, Environment.ProcessId);
         }
         catch (Exception)
         {
@@ -433,6 +533,7 @@ public sealed class NetPulseHost : IDisposable
             {
                 saveError = ex.Message;
             }
+            if (session.Automatic && saveError == null) PruneAutomaticRecordings(session.Id);
             SessionSaved?.Invoke(this, new SessionSavedEventArgs(session, saveError));
             return session;
         }
@@ -478,6 +579,7 @@ public sealed class NetPulseHost : IDisposable
         _checkpointTimer.Dispose();
         _activityTimer?.Dispose();
         GameMonitor.Dispose(); // stops and saves a game session first, so nothing recorded is lost
+        try { _pruning?.Wait(3000); } catch (AggregateException) { }
         Mtr.Stop();
         Engine.Stop();
         Diary.Save();   // the hour in progress, so a restart continues it

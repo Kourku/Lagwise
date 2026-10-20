@@ -4,20 +4,6 @@ using System.Linq;
 
 namespace NetPulse.Core.Games;
 
-/// <summary>
-/// How far a game integration can be trusted. Derived from validation evidence, never set by hand:
-/// a game is only Supported once its capabilities were validated against the real client.
-/// </summary>
-public enum SupportStatus
-{
-    /// <summary>Advertised capabilities are implemented AND validated against the real game client.</summary>
-    Supported,
-    /// <summary>Generic network measurements and process/connection observation work, but actual game-server monitoring is not validated.</summary>
-    ReferenceOnly,
-    /// <summary>The integration is incomplete (for example no process detection).</summary>
-    NotImplemented
-}
-
 public enum ProcessRole
 {
     /// <summary>The process that actually runs the game (match/world). Only this role means "the game is running".</summary>
@@ -29,16 +15,15 @@ public enum ProcessRole
     CrashReporter
 }
 
-public enum DetectionConfidence { High, Medium, Low }
-
-public enum ValidationLevel
+/// <summary>Where NetPulse learned about a game.</summary>
+public enum GameSource
 {
-    /// <summary>Nothing checked beyond the profile data.</summary>
-    None,
-    /// <summary>Verified with simulated processes/connections in automated tests only.</summary>
-    SyntheticTests,
-    /// <summary>Verified against the real client and real network connections.</summary>
-    LiveValidated
+    /// <summary>One of the games NetPulse knows by name (it can tell their launchers from the game itself).</summary>
+    BuiltIn,
+    /// <summary>A game Windows recorded on this PC (the list Windows' Game Bar keeps of the games it has seen run).</summary>
+    Windows,
+    /// <summary>A program the user chose as a game.</summary>
+    AddedByYou
 }
 
 /// <param name="ExecutableName">File name without ".exe", compared case-insensitively.</param>
@@ -46,56 +31,39 @@ public enum ValidationLevel
 /// Optional folder-name fragments. If the executable path is readable and contains none of them, the match is
 /// reported as uncertain rather than silently treated as this game.
 /// </param>
-public sealed record ProcessRule(string ExecutableName, ProcessRole Role, string[]? PathHints = null, string? Note = null);
+/// <param name="ExactPath">
+/// The game's own file on this PC (games from Windows' list or added by the user). A process of that name elsewhere is
+/// not this game, and one whose path cannot be read is not claimed either.
+/// </param>
+public sealed record ProcessRule(string ExecutableName, ProcessRole Role, string[]? PathHints = null, string? Note = null, string? ExactPath = null);
 
 /// <param name="IsOfficial">True only for a page published by the game's publisher/operator.</param>
-public sealed record StatusResource(string? Url, bool IsOfficial, string Note);
+public sealed record StatusResource(string? Url, bool IsOfficial, string Note)
+{
+    public static StatusResource None { get; } = new(null, false, "");
+}
 
-/// <summary>An endpoint that was verified (by the publisher or by measurement) as a stable diagnostic target for this game.</summary>
-public sealed record VerifiedEndpoint(string Host, string Description, string Source);
-
-public sealed record GameCapabilities(
-    bool ProcessDetection,
-    bool ConnectionDiscovery,
-    bool ReferenceMeasurement,
-    bool EndpointMeasurement,
-    bool MatchServerIdentification);
-
-public sealed class GameProfile
+/// <summary>
+/// A game NetPulse can recognise while it runs. Nothing here claims anything about the game's servers: NetPulse measures
+/// the player's own connection while the game runs, the same way for every game.
+/// </summary>
+public sealed record GameProfile
 {
     public required string Id { get; init; }
     public required string DisplayName { get; init; }
-    public required string Publisher { get; init; }
+    public string Publisher { get; init; } = "";
     public required IReadOnlyList<ProcessRule> ProcessRules { get; init; }
-    /// <summary>True when the executable names were confirmed against a real installation (not just documented knowledge).</summary>
-    public bool ProcessNamesVerified { get; init; }
-    public DetectionConfidence DetectionConfidence { get; init; } = DetectionConfidence.Medium;
-    public IReadOnlyList<string> DetectionMethods { get; init; } = new[] { "Running process name" };
-    /// <summary>Empty unless an endpoint has genuinely been verified. Match servers are dynamic and are never listed here.</summary>
-    public IReadOnlyList<VerifiedEndpoint> VerifiedEndpoints { get; init; } = Array.Empty<VerifiedEndpoint>();
-    public required GameCapabilities Capabilities { get; init; }
-    public required StatusResource StatusPage { get; init; }
-    public required IReadOnlyList<string> Limitations { get; init; }
-    public ValidationLevel Validation { get; init; } = ValidationLevel.SyntheticTests;
-    public string ValidationNotes { get; init; } = string.Empty;
-
-    public SupportStatus Status =>
-        !Capabilities.ProcessDetection || ProcessRules.All(r => r.Role != ProcessRole.Game)
-            ? SupportStatus.NotImplemented
-            : Validation == ValidationLevel.LiveValidated
-                ? SupportStatus.Supported
-                : SupportStatus.ReferenceOnly;
-
-    public string StatusExplanation => Status switch
-    {
-        SupportStatus.Supported => "Process detection and connection discovery were validated against the real client.",
-        SupportStatus.ReferenceOnly => "Process and connection observation are implemented, and generic reference measurements work. "
-            + "Match-server monitoring is not available or not yet validated against the real game, so results are reference measurements, not game-server ping.",
-        _ => "This integration is incomplete."
-    };
+    public StatusResource StatusPage { get; init; } = StatusResource.None;
+    public GameSource Source { get; init; } = GameSource.BuiltIn;
+    /// <summary>The game's main program on this PC, when known (from Windows' list, the user, or a running process).</summary>
+    public string? ExecutablePath { get; init; }
+    /// <summary>When Windows last saw the game run, from its game list; null when unknown.</summary>
+    public DateTime? LastPlayedUtc { get; init; }
 
     public IEnumerable<ProcessRule> RulesFor(ProcessRole role) => ProcessRules.Where(r => r.Role == role);
 
     public IReadOnlyCollection<string> AllProcessNames =>
         ProcessRules.Select(r => r.ExecutableName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    public bool HasStatusPage => !string.IsNullOrEmpty(StatusPage.Url);
 }

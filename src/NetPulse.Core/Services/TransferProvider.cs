@@ -48,12 +48,12 @@ public sealed class CloudflareTransferProvider : ITransferProvider
         {
             using var down = await http.GetAsync(DownloadUri, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!down.IsSuccessStatusCode)
-                return $"{DisplayName} rejected the download request (HTTP {(int)down.StatusCode} {down.ReasonPhrase}).";
+                return $"{DisplayName} rejected the download request (HTTP {(int)down.StatusCode} {UntrustedText.Clean(down.ReasonPhrase, 60)}).";
 
             using var content = new ByteArrayContent(new byte[1024]);
             using var up = await http.PostAsync(UploadUri, content, ct);
             if (!up.IsSuccessStatusCode)
-                return $"{DisplayName} rejected the upload request (HTTP {(int)up.StatusCode} {up.ReasonPhrase}).";
+                return $"{DisplayName} rejected the upload request (HTTP {(int)up.StatusCode} {UntrustedText.Clean(up.ReasonPhrase, 60)}).";
 
             return null;
         }

@@ -84,8 +84,7 @@ public class SystemTrayManager : IDisposable
         contextMenu.Opening += (_, _) =>
         {
             var gm = _viewModel.GameMonitor;
-            string game = gm.SelectedProfile?.Profile.DisplayName ?? "a game";
-            gameRecording.Text = gm.IsMonitoring ? $"Stop && save {game} recording" : gm.SelectedProfile == null ? "Choose a game to monitor..." : $"Start monitoring {game}";
+            gameRecording.Text = gm.IsMonitoring ? $"Stop && save the {gm.RecordingGameName} recording" : "Record a game session now";
             markLag.Enabled = App.Host.IsRecording;
             overlay.Checked = _viewModel.IsOverlayVisible;
             string key = App.Host.Settings.MarkLagHotkey;

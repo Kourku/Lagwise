@@ -61,11 +61,14 @@ public class HotkeyGestureTests
         d.MarkLagHotkey = "Ctrl+Alt+M";
         d.MarkLagSound = false;
         d.RecordingRetentionDays = 90;
+        Assert.Equal(50, d.AutoRecordingsKept);
+        d.AutoRecordingsKept = 200;
         Assert.Empty(d.Validate());
         d.ApplyTo(s);
         Assert.Equal("Ctrl+Alt+M", s.MarkLagHotkey);
         Assert.False(s.MarkLagSound);
         Assert.Equal(90, s.RecordingRetentionDays);
+        Assert.Equal(200, s.AutoRecordingsKept);
 
         d.MarkLagHotkey = "nonsense";
         Assert.Contains(d.Validate(), e => e.Contains("shortcut"));

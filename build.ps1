@@ -4,7 +4,8 @@
 .DESCRIPTION
     1. Release build of the whole solution with warnings treated as errors.
     2. Full automated test suite.
-    3. Publishes a self-contained win-x64 single-file portable build into a scratch folder (dist/_build/...).
+    3. Publishes a self-contained win-x64 single-file portable build into a scratch folder (dist/_build/...), bundling the
+       latest .NET 10 runtime patch named by Microsoft's release feed (a bundled runtime is not patched by Windows Update).
     4. Smoke-tests the PUBLISHED exe: headless self-test, then (unless -SkipGuiCheck) the Game Monitor workflow through UI Automation.
        Both run against an isolated data folder, never the user's real %LOCALAPPDATA%\NetPulse.
     5. Only then: writes dist/releases/<version>/ (zip, release notes, build-info.json, installer) and swaps dist/portable.
@@ -17,12 +18,16 @@
     Do not build the NetPulse-Setup.exe installer.
 .PARAMETER VerifyInstaller
     Additionally install and uninstall the built installer into a temporary folder (UI Automation; no shortcuts are created).
+.PARAMETER RuntimeVersion
+    The .NET runtime patch to bundle (for example 10.0.13) when Microsoft's release feed cannot be reached. Without it
+    the build asks the feed and fails if it cannot, rather than ship an outdated runtime silently.
 #>
 [CmdletBinding()]
 param(
     [switch]$SkipGuiCheck,
     [switch]$SkipInstaller,
-    [switch]$VerifyInstaller
+    [switch]$VerifyInstaller,
+    [string]$RuntimeVersion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -88,9 +93,19 @@ Ok "$($Tests.passed)/$($Tests.total) tests passed"
 
 # ---- 3. publish portable ---------------------------------------------------------------------------------------
 Step '3/6 Publish portable build (win-x64, self-contained, single file)'
+# The exe carries its own .NET runtime and Windows Update never patches it: bundle the latest patch, with its security fixes.
+if (-not $RuntimeVersion) {
+    try {
+        $feed = Invoke-RestMethod 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json' -TimeoutSec 20
+        $RuntimeVersion = $feed.'latest-runtime'
+    }
+    catch { Fail "could not read the latest .NET runtime from Microsoft's release feed ($($_.Exception.Message)); pass -RuntimeVersion 10.0.x" }
+}
+if ($RuntimeVersion -notmatch '^10\.0\.\d+$') { Fail "unexpected .NET runtime version '$RuntimeVersion'" }
+Ok ".NET runtime to bundle: $RuntimeVersion"
 Run-Native 'dotnet publish (app)' {
     dotnet publish "$Root\src\NetPulse.App\NetPulse.App.csproj" -c Release -r win-x64 --self-contained `
-        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -nologo -v:q -o $Portable
+        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:NetPulseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Portable
 }
 Copy-Item "$Root\src\NetPulse.App\app.ico" "$Portable\app.ico" -Force
 $exe = Join-Path $Portable 'NetPulse.exe'
@@ -112,12 +127,16 @@ $self = Get-Content $selfJson -Raw | ConvertFrom-Json
 foreach ($chk in $self.Checks) { Write-Host ("   [{0}] {1}" -f $(if ($chk.Passed) { 'PASS' } else { 'FAIL' }), $chk.Name) -ForegroundColor $(if ($chk.Passed) { 'Green' } else { 'Red' }) }
 if ($p.ExitCode -ne 0 -or -not $self.Ok) { Fail 'published self-test failed' }
 Ok "self-test passed ($($self.Checks.Count) checks)"
+if ($self.Runtime -ne $RuntimeVersion) { Fail "the published exe runs on .NET $($self.Runtime), not $RuntimeVersion" }
+Ok "the published exe runs on .NET $($self.Runtime)"
 
 $GuiResult = 'skipped'
 if (-not $SkipGuiCheck) {
     $guiData = Join-Path $Work 'gui-data'
     $guiJson = Join-Path $Work 'gui.json'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Gui.ps1" -Exe $exe -DataDir $guiData -Out $guiJson
+    $standIn = "$Root\tests\NetPulse.FakeGame\bin\Release\net10.0\StandInGame.exe"
+    if (-not (Test-Path $standIn)) { Fail "the stand-in game for the GUI check was not built ($standIn)" }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Gui.ps1" -Exe $exe -DataDir $guiData -Out $guiJson -FakeGame $standIn
     if ($LASTEXITCODE -ne 0) { Fail 'GUI verification of the published build failed' }
     $GuiResult = 'passed'
     Ok 'Game Monitor workflow verified in the published exe'
@@ -137,7 +156,7 @@ if (-not $SkipInstaller) {
     New-Item -ItemType Directory -Force -Path "$Installer\payload" | Out-Null
     Run-Native 'dotnet publish (installer)' {
         dotnet publish "$Root\src\NetPulse.Installer\NetPulse.Installer.csproj" -c Release -r win-x64 --self-contained `
-            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -nologo -v:q -o $Installer
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:NetPulseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Installer
     }
     Copy-Item $exe "$Installer\payload\NetPulse.exe" -Force
     Copy-Item "$Portable\app.ico" "$Installer\payload\app.ico" -Force
@@ -186,6 +205,7 @@ try {
         builtUtc       = (Get-Date).ToUniversalTime().ToString('o')
         commit         = $commit
         uncommittedChanges = $dirty
+        dotnetRuntime  = $RuntimeVersion
         tests          = $Tests
         publishedSelfTest = "passed ($($self.Checks.Count) checks)"
         publishedGuiCheck = $GuiResult
@@ -227,4 +247,5 @@ Write-Host " Portable zip : $(Join-Path $Dist "NetPulse-$Version-Portable-win-x6
 Write-Host " Release      : $Release"
 Write-Host " Installer    : $InstallerResult"
 Write-Host " Tests        : $($Tests.passed)/$($Tests.total)   Published self-test: passed   GUI check: $GuiResult"
+Write-Host " .NET runtime : $RuntimeVersion (bundled)"
 exit 0

@@ -24,10 +24,10 @@ public class LexiconTests
     [InlineData("loss")]
     [InlineData("router")]
     [InlineData("reference")]
-    [InlineData("endpoint")]
+    [InlineData("games")]
     [InlineData("udp")]
     [InlineData("bufferbloat")]
-    [InlineData("confidence")]
+    [InlineData("verdict")]
     public void EveryTermTheUiUses_IsDefined(string key) => Assert.NotNull(Lexicon.Find(key));
 
     [Fact]

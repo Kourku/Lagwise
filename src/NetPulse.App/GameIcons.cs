@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
@@ -28,7 +29,12 @@ public static class GameIcons
         return words.Length == 0 ? "?" : string.Concat(Array.ConvertAll(words.Length > 3 ? words[..3] : words, w => char.ToUpperInvariant(w[0]).ToString()));
     }
 
-    public static string FileOf(string dataDirectory, string id) => Path.Combine(dataDirectory, "game-icons", id + ".png");
+    /// <summary>The icon's file: ids such as "win:1234" become "win-1234.png" (a colon would name a hidden stream, not a file).</summary>
+    public static string FileOf(string dataDirectory, string id)
+    {
+        var safe = new string(id.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '-').ToArray());
+        return Path.Combine(dataDirectory, "game-icons", (safe.Length == 0 ? "game" : safe) + ".png");
+    }
 
     public static ImageSource? Load(string dataDirectory, string id)
     {

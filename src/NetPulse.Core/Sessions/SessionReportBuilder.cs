@@ -8,7 +8,7 @@ namespace NetPulse.Core.Sessions;
 
 /// <summary>
 /// Builds the written report for a recorded session. Everything is derived from the local session file; nothing is sent anywhere.
-/// The wording keeps measurements, possible explanations and confidence apart, and never presents a reference measurement as game-server ping.
+/// It starts with the verdict (was it the player's connection?) and never presents a reference measurement as game-server ping.
 /// </summary>
 public static class SessionReportBuilder
 {
@@ -17,8 +17,17 @@ public static class SessionReportBuilder
     private static string Clock(DateTime utc) => (utc.Kind == DateTimeKind.Local ? utc : DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime()).ToString("HH:mm:ss");
     private static string Dur(TimeSpan d) => d.TotalHours >= 1 ? $"{(int)d.TotalHours} h {d.Minutes} min" : d.TotalMinutes >= 1 ? $"{(int)d.TotalMinutes} min {d.Seconds} s" : $"{d.Seconds} s";
 
-    public static string BuildMarkdown(MonitoringSession s, SessionStats stats)
+    public static string Rating(VerdictLevel l) => l switch
     {
+        VerdictLevel.Good => "Good",
+        VerdictLevel.Fair => "Some trouble",
+        VerdictLevel.Poor => "Poor",
+        _ => "Not judged"
+    };
+
+    public static string BuildMarkdown(MonitoringSession s, SessionStats stats, double busyBps = SessionAnalysis.DefaultBusyBps)
+    {
+        var verdict = SessionVerdict.Build(s, busyBps);
         var sb = new StringBuilder();
         sb.AppendLine($"# NetPulse session report: {s.Name}");
         sb.AppendLine();
@@ -26,7 +35,7 @@ public static class SessionReportBuilder
         sb.AppendLine("## Summary");
         sb.AppendLine();
         if (!string.IsNullOrEmpty(s.GameDisplayName))
-            sb.AppendLine($"- **Game:** {s.GameDisplayName} (profile status: {s.GameSupportStatus ?? "unknown"})");
+            sb.AppendLine($"- **Game:** {s.GameDisplayName}");
         sb.AppendLine($"- **Recorded:** {Local(s.StartedUtc)} to {(s.EndedUtc.HasValue ? Local(s.EndedUtc.Value) : "(recording was interrupted)")} (local time)");
         sb.AppendLine($"- **Length:** {Dur(stats.Duration)}{(s.IsComplete ? "" : " (incomplete: the recording ended without a normal stop, so data up to the last checkpoint is shown)")}");
         sb.AppendLine($"- **Connection:** {s.ActiveInterface ?? "unknown"}{(string.IsNullOrEmpty(s.InterfaceType) ? "" : $" ({s.InterfaceType})")}");
@@ -35,6 +44,43 @@ public static class SessionReportBuilder
         sb.AppendLine();
         sb.AppendLine("> These are measurements of your connection (your router and reference servers). They are **not** the ping shown inside a game, and a reference server is not the game's server.");
         sb.AppendLine();
+
+        sb.AppendLine($"## Verdict: {verdict.Headline}");
+        sb.AppendLine();
+        sb.AppendLine(verdict.Summary);
+        sb.AppendLine();
+        sb.AppendLine("| Part of the connection | Rating | What NetPulse saw |");
+        sb.AppendLine("|---|---|---|");
+        foreach (var l in verdict.Layers) sb.AppendLine($"| {l.Name} | {Rating(l.Level)} | {l.Text.Replace("|", "/")} |");
+        sb.AppendLine();
+        if (verdict.Episodes.Count > 0)
+        {
+            sb.AppendLine("### When it happened");
+            sb.AppendLine();
+            foreach (var e in verdict.Episodes.Take(40)) sb.AppendLine($"- {e.Text}");
+            if (verdict.Episodes.Count > 40) sb.AppendLine($"- ...and {verdict.Episodes.Count - 40} more.");
+            sb.AppendLine();
+        }
+        sb.AppendLine("### Moments you marked as laggy");
+        sb.AppendLine();
+        if (verdict.LagMarks.Count == 0)
+            sb.AppendLine("None. Pressing **Mark lag** (or its keyboard shortcut) when you notice lag lets this report say what your connection did at that moment.");
+        foreach (var (lag, i) in verdict.LagMarks.Select((l, i) => (l, i)))
+        {
+            sb.AppendLine($"- **{Clock(lag.T)}{(string.IsNullOrEmpty(lag.Note) ? "" : $" ({lag.Note})")}: {lag.Headline}.** {lag.Detail}");
+            if (i >= stats.LagCorrelations.Count) continue;
+            if (stats.LagCorrelations[i].Traffic is { } traffic) sb.AppendLine($"  - {traffic.Describe()}");
+            foreach (var e in stats.LagCorrelations[i].NearbyEvents.Take(4))
+                sb.AppendLine($"  - {Clock(e.Timestamp)} {Lexicon.EventLabel(e.EventType)}: {e.Description}");
+        }
+        sb.AppendLine();
+        if (verdict.Advice.Count > 0)
+        {
+            sb.AppendLine("### What to do");
+            sb.AppendLine();
+            foreach (var a in verdict.Advice) sb.AppendLine($"- {a}");
+            sb.AppendLine();
+        }
 
         sb.AppendLine("## What was measured");
         sb.AppendLine();
@@ -72,51 +118,6 @@ public static class SessionReportBuilder
         }
         sb.AppendLine();
 
-        sb.AppendLine("## Lag markers");
-        sb.AppendLine();
-        if (stats.LagCorrelations.Count == 0)
-        {
-            sb.AppendLine("No lag markers were added. Pressing **Mark lag** when you notice lag lets this report check what the measurements showed at that moment.");
-        }
-        if (stats.LagTrafficSummary.Length > 0)
-        {
-            sb.AppendLine(stats.LagTrafficSummary);
-            sb.AppendLine();
-        }
-        foreach (var c in stats.LagCorrelations)
-        {
-            sb.AppendLine($"### {Clock(c.MarkerUtc)}{(string.IsNullOrEmpty(c.Note) ? "" : $" - {c.Note}")}");
-            sb.AppendLine();
-            var affected = c.Affected.ToList();
-            if (affected.Count == 0 && c.NearbyEvents.Count == 0 && c.Traffic?.Busy != true)
-                sb.AppendLine($"Nothing unusual was measured within {SessionAnalysis.LagWindowSeconds} s of this moment. The lag may have been in the game's own servers or a path these targets do not share.");
-            if (c.Traffic != null) sb.AppendLine($"- {c.Traffic.Describe()}");
-            foreach (var a in affected)
-                sb.AppendLine($"- {a.Name}: median {Ms(a.WindowMedianMs)} around this moment versus {Ms(a.SessionMedianMs)} for the session; {a.WindowFailures} of {a.WindowProbes} probes unanswered.");
-            foreach (var e in c.NearbyEvents.Take(8))
-                sb.AppendLine($"- {Clock(e.Timestamp)} {Lexicon.EventLabel(e.EventType)}: {e.Description}");
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("## Findings");
-        sb.AppendLine();
-        if (s.Findings.Count == 0)
-        {
-            sb.AppendLine("No diagnostic findings were stored with this session.");
-            sb.AppendLine();
-        }
-        foreach (var f in s.Findings)
-        {
-            sb.AppendLine($"### {f.Title} (confidence: {f.Confidence})");
-            sb.AppendLine();
-            foreach (var o in f.Observations) sb.AppendLine($"- **Observed:** {o}");
-            foreach (var x in f.PossibleExplanations) sb.AppendLine($"- **Possible explanation:** {x}");
-            foreach (var x in f.Evidence) sb.AppendLine($"- **Evidence:** {x}");
-            foreach (var x in f.Contradictions) sb.AppendLine($"- **Points the other way:** {x}");
-            if (!string.IsNullOrWhiteSpace(f.NextTest)) sb.AppendLine($"- **Next test:** {f.NextTest}");
-            sb.AppendLine();
-        }
-
         sb.AppendLine("## Events");
         sb.AppendLine();
         var events = s.Events.OrderBy(e => e.Timestamp).ToList();
@@ -133,34 +134,26 @@ public static class SessionReportBuilder
 
         if (!string.IsNullOrEmpty(s.GameDisplayName))
         {
-            sb.AppendLine("## Game processes and connections");
+            sb.AppendLine("## The game");
             sb.AppendLine();
-            if (s.GameProcesses.Count == 0) sb.AppendLine("The game process was not detected while recording.");
-            foreach (var p in s.GameProcesses)
-                sb.AppendLine($"- {p.Name} (PID {p.Pid}) seen {Clock(p.FirstSeenUtc)}-{Clock(p.LastSeenUtc)}{(p.ExitedUtc.HasValue ? $", exited {Clock(p.ExitedUtc.Value)}" : "")}");
+            if (verdict.GameTime is TimeSpan played) sb.AppendLine($"{s.GameDisplayName} ran for {Dur(played)} of this recording.");
+            if (s.GameProcesses.Count == 0) sb.AppendLine("The game itself was not seen running while recording.");
+            foreach (var p in s.GameProcesses.Take(10))
+                sb.AppendLine($"- {p.Name} seen {Clock(p.FirstSeenUtc)}-{Clock(p.LastSeenUtc)}{(p.ExitedUtc.HasValue ? $", closed {Clock(p.ExitedUtc.Value)}" : "")}");
+            int udp = s.Connections.Count(c => c.Protocol == "UDP");
+            int web = s.Connections.Count(c => c.Protocol == "TCP" && c.Remote != null && c.Scope == "Public");
             sb.AppendLine();
-            if (s.Connections.Count > 0)
-            {
-                sb.AppendLine($"{s.Connections.Count} sockets were observed on the game process. Their role is **unknown**: a game also contacts login, matchmaking, telemetry, voice and download services, so none is assumed to be the match server.");
-                sb.AppendLine();
-                sb.AppendLine("| Protocol | Remote endpoint | Where | First seen | Last seen |");
-                sb.AppendLine("|---|---|---|---|---|");
-                foreach (var c in s.Connections.OrderBy(c => c.FirstSeenUtc).Take(60))
-                    sb.AppendLine($"| {c.Protocol} | {c.Remote ?? "(remote peer not visible)"} | {c.Scope} | {Clock(c.FirstSeenUtc)} | {Clock(c.LastSeenUtc)} |");
-                if (s.Connections.Count > 60) sb.AppendLine($"\n*{s.Connections.Count - 60} more are in the session file.*");
-                sb.AppendLine();
-            }
+            sb.AppendLine(s.GameProcesses.Count == 0 ? ""
+                : s.Connections.Count == 0 ? "The game made no network connections NetPulse could see: it was probably played offline."
+                : $"The game had {udp} UDP socket{(udp == 1 ? "" : "s")} (where games send the match itself; Windows does not show where they go) and {web} connection{(web == 1 ? "" : "s")} to internet services (logins, chat, updates).");
+            sb.AppendLine();
         }
-
-        sb.AppendLine("## Route information");
-        sb.AppendLine();
-        sb.AppendLine("No route trace is stored with a session. Use the Route trace screen to follow the path to an address; a hop that looks slow or lossy only matters if the hops after it are affected too.");
-        sb.AppendLine();
 
         sb.AppendLine("## Limitations");
         sb.AppendLine();
-        if (s.Limitations.Count == 0) sb.AppendLine("- Reference measurements describe your connection in general, not a game server.");
-        foreach (var l in s.Limitations) sb.AppendLine($"- {l}");
+        sb.AppendLine("- NetPulse measures your side of the connection: this PC, your home network, your provider and the internet, using your router and reference servers. It cannot measure a game's own server: games send the match over UDP, and Windows does not show programs without administrator rights where that traffic goes.");
+        sb.AppendLine("- A moment that looked normal on your side can still have been lag between your provider and the game's server, or on the server itself. The game's own ping or network display shows that part.");
+        sb.AppendLine("- This PC's traffic is the adapter's total: other devices at home are not included.");
         sb.AppendLine();
         sb.AppendLine("---");
         sb.AppendLine($"*Generated by NetPulse on this PC. The session data stays local; nothing was uploaded.*");
@@ -176,10 +169,10 @@ public static class SessionReportBuilder
         foreach (var x in s.Samples.OrderBy(x => x.T))
         {
             names.TryGetValue(x.TargetId, out var t);
-            string name = (t?.Name ?? x.TargetId).Replace("\"", "\"\"");
-            string error = (x.Error ?? "").Replace("\"", "\"\"");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0:O},{1},\"{2}\",{3},{4},{5},{6},\"{7}\"",
-                x.T, Local(x.T), name, t == null ? "" : SessionAnalysis.MethodLabel(t), t?.Kind.ToString() ?? "", x.Ok, x.RttMs?.ToString("F2", CultureInfo.InvariantCulture) ?? "", error));
+            // every text field quoted, and nothing a spreadsheet would run as a formula
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0:O},{1},{2},{3},{4},{5},{6},{7}",
+                x.T, Local(x.T), UntrustedText.CsvField(t?.Name ?? x.TargetId), UntrustedText.CsvField(t == null ? "" : SessionAnalysis.MethodLabel(t)),
+                t?.Kind.ToString() ?? "", x.Ok, x.RttMs?.ToString("F2", CultureInfo.InvariantCulture) ?? "", UntrustedText.CsvField(x.Error)));
         }
         return sb.ToString();
     }
