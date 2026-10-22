@@ -1,21 +1,21 @@
 <#
 .SYNOPSIS
-    Builds, verifies and packages NetPulse. Only a build that passes every check is promoted to dist/.
+    Builds, verifies and packages Lagwise. Only a build that passes every check is promoted to dist/.
 .DESCRIPTION
     1. Release build of the whole solution with warnings treated as errors.
     2. Full automated test suite.
     3. Publishes a self-contained win-x64 single-file portable build into a scratch folder (dist/_build/...), bundling the
        latest .NET 10 runtime patch named by Microsoft's release feed (a bundled runtime is not patched by Windows Update).
     4. Smoke-tests the PUBLISHED exe: headless self-test, then (unless -SkipGuiCheck) the Game Monitor workflow through UI Automation.
-       Both run against an isolated data folder, never the user's real %LOCALAPPDATA%\NetPulse.
+       Both run against an isolated data folder, never the user's real %LOCALAPPDATA%\Lagwise.
     5. Only then: writes dist/releases/<version>/ (zip, release notes, build-info.json, installer) and swaps dist/portable.
     If anything fails, dist/portable and dist/releases are left exactly as they were (the last known-good build).
 
-    User data (settings, recordings) always lives in %LOCALAPPDATA%\NetPulse, never in dist/ or beside the exe.
+    User data (settings, recordings) always lives in %LOCALAPPDATA%\Lagwise, never in dist/ or beside the exe.
 .PARAMETER SkipGuiCheck
     Skip the UI Automation check (needed on machines without an interactive desktop). The headless self-test still runs.
 .PARAMETER SkipInstaller
-    Do not build the NetPulse-Setup.exe installer.
+    Do not build the Lagwise-Setup.exe installer.
 .PARAMETER VerifyInstaller
     Additionally install and uninstall the built installer into a temporary folder (UI Automation; no shortcuts are created).
 .PARAMETER RuntimeVersion
@@ -74,17 +74,17 @@ New-Item -ItemType Directory -Force -Path $Work, $Portable | Out-Null
 $commit = (git rev-parse --short HEAD 2>$null); if (-not $commit) { $commit = 'unknown' }
 $dirty = [bool](git status --porcelain 2>$null | Select-Object -First 1)
 
-Write-Host "NetPulse build  version $Version  commit $commit$(if ($dirty) { ' (+uncommitted changes)' })" -ForegroundColor Cyan
+Write-Host "Lagwise build  version $Version  commit $commit$(if ($dirty) { ' (+uncommitted changes)' })" -ForegroundColor Cyan
 
 # ---- 1. build --------------------------------------------------------------------------------------------------
 Step '1/6 Release build (warnings are errors)'
-Run-Native 'dotnet build' { dotnet build "$Root\NetPulse.slnx" -c Release -nologo -p:TreatWarningsAsErrors=true -v:q }
+Run-Native 'dotnet build' { dotnet build "$Root\Lagwise.slnx" -c Release -nologo -p:TreatWarningsAsErrors=true -v:q }
 Ok 'Build succeeded with 0 warnings'
 
 # ---- 2. tests --------------------------------------------------------------------------------------------------
 Step '2/6 Automated tests'
 $trxDir = Join-Path $Work 'tests'
-Run-Native 'dotnet test' { dotnet test "$Root\NetPulse.slnx" -c Release --no-build -nologo --logger "trx;LogFileName=results.trx" --results-directory $trxDir -v:q }
+Run-Native 'dotnet test' { dotnet test "$Root\Lagwise.slnx" -c Release --no-build -nologo --logger "trx;LogFileName=results.trx" --results-directory $trxDir -v:q }
 $trx = [xml](Get-Content (Join-Path $trxDir 'results.trx') -Raw)
 $c = $trx.TestRun.ResultSummary.Counters
 if ([int]$c.failed -ne 0 -or [int]$c.total -eq 0) { Fail "tests: $($c.failed) failed of $($c.total)" }
@@ -104,12 +104,12 @@ if (-not $RuntimeVersion) {
 if ($RuntimeVersion -notmatch '^10\.0\.\d+$') { Fail "unexpected .NET runtime version '$RuntimeVersion'" }
 Ok ".NET runtime to bundle: $RuntimeVersion"
 Run-Native 'dotnet publish (app)' {
-    dotnet publish "$Root\src\NetPulse.App\NetPulse.App.csproj" -c Release -r win-x64 --self-contained `
-        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:NetPulseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Portable
+    dotnet publish "$Root\src\Lagwise.App\Lagwise.App.csproj" -c Release -r win-x64 --self-contained `
+        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:LagwiseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Portable
 }
-Copy-Item "$Root\src\NetPulse.App\app.ico" "$Portable\app.ico" -Force
-$exe = Join-Path $Portable 'NetPulse.exe'
-if (-not (Test-Path $exe)) { Fail 'NetPulse.exe was not produced' }
+Copy-Item "$Root\src\Lagwise.App\app.ico" "$Portable\app.ico" -Force
+$exe = Join-Path $Portable 'Lagwise.exe'
+if (-not (Test-Path $exe)) { Fail 'Lagwise.exe was not produced' }
 $exeVersion = (Get-Item $exe).VersionInfo.ProductVersion
 if (-not $exeVersion -or -not $exeVersion.StartsWith($Version)) { Fail "exe version '$exeVersion' does not match $Version" }
 Ok ("{0}  ({1:N1} MB, product version {2})" -f $exe, ((Get-Item $exe).Length / 1MB), $exeVersion)
@@ -134,7 +134,7 @@ $GuiResult = 'skipped'
 if (-not $SkipGuiCheck) {
     $guiData = Join-Path $Work 'gui-data'
     $guiJson = Join-Path $Work 'gui.json'
-    $standIn = "$Root\tests\NetPulse.FakeGame\bin\Release\net10.0\StandInGame.exe"
+    $standIn = "$Root\tests\Lagwise.FakeGame\bin\Release\net10.0\StandInGame.exe"
     if (-not (Test-Path $standIn)) { Fail "the stand-in game for the GUI check was not built ($standIn)" }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Gui.ps1" -Exe $exe -DataDir $guiData -Out $guiJson -FakeGame $standIn
     if ($LASTEXITCODE -ne 0) { Fail 'GUI verification of the published build failed' }
@@ -146,27 +146,27 @@ else {
 }
 
 $after = Get-ChildItem $Portable -Recurse | ForEach-Object { "$($_.FullName)|$($_.Length)" } | Sort-Object
-if (Compare-Object $before $after) { Fail 'running the published exe wrote files next to it (user data must live in %LOCALAPPDATA%\NetPulse)' }
+if (Compare-Object $before $after) { Fail 'running the published exe wrote files next to it (user data must live in %LOCALAPPDATA%\Lagwise)' }
 Ok 'Nothing was written next to the executable'
 
 # ---- 5. installer ----------------------------------------------------------------------------------------------
 $InstallerResult = 'not built'
 if (-not $SkipInstaller) {
-    Step '5/6 Installer (NetPulse-Setup.exe)'
+    Step '5/6 Installer (Lagwise-Setup.exe)'
     New-Item -ItemType Directory -Force -Path "$Installer\payload" | Out-Null
     Run-Native 'dotnet publish (installer)' {
-        dotnet publish "$Root\src\NetPulse.Installer\NetPulse.Installer.csproj" -c Release -r win-x64 --self-contained `
-            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:NetPulseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Installer
+        dotnet publish "$Root\src\Lagwise.Installer\Lagwise.Installer.csproj" -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:LagwiseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Installer
     }
-    Copy-Item $exe "$Installer\payload\NetPulse.exe" -Force
+    Copy-Item $exe "$Installer\payload\Lagwise.exe" -Force
     Copy-Item "$Portable\app.ico" "$Installer\payload\app.ico" -Force
-    Copy-Item "$Root\installer\Setup-NetPulse.ps1" "$Installer\Setup-NetPulse.ps1" -Force
-    if (-not (Test-Path "$Installer\NetPulse-Setup.exe")) { Fail 'NetPulse-Setup.exe was not produced' }
+    Copy-Item "$Root\installer\Setup-Lagwise.ps1" "$Installer\Setup-Lagwise.ps1" -Force
+    if (-not (Test-Path "$Installer\Lagwise-Setup.exe")) { Fail 'Lagwise-Setup.exe was not produced' }
     $InstallerResult = 'built (not install-tested)'
-    Ok 'NetPulse-Setup.exe built'
+    Ok 'Lagwise-Setup.exe built'
 
     if ($VerifyInstaller) {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Installer.ps1" -Setup "$Installer\NetPulse-Setup.exe" -WorkDir (Join-Path $Work 'installer-test')
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Installer.ps1" -Setup "$Installer\Lagwise-Setup.exe" -WorkDir (Join-Path $Work 'installer-test')
         if ($LASTEXITCODE -ne 0) { Fail 'installer verification failed' }
         $InstallerResult = 'built; install and uninstall verified'
         Ok 'Installer install/uninstall verified'
@@ -189,14 +189,14 @@ $n = 2
 while (Test-Path (Join-Path $Releases $releaseName)) { $releaseName = "$Version-build$n"; $n++ }   # never overwrite an earlier release
 $Release = Join-Path $Releases $releaseName
 $Pending = Join-Path $Releases "_pending-$Stamp"   # assembled here and renamed only when complete, so a failure never leaves a half-written release
-$zipName = "NetPulse-$releaseName-Portable-win-x64.zip"
+$zipName = "Lagwise-$releaseName-Portable-win-x64.zip"
 
 try {
     New-Item -ItemType Directory -Force -Path $Pending | Out-Null
     New-Zip $Portable (Join-Path $Pending $zipName)
-    if (Test-Path "$Installer\NetPulse-Setup.exe") { Copy-Item $Installer (Join-Path $Pending 'installer') -Recurse -Force }
+    if (Test-Path "$Installer\Lagwise-Setup.exe") { Copy-Item $Installer (Join-Path $Pending 'installer') -Recurse -Force }
 
-    "# NetPulse $Version`n`nBuilt $((Get-Date).ToString('u')) from commit $commit$(if ($dirty) { ' (with uncommitted changes)' }).`n`n$($section.Groups[1].Value.Trim())`n" |
+    "# Lagwise $Version`n`nBuilt $((Get-Date).ToString('u')) from commit $commit$(if ($dirty) { ' (with uncommitted changes)' }).`n`n$($section.Groups[1].Value.Trim())`n" |
         Set-Content (Join-Path $Pending 'RELEASE_NOTES.md') -Encoding UTF8
 
     [pscustomobject]@{
@@ -212,7 +212,7 @@ try {
         installer      = $InstallerResult
         exeSha256      = Get-Sha256 $exe
         zipSha256      = Get-Sha256 (Join-Path $Pending $zipName)
-        dataLocation   = '%LOCALAPPDATA%\NetPulse (settings, sessions); nothing is stored beside the executable'
+        dataLocation   = '%LOCALAPPDATA%\Lagwise (settings, sessions); nothing is stored beside the executable'
     } | ConvertTo-Json | Set-Content (Join-Path $Pending 'build-info.json') -Encoding UTF8
     Rename-Item $Pending $releaseName   # the release becomes visible only now
 
@@ -227,7 +227,7 @@ try {
     catch { if (Test-Path $PortablePrev) { Rename-Item $PortablePrev 'portable' }; throw }
     if (Test-Path $PortablePrev) { Remove-Item $PortablePrev -Recurse -Force }
 
-    Copy-Item (Join-Path $Release $zipName) (Join-Path $Dist "NetPulse-$Version-Portable-win-x64.zip") -Force
+    Copy-Item (Join-Path $Release $zipName) (Join-Path $Dist "Lagwise-$Version-Portable-win-x64.zip") -Force
     "$releaseName`n$Release" | Set-Content (Join-Path $Dist 'LATEST.txt')
 }
 catch {
@@ -240,10 +240,10 @@ $buildDir = Join-Path $Dist '_build'
 if ((Test-Path $buildDir) -and -not (Get-ChildItem $buildDir)) { Remove-Item $buildDir -Force }
 
 Write-Host "`n=====================================================" -ForegroundColor Green
-Write-Host " NetPulse $Version verified and packaged" -ForegroundColor Green
+Write-Host " Lagwise $Version verified and packaged" -ForegroundColor Green
 Write-Host "=====================================================" -ForegroundColor Green
-Write-Host " Portable exe : $(Join-Path $Dist 'portable\NetPulse.exe')"
-Write-Host " Portable zip : $(Join-Path $Dist "NetPulse-$Version-Portable-win-x64.zip")"
+Write-Host " Portable exe : $(Join-Path $Dist 'portable\Lagwise.exe')"
+Write-Host " Portable zip : $(Join-Path $Dist "Lagwise-$Version-Portable-win-x64.zip")"
 Write-Host " Release      : $Release"
 Write-Host " Installer    : $InstallerResult"
 Write-Host " Tests        : $($Tests.passed)/$($Tests.total)   Published self-test: passed   GUI check: $GuiResult"

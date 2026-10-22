@@ -1,14 +1,14 @@
 <Project>
   <!--
-    A published NetPulse carries its own .NET runtime, which Windows Update does not patch. build.ps1 reads the latest
+    A published Lagwise carries its own .NET runtime, which Windows Update does not patch. build.ps1 reads the latest
     .NET 10 patch from Microsoft's release feed and passes it here, so a release always bundles the current runtime
     with its security fixes, whatever SDK patch is installed on the build PC.
   -->
-  <ItemGroup Condition="'$(NetPulseRuntimeVersion)' != ''">
-    <KnownFrameworkReference Update="Microsoft.NETCore.App" LatestRuntimeFrameworkVersion="$(NetPulseRuntimeVersion)" />
-    <KnownFrameworkReference Update="Microsoft.AspNetCore.App" LatestRuntimeFrameworkVersion="$(NetPulseRuntimeVersion)" />
-    <KnownFrameworkReference Update="Microsoft.WindowsDesktop.App" LatestRuntimeFrameworkVersion="$(NetPulseRuntimeVersion)" />
-    <KnownFrameworkReference Update="Microsoft.WindowsDesktop.App.WPF" LatestRuntimeFrameworkVersion="$(NetPulseRuntimeVersion)" />
-    <KnownFrameworkReference Update="Microsoft.WindowsDesktop.App.WindowsForms" LatestRuntimeFrameworkVersion="$(NetPulseRuntimeVersion)" />
+  <ItemGroup Condition="'$(LagwiseRuntimeVersion)' != ''">
+    <KnownFrameworkReference Update="Microsoft.NETCore.App" LatestRuntimeFrameworkVersion="$(LagwiseRuntimeVersion)" />
+    <KnownFrameworkReference Update="Microsoft.AspNetCore.App" LatestRuntimeFrameworkVersion="$(LagwiseRuntimeVersion)" />
+    <KnownFrameworkReference Update="Microsoft.WindowsDesktop.App" LatestRuntimeFrameworkVersion="$(LagwiseRuntimeVersion)" />
+    <KnownFrameworkReference Update="Microsoft.WindowsDesktop.App.WPF" LatestRuntimeFrameworkVersion="$(LagwiseRuntimeVersion)" />
+    <KnownFrameworkReference Update="Microsoft.WindowsDesktop.App.WindowsForms" LatestRuntimeFrameworkVersion="$(LagwiseRuntimeVersion)" />
   </ItemGroup>
 </Project>

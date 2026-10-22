@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
-    Launches a published NetPulse.exe against an isolated data folder and drives it through UI Automation.
+    Launches a published Lagwise.exe against an isolated data folder and drives it through UI Automation.
 .DESCRIPTION
     Requires an interactive desktop. Verifies: the window opens and stays responsive, the live graph is shown, and the whole
-    Game Monitor workflow with a stand-in game (tests/NetPulse.FakeGame, added as a game the way a user adds one): NetPulse
+    Game Monitor workflow with a stand-in game (tests/Lagwise.FakeGame, added as a game the way a user adds one): Lagwise
     finds it, records automatically when it starts, takes lag marks by button and by the system-wide shortcut, saves when it
     closes, shows the session's verdict, and opens it in History. Then the other pages, and a changed setting is applied and written.
-    The process is started with NETPULSE_DATA_DIR pointing at -DataDir so the user's real settings and recordings are untouched.
+    The process is started with LAGWISE_DATA_DIR pointing at -DataDir so the user's real settings and recordings are untouched.
     Exit code 0 = all checks passed.
 #>
 param(
     [Parameter(Mandatory)][string]$Exe,
     [Parameter(Mandatory)][string]$DataDir,
     [string]$Out,
-    # the stand-in game (StandInGame.exe from tests/NetPulse.FakeGame)
+    # the stand-in game (StandInGame.exe from tests/Lagwise.FakeGame)
     [string]$FakeGame
 )
 
@@ -37,9 +37,9 @@ function Check($name, $ok, $detail) {
 }
 
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
-$env:NETPULSE_DATA_DIR = $DataDir
+$env:LAGWISE_DATA_DIR = $DataDir
 # the stand-in game is added the way a user adds a game; automatic recording is on (the default)
-if (-not $FakeGame) { $FakeGame = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\tests\NetPulse.FakeGame\bin\Release\net10.0\StandInGame.exe' }
+if (-not $FakeGame) { $FakeGame = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\tests\Lagwise.FakeGame\bin\Release\net10.0\StandInGame.exe' }
 $FakeGame = [System.IO.Path]::GetFullPath($FakeGame)
 if (-not (Test-Path $FakeGame)) { Write-Host "Stand-in game not found: $FakeGame" -ForegroundColor Red; exit 1 }
 [pscustomobject]@{ UserGames = @($FakeGame); AutoRecordGame = $true } | ConvertTo-Json | Set-Content -Path (Join-Path $DataDir 'settings.json') -Encoding UTF8
@@ -85,6 +85,9 @@ try {
 
     Start-Sleep -Seconds 4
     Check 'Application stays responsive' ((Get-Process -Id $proc.Id).Responding) ''
+    # one Lagwise per data folder: a second start hands over to this one and closes
+    $second = Start-Process -FilePath $Exe -PassThru
+    Check 'A second start hands over to the running Lagwise instead of running twice' ($second.WaitForExit(10000) -and $second.ExitCode -eq 0 -and -not $proc.HasExited) ''
     Check 'Game Monitor navigation entry exists' ($null -ne (Find-Like 'Game Monitor')) ''
     # first run: the "how much detail?" card is offered; choose Beginner
     $choose = Wait-For { Find-Named 'Choose Beginner' 'ControlType.Button' } 5
@@ -100,7 +103,7 @@ try {
     $ovBtn = Find-Named 'Mini overlay' 'ControlType.Button'
     if ($ovBtn) { ($ovBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke() }
     $overlay = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,
-        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'NetPulse overlay'))) } 5
+        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Lagwise overlay'))) } 5
     Check 'The mini overlay opens' ($null -ne $overlay) ''
     if ($ovBtn) { ($ovBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 500 }
     Check 'Overview shows the Ready to play checklist' (($null -ne (Find-Like '^Ready to play\?$')) -and ($null -ne (Wait-For { Find-Like '^Ping stability$' } 10))) ''
@@ -142,7 +145,7 @@ try {
     Check 'With no game running, the page says so' ($null -ne (Wait-For { Find-Like '^No game running$' } 10)) ''
     Check 'The live connection tiles are shown' (($null -ne (Find-Like '^Router\.')) -and ($null -ne (Find-Like '^Processor\.'))) ''
 
-    # the game starts: NetPulse finds it by its file and records by itself
+    # the game starts: Lagwise finds it by its file and records by itself
     $game = Start-Process -FilePath $FakeGame -ArgumentList '300' -PassThru
     Check 'Starting the game starts a recording by itself' ($null -ne (Wait-For { Find-Like '^Recording Stand-in Game$' } 20)) ''
     Check 'Monitoring state is displayed' ($null -ne (Wait-For { All | Where-Object { $_.Current.Name -cmatch 'RECORDING$' } | Select-Object -First 1 } 10)) ''
@@ -156,6 +159,10 @@ try {
     [NpMouse]::keybd_event(0x78, 0, 2, 0); [NpMouse]::keybd_event(0x10, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
     Check 'The Mark lag shortcut adds a marker' ($null -ne (Wait-For { Find-Like 'Marked with the keyboard shortcut' } 5)) ''
     Check 'The footer shows what is being recorded' ($null -ne (Find-Like '^Recording Stand-in Game  ')) ''
+    # the taskbar jump list's "Mark lag" starts Lagwise.exe --command mark-lag, which the running copy acts on
+    $jump = Start-Process -FilePath $Exe -ArgumentList '--command', 'mark-lag' -PassThru
+    Check 'The jump list task Mark lag reaches the running Lagwise' ($jump.WaitForExit(10000) -and $jump.ExitCode -eq 0) ''
+    Start-Sleep -Seconds 1
     Check 'The session so far gets a verdict while recording' ($null -ne (Wait-For { Find-Like '^This session so far$' } 15)) ''
 
     # the game closes: the recording is saved by itself once the game has stayed closed for 20 s
@@ -168,7 +175,7 @@ try {
     Check 'Session file exists under the data folder' ($null -ne $file) $(if ($file) { $file.FullName })
     if ($file) {
         $j = Get-Content $file.FullName -Raw | ConvertFrom-Json
-        Check 'Session is complete with samples and both lag markers' ($j.isComplete -and $j.samples.Count -gt 0 -and $j.lagMarkers.Count -eq 2) "samples=$($j.samples.Count), markers=$($j.lagMarkers.Count)"
+        Check 'Session is complete with samples and all three lag markers (button, shortcut, jump list)' ($j.isComplete -and $j.samples.Count -gt 0 -and $j.lagMarkers.Count -eq 3) "samples=$($j.samples.Count), markers=$($j.lagMarkers.Count)"
         Check 'Session records the game, that it started by itself, and the game being online' ($j.gameDisplayName -eq 'Stand-in Game' -and $j.automatic -and $j.gameRecording -and @($j.connections | Where-Object { $_.protocol -eq 'UDP' }).Count -ge 1 -and $j.gameProcesses.Count -ge 1) "$($j.gameDisplayName), connections=$($j.connections.Count)"
         Check 'Session keeps this PC''s processor load with its traffic' (@($j.throughput | Where-Object { $null -ne $_.cpu }).Count -gt 0) ''
     }
@@ -209,6 +216,11 @@ try {
     Start-Sleep -Milliseconds 80
     [NpMouse]::keybd_event(0x31, 0, 2, 0); [NpMouse]::keybd_event(0x11, 0, 2, 0)
     Check 'Ctrl+1 opens the Overview' ($null -ne (Wait-For { Find-Like '^Ready to play\?$' } 5)) ''
+    # the jump list's "History & reports" switches the open window to that page
+    $jump = Start-Process -FilePath $Exe -ArgumentList '--command', 'history' -PassThru
+    $null = $jump.WaitForExit(10000)
+    $onHistory = Wait-For { Find-Like '^Analyse (my recordings|again)$' } 8
+    Check 'The jump list task History opens that page in the running window' ($null -ne $onHistory) $(if (-not $onHistory) { "exit $($jump.ExitCode); on screen: " + ((All | ForEach-Object { $_.Current.Name } | Where-Object { $_ -match '^(Ready to play\?|Recordings|Graph|Was it your connection\?|Analyse.*)$' }) -join ', ') })
 
     # Network activity: live adapter throughput with its graph
     Click-Element (Find-Like '^Network activity$')
@@ -293,6 +305,11 @@ try {
     $settingsFile = Join-Path $DataDir 'settings.json'
     Check 'Settings were written to the data folder' ((Test-Path $settingsFile) -and ((Get-Content $settingsFile -Raw) -match 'StandInGame\.exe' -and (Get-Content $settingsFile -Raw) -match '"MonitoringIntervalMs": 2000')) $settingsFile
     Check 'Application still responsive at the end' ((Get-Process -Id $proc.Id).Responding) ''
+
+    # the installer closes a running Lagwise this way: it saves and exits, rather than being killed
+    $bye = Start-Process -FilePath $Exe -ArgumentList '--command', 'exit' -PassThru
+    $null = $bye.WaitForExit(10000)
+    Check 'Asked to exit by a second start (as the installer does), Lagwise saves and closes' ($proc.WaitForExit(20000) -and $proc.ExitCode -eq 0) ''
 }
 catch {
     Check 'Verification completed without an unexpected error' $false $_.Exception.Message

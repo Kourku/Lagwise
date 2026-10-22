@@ -1,32 +1,32 @@
-# NetPulse architecture
+# Lagwise architecture
 
-NetPulse is a .NET 10 WPF application for Windows 10 and 11 (x64), published as one self-contained executable with
+Lagwise is a .NET 10 WPF application for Windows 10 and 11 (x64), published as one self-contained executable with
 its own .NET runtime. It has no third-party libraries, no server and no account; everything it keeps lives in
-`%LOCALAPPDATA%\NetPulse`.
+`%LOCALAPPDATA%\Lagwise`.
 
 ## Projects
 
 | Project | What it is |
 |---|---|
-| `src/NetPulse.Core` | Everything that measures, decides and stores. No UI types, so it is tested directly. |
-| `src/NetPulse.App` | The WPF application: windows, view models, custom drawn controls (charts, gauges, status marks), tray, overlay, global shortcut. |
-| `src/NetPulse.Installer` | `NetPulse-Setup.exe`, a per-user installer (no administrator rights). |
-| `tests/NetPulse.Tests` | xUnit tests for Core, including tests against the real Windows APIs (process list, socket tables, game list). |
-| `tests/NetPulse.FakeGame` | `StandInGame.exe`, a stand-in "online game" for the GUI check. Never shipped. |
+| `src/Lagwise.Core` | Everything that measures, decides and stores. No UI types, so it is tested directly. |
+| `src/Lagwise.App` | The WPF application: windows, view models, custom drawn controls (charts, gauges, status marks), tray, overlay, global shortcut, taskbar (jump list, badge, preview buttons). |
+| `src/Lagwise.Installer` | `Lagwise-Setup.exe`, a per-user installer (no administrator rights). It shares `AppInstance` and `WindowsIntegrationService` with the app (linked source files). |
+| `tests/Lagwise.Tests` | xUnit tests for Core, including tests against the real Windows APIs (process list, socket tables, game list). |
+| `tests/Lagwise.FakeGame` | `StandInGame.exe`, a stand-in "online game" for the GUI check. Never shipped. |
 
 ## Composition
 
-`NetPulseHost` (Core) builds every service once. The main window, the tray, the mini overlay and the Game Monitor all
+`LagwiseHost` (Core) builds every service once. The main window, the tray, the mini overlay and the Game Monitor all
 share one measurement engine, one event log, one settings object and one session recorder.
 
 ```
-                ┌──────────────────────── NetPulse.App (WPF, MVVM) ────────────────────────┐
-                │ MainWindow · OverlayWindow · Tray · GlobalHotkey · PageSnapshots           │
+                ┌──────────────────────── Lagwise.App (WPF, MVVM) ────────────────────────┐
+                │ MainWindow · OverlayWindow · Tray · GlobalHotkey · TaskbarTasks · Snapshots │
                 │ MainViewModel · GameMonitorViewModel · HistoryViewModel · VerdictViewModel │
                 │ SiteCheck / Security / Diary / Activity / Settings view models             │
                 └───────────────────────────────────┬────────────────────────────────────────┘
                                                     │ bindings, events
-┌───────────────────────────────────────── NetPulseHost (Core) ─────────────────────────────────────────┐
+┌───────────────────────────────────────── LagwiseHost (Core) ─────────────────────────────────────────┐
 │ MeasurementEngine ── Ping · TCP · HTTPS · DNS probes ── DiagnosticEngine ── EventLogService            │
 │ SessionRecorder ── SessionStore ── SessionAnalysis · SessionVerdict · SessionReportBuilder             │
 │ GameMonitorService ── GameLibrary (built-in · Windows' game list · added) ── GameWatcher ── detection   │
@@ -38,14 +38,15 @@ share one measurement engine, one event log, one settings object and one session
 ## Core, by folder
 
 - **Services**: the measurement engine (one probe per target per interval, rolling windows, baselines, episodes and
-  events), the probes, the live diagnosis, network discovery (adapter, gateway, Wi-Fi via `netsh` by full path),
-  adapter activity and processor load, bufferbloat and speed tests, route tracing, the connection diary, stored test
+  events, and the grace after Windows wakes), the probes, the live diagnosis, network discovery (the adapter Windows
+  routes internet traffic through, from `GetBestInterface`; VPNs and tunnels; Wi-Fi from the WLAN API in `WlanInfo`, with
+  `netsh` by full path as a fallback), the startup entry (`WindowsIntegrationService`), adapter activity and processor load, bufferbloat and speed tests, route tracing, the connection diary, stored test
   results, report export and privacy (`ReportPrivacy`), and the composition root.
 - **Games**: the built-in game profiles, `GameLibrary` (reads Windows' game list from
   `HKCU\System\GameConfigStore\Children`, names games, merges built-in, Windows and added games), process detection
   (by name, path hint or exact path), `GameWatcher` (start, exit and restart from successive process lists),
   connection discovery (`GetExtendedTcpTable` / `GetExtendedUdpTable`), `GameMonitorService` (watching, automatic
-  recording, lag marks) and the self-test run by `NetPulse.exe --selftest`.
+  recording, lag marks) and the self-test run by `Lagwise.exe --selftest`.
 - **Sessions**: the recording model, the recorder (samples, events, gaps, drops, lag marks, traffic, processor and Wi-Fi
   each second, the game's processes and sockets), the store (one JSON file per recording plus a summary index), and the
   analysis: statistics, comparisons, time-of-day patterns, the **session verdict** and the Markdown report.
@@ -53,7 +54,25 @@ share one measurement engine, one event log, one settings object and one session
   Security check (firewall, network type, Wi-Fi protection, listeners, DNS honesty, HTTPS inspection, UPnP).
 - **Statistics**: medians and percentiles, rolling windows, and the long-term memory of each target's usual ping.
 - `SystemTools` (Windows tools only by full path), `UntrustedText` (cleaning text from the network, CSV fields),
-  `Lexicon` (every term and event label shown to people).
+  `Lexicon` (every term and event label shown to people), `AppInstance` (one running copy per data folder).
+
+## Windows integration
+
+- **One copy per data folder.** `App` holds a named mutex derived from the data folder. A later start sends its request
+  (`show`, `mark-lag`, `record`, `overlay`, `speedtest`, `bufferbloat`, `history`, `exit`) over a named pipe created with
+  `PipeOptions.CurrentUserOnly` and exits; anything but those words is dropped. The taskbar jump list starts
+  `Lagwise.exe --command ...`, and the installer sends `exit`. A test copy with its own `LAGWISE_DATA_DIR` runs alongside.
+- **Sleep and wake.** `SystemEvents.PowerModeChanged` calls `LagwiseHost.OnSystemSuspending` (checkpoint the recording,
+  save the diary) and `OnSystemResumed`. Until an internet server answers again, or 45 s have passed, cycles without an
+  internet answer are not ingested, so a recording shows a gap rather than a drop. The measuring loop also notices a
+  pause it did not take (more than 15 s) in case the notice is missed.
+- **Sign-out and shutdown.** `App.OnSessionEnding` lets the window close for real; `OnExit` disposes the host, which
+  saves a recording in progress.
+- **Taskbar and tray.** `TaskbarTasks` builds the jump list and the images for the badge (`TaskbarItemInfo.Overlay`) and
+  the preview buttons; the tray icon is drawn with a status dot. Test progress uses `TaskbarItemInfo.ProgressValue`.
+- **Window.** `app.manifest` declares per-monitor DPI awareness (v2) and Windows 10/11. `MainWindow` answers
+  `WM_NCHITTEST` with `HTMAXBUTTON` over its own maximise button, so Windows 11 shows Snap Layouts. The overlay window
+  has `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, and `WS_EX_TRANSPARENT` when clicks should pass through.
 
 ## Threads
 
@@ -66,7 +85,7 @@ share one measurement engine, one event log, one settings object and one session
 
 ## Storage
 
-`%LOCALAPPDATA%\NetPulse` (or `NETPULSE_DATA_DIR` for tests):
+`%LOCALAPPDATA%\Lagwise` (or `LAGWISE_DATA_DIR` for tests):
 
 - `settings.json`, `sessions\*.session.json` and `sessions\index.json`;
 - `test-history.json`, `diary.json`, `baselines.json`;

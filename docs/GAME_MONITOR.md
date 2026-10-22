@@ -1,12 +1,12 @@
 # Game Monitor: what it does, and how it is verified
 
-Status as of NetPulse 1.0.0 (2026-10-20).
+Status as of Lagwise 1.0.0 (2026-10-20).
 
 ![The Game Monitor with the verdict of the last game session](screenshots/game-monitor-1.0.png)
 
 ## In one paragraph
 
-While you play any of your games, NetPulse records how your side of the connection behaves: this PC, your Wi-Fi or
+While you play any of your games, Lagwise records how your side of the connection behaves: this PC, your Wi-Fi or
 cable and router, and your provider, measured against your router and well-known internet servers, together with this
 PC's own traffic and processor load. Afterwards it answers one question for the whole session and for every moment you
 marked as laggy: **was it my connection?** It does this the same way for every game, so it works for any game on any PC,
@@ -39,11 +39,11 @@ needed could never be automated.
 
 ## How games are found (on any PC)
 
-Nothing depends on a particular PC's folders. Every source is read on the PC NetPulse runs on:
+Nothing depends on a particular PC's folders. Every source is read on the PC Lagwise runs on:
 
 1. **Windows' own game list.** Windows 10 and 11 keep a list of the games they have seen run, for each user, under
    `HKEY_CURRENT_USER\System\GameConfigStore\Children`. Game Bar and Game Mode use it. Entries Windows matched to a
-   program carry its full path (`MatchedExeFullPath`) and when it last ran (`LastAccessed`). NetPulse reads it, read-only,
+   program carry its full path (`MatchedExeFullPath`) and when it last ran (`LastAccessed`). Lagwise reads it, read-only,
    and leaves out programs that no longer exist. Programs Windows files under one title (a game and its own launcher) are one
    game. Names come from the program's product name, or from the game's folder, climbing past engine folders such as
    `Binaries\Win64` (for example `Arc Raiders\PioneerGame\Binaries\Win64\PioneerGame.exe` is "Arc Raiders").
@@ -79,8 +79,12 @@ the game is still found through Windows' list.
   recording started by hand is never stopped automatically, and a recording you stop while the game runs is not
   restarted until the game has closed and started again. **Record now** with all games watched and none running makes
   a recording that takes the first game that starts.
-- **Mark lag:** the button, or a system-wide shortcut (`Ctrl+Shift+F9` by default) that works while the game has focus,
-  with an optional confirmation sound.
+- **Mark lag:** the button, a system-wide shortcut (`Ctrl+Shift+F9` by default) that works while the game has focus,
+  with an optional confirmation sound, or **Mark lag** in the taskbar jump list (right-click Lagwise on the taskbar) and
+  under the taskbar button's preview, also while Lagwise sits in the tray. Recording can be started or stopped the
+  same ways.
+- **The mini overlay** (`Ctrl+Shift+O`) shows the live numbers over a game in windowed or borderless mode. Clicking or
+  dragging it never takes the keyboard from the game, and Settings > Appearance can let clicks pass through it.
 - **What a recording keeps:** every probe to your router and the reference servers, every second of this PC's traffic,
   processor load and Wi-Fi signal, events, monitoring gaps (kept apart from outages), connection drops, lag marks, the game's
   processes and its sockets (whether it was online, and over UDP). The match server's address is not among them, because
@@ -114,11 +118,11 @@ one in History, old ones included, and the live view shows it for the session so
   - else "this PC was very busy" when the processor ran flat out;
   - else "the game was not online" when it had no connections;
   - else "your connection looked normal at that moment". In that last case the lag was further away (the game's server
-    or the route to it), which NetPulse cannot measure; the game's own ping display shows that part.
+    or the route to it), which Lagwise cannot measure; the game's own ping display shows that part.
 - **What to do** follows from the causes: a cable for Wi-Fi trouble, pausing downloads, recording a few evenings for the
   provider, closing background programs.
 
-## What NetPulse does not do
+## What Lagwise does not do
 
 - It does not measure in-game latency or the game server's ping, and never presents a reference server as a game server.
 - It does not read or capture any traffic. It sees which sockets the game process has open, as Task Manager does.
@@ -139,19 +143,20 @@ Everything game-related is verified without a real match and without anyone at t
     one short spike; an HTTPS handshake that varies on its own; too short; gaps;
   - each kind of lag mark; the report and index;
   - the processor counter; pruning of automatic recordings.
-- **Self-test inside the published exe:** NetPulse stands in for a game added by the user:
+- **Self-test inside the published exe:** Lagwise stands in for a game added by the user:
   - it is found by its exact path and recorded automatically through the real process and socket APIs;
   - a lag mark is taken and the session is saved;
   - its TCP and UDP sockets, the automatic flag and the verdict are checked;
   - Windows' game list is read.
-- **GUI check of the published exe (UI Automation):** a stand-in game program (`tests/NetPulse.FakeGame`, a UDP
+- **GUI check of the published exe (UI Automation):** a stand-in game program (`tests/Lagwise.FakeGame`, a UDP
   socket and a TCP connection, like an online game) is added in Settings. Then:
   - the Game Monitor lists it;
-  - starting it starts a recording by itself, and lag is marked by button and by the system-wide shortcut;
+  - starting it starts a recording by itself, and lag is marked by button, by the system-wide shortcut and by the jump
+    list's task;
   - the live verdict appears;
   - closing it saves the recording by itself, and the verdict is shown;
   - the session file holds the game, the automatic flag, the UDP socket and the processor samples;
   - the recording opens in History with its verdict.
 
-What only a real match would add is the feel of it: whether NetPulse's verdicts match what you notice in game. A
+What only a real match would add is the feel of it: whether Lagwise's verdicts match what you notice in game. A
 recording of your own game sessions is the way to check that, and nothing in the verdict depends on which game it was.

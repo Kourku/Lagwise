@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Installs the built NetPulse-Setup.exe into a temporary folder through its UI, runs the installed exe's self-test, then uninstalls.
+    Installs the built Lagwise-Setup.exe into a temporary folder through its UI, runs the installed exe's self-test, then uninstalls.
 .DESCRIPTION
     Uses UI Automation (needs an interactive desktop). No Desktop/Start Menu shortcuts are created and the app is not launched.
-    It writes and then removes HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulse, so it refuses to run if a
-    real NetPulse installation is already registered (it would overwrite it).
+    It writes and then removes HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Lagwise, so it refuses to run if a
+    real Lagwise installation is already registered (it would overwrite it).
     Exit code 0 = install and uninstall both worked.
 #>
 param(
@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $AE = [System.Windows.Automation.AutomationElement]
 $TS = [System.Windows.Automation.TreeScope]
-$regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulse'
+$regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Lagwise'
 $checks = New-Object System.Collections.ArrayList
 function Check($name, $ok, $detail) {
     [void]$checks.Add([pscustomobject]@{ Name = $name; Passed = [bool]$ok })
@@ -25,7 +25,13 @@ function Check($name, $ok, $detail) {
 
 if (Test-Path $regPath) {
     $existing = (Get-ItemProperty $regPath).InstallLocation
-    Write-Host "A NetPulse installation is already registered at '$existing'. Skipping installer verification so it is not overwritten." -ForegroundColor Yellow
+    Write-Host "A Lagwise installation is already registered at '$existing'. Skipping installer verification so it is not overwritten." -ForegroundColor Yellow
+    exit 2
+}
+# the setup removes an installed NetPulse (the old name): never let a test run do that to a real installation
+$oldPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\NetPulse'
+if (Test-Path $oldPath) {
+    Write-Host "A NetPulse installation is registered at '$((Get-ItemProperty $oldPath).InstallLocation)'. Skipping installer verification so the setup does not remove it." -ForegroundColor Yellow
     exit 2
 }
 
@@ -61,8 +67,8 @@ try {
     ((By-Id $win 'BtnAction').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
     $null = $p.WaitForExit(10000)
 
-    $exe = Join-Path $installDir 'NetPulse.exe'
-    Check 'NetPulse.exe, app.ico and the setup copy were installed' ((Test-Path $exe) -and (Test-Path "$installDir\app.ico") -and (Test-Path "$installDir\NetPulse-Setup.exe")) $installDir
+    $exe = Join-Path $installDir 'Lagwise.exe'
+    Check 'Lagwise.exe, app.ico and the setup copy were installed' ((Test-Path $exe) -and (Test-Path "$installDir\app.ico") -and (Test-Path "$installDir\Lagwise-Setup.exe")) $installDir
     Check 'Uninstall entry registered with the product version' ((Test-Path $regPath) -and ((Get-ItemProperty $regPath).DisplayVersion -eq ((Get-Item $exe).VersionInfo.ProductVersion -split '\+')[0])) $(if (Test-Path $regPath) { (Get-ItemProperty $regPath).DisplayVersion })
 
     # ---- installed copy works ----
@@ -71,7 +77,7 @@ try {
     Check 'Installed exe self-test completes' ($sp.WaitForExit(120000) -and $sp.ExitCode -eq 0) "exit $($sp.ExitCode)"
 
     # ---- uninstall ----
-    $up = Start-Process -FilePath "$installDir\NetPulse-Setup.exe" -ArgumentList '--uninstall' -PassThru
+    $up = Start-Process -FilePath "$installDir\Lagwise-Setup.exe" -ArgumentList '--uninstall' -PassThru
     $uwin = Get-Window $up
     ((By-Id $uwin 'BtnAction').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
 
@@ -79,7 +85,7 @@ try {
     $deadline = (Get-Date).AddSeconds(30)
     $ok = $null
     while ((Get-Date) -lt $deadline -and -not $ok) {
-        $box = $AE::RootElement.FindFirst($TS::Children, (New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, 'NetPulse Uninstall')))
+        $box = $AE::RootElement.FindFirst($TS::Children, (New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, 'Lagwise Uninstall')))
         if ($box) { $ok = $box.FindFirst($TS::Descendants, (New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, 'OK'))) }
         Start-Sleep -Milliseconds 400
     }
@@ -94,7 +100,7 @@ catch {
     Check 'Installer verification completed without an unexpected error' $false $_.Exception.Message
 }
 finally {
-    Get-Process -Name 'NetPulse-Setup' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name 'Lagwise-Setup' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (Test-Path $regPath) { Remove-Item $regPath -Recurse -Force }   # never leave a test registration behind
 }
 

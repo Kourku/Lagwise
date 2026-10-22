@@ -1,17 +1,21 @@
-# NetPulse release notes
+# Lagwise release notes
 
-Newest first. Versions follow the repository names (NetPulse-ver0.1, -ver0.3, ... -ver0.16, then NetPulse-ver1.0); 0.10 follows 0.9, and 0.17 was folded into 1.0 without a release of its own; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
+Lagwise was called **NetPulse** up to and including 0.16; the notes for those versions keep the old name.
+
+Newest first. Versions 0.1 to 0.16 were published as repositories named NetPulse-ver0.1, -ver0.3, ... -ver0.16; 0.10 follows 0.9, and 0.17 was folded into 1.0 without a release of its own; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
 ## 1.0.0
 
-NetPulse 1.0. The Game Monitor works for any game on any PC and answers the question players actually have: **was it my connection?** Everything it does is verified automatically, without a real match. This release also makes NetPulse itself safer to run (the work planned for 0.17).
+**NetPulse is now Lagwise.** Same app, new name. On its first start Lagwise copies your NetPulse settings, recordings, diary and test results from `%LOCALAPPDATA%\NetPulse` to `%LOCALAPPDATA%\Lagwise` (the old folder is left as it was; delete it when you like), and "Start with Windows" carries over. The installer removes an installed NetPulse (its shortcuts, Apps entry and program files) so only Lagwise is left.
+
+Lagwise 1.0. The Game Monitor works for any game on any PC and answers the question players actually have: **was it my connection?** Everything it does is verified automatically, without a real match. This release also makes Lagwise itself safer to run (the work planned for 0.17).
 
 ![The Game Monitor in 1.0](docs/screenshots/game-monitor-1.0.png)
 
 **The Game Monitor, rebuilt for any game**
-- **Finds your games by itself.** Windows 10 and 11 keep a list of the games they have seen run on each PC (the one Game Bar and Game Mode use). NetPulse reads it, read-only, and adds its seven built-in games and any program you add with **Add a game...**. A game you do not want watched can be taken off the list.
+- **Finds your games by itself.** Windows 10 and 11 keep a list of the games they have seen run on each PC (the one Game Bar and Game Mode use). Lagwise reads it, read-only, and adds its seven built-in games and any program you add with **Add a game...**. A game you do not want watched can be taken off the list.
 - **Watches all of them by default**, and **records automatically when one starts** (now on by default), saving when it has been closed for 20 seconds. Settings from an earlier version are switched to all games with automatic recording once; the switch on the Game Monitor turns it off. A recording you stop while the game runs is not restarted until the game closes and starts again. **Record now** also works before the game is running: the recording takes the first game that starts.
-- **A verdict for every session: was it my connection?** Afterwards NetPulse says whether lag came from your side and which part: your Wi-Fi or router, beyond your router (your provider or the internet), or this PC (its own downloads, or a processor working flat out). Each part gets its own rating, every stretch of trouble is listed with its time, and each moment you marked as laggy gets its own answer, with the numbers. When your side was fine, it says so: the lag was further away, at the game's server or on the route to it.
+- **A verdict for every session: was it my connection?** Afterwards Lagwise says whether lag came from your side and which part: your Wi-Fi or router, beyond your router (your provider or the internet), or this PC (its own downloads, or a processor working flat out). Each part gets its own rating, every stretch of trouble is listed with its time, and each moment you marked as laggy gets its own answer, with the numbers. When your side was fine, it says so: the lag was further away, at the game's server or on the route to it.
 - **Live while you play:** six tiles (router, internet, variation, loss, this PC's traffic, processor) and **This session so far**, worked out every few seconds.
 - **Your last game session and the recent ones** on the Game Monitor, each with its verdict.
 - **Recordings keep this PC's processor load and Wi-Fi signal** every second, beside its traffic.
@@ -23,32 +27,55 @@ NetPulse 1.0. The Game Monitor works for any game on any PC and answers the ques
 - Every recording opens with **Was it your connection?**, worked out again by this version from its measurements, so older recordings get a verdict too. The list of recordings shows each one's verdict.
 - The exported report starts with the verdict: the parts of the connection, when it happened, every lag mark, and what to do.
 
-**The .NET runtime inside NetPulse is current again**
-- NetPulse carries its own .NET runtime, which Windows Update does not patch. Up to 0.16.0 it carried .NET 10.0.3, which nine later security updates fixed. This release carries .NET 10.0.13 (October 2026).
-- The build now asks Microsoft's release feed for the latest .NET 10 patch, bundles it, and refuses to finish if the exe reports another runtime. The runtime is recorded in build-info.json. Use the newest NetPulse: an old copy keeps its old runtime.
+**At home in Windows**
+- **One Lagwise at a time.** Starting it again (or Windows starting it at sign-in while it already runs) brings the running Lagwise forward instead of opening a second copy that measured twice and wrote the same files. The request travels over a channel only you can open, only from this PC (Windows refuses it to other computers), and only a fixed set of requests is accepted.
+- **Taskbar jump list:** right-click Lagwise on the taskbar or in Start for Mark lag, Start or stop a game recording, the mini overlay, the speed and bufferbloat tests and History, also while Lagwise sits in the tray.
+- **The taskbar button and the tray icon show the connection at a glance:** an amber dot when something is worth a look, red for a problem; a record dot on the taskbar button while recording; the button fills like a progress bar during a speed or bufferbloat test. Hovering the button offers Mark lag and Record or Stop under the preview.
+- **Sleep and wake are not outages any more.** Waking up used to count the few seconds the adapter needs to reconnect as a drop, with a "Connection lost" notification. Now the time asleep shows as a gap, the adapter gets up to 45 seconds to come back, and a recording in progress is saved to disk as Windows goes to sleep. Signing out or shutting down saves it too.
+- **Sharp on every screen:** Lagwise follows each monitor's scaling (per-monitor DPI), so it is no longer blurry on a second screen with other scaling.
+- **Snap Layouts:** hovering the maximise button offers Windows 11's layouts, as on Windows' own windows.
+- **The mini overlay never takes the keyboard from your game** when clicked or dragged, stays out of Alt+Tab, and can let clicks pass through to the game (Settings > Appearance).
+- **Start with Windows tells the truth:** when Lagwise is switched off in Task Manager > Startup apps, Settings says so, and switching it on again in Lagwise works. A moved portable Lagwise repairs its startup entry.
+- **The installer closes a running Lagwise** (which saves what it is recording) before replacing or removing it, and uninstalling removes the startup entry, so Windows no longer tries to start a deleted program. Settings > Apps offers only Uninstall.
+
+**Your connection, measured where it actually goes**
+- **The adapter Windows really uses.** With several adapters connected (cable and Wi-Fi, a virtual switch), Lagwise used the first one with a router; it now asks Windows' routing table which adapter carries internet traffic.
+- **VPNs are recognised.** When internet traffic goes through a VPN or tunnel, the Adapter page, "Ready to play?", the copy summary and reports name it, and a recording's verdict says that slowness beyond your router may be the VPN's, with advice to try a closer VPN server or play once without it. Your own router is still measured directly.
+- **Wi-Fi details in every Windows language.** Signal, network name, access point, standard, channel, link rate and protection now come from Windows' WLAN API rather than the English text of netsh, so Wi-Fi verdicts and the Security check's Wi-Fi line work on French, German, Spanish or any other Windows. Since Windows 11 24H2, Windows shares these details only with apps allowed to use location; the Adapter page explains this and opens the right Settings page. Lagwise never asks where you are.
+- **Fewer false alarms about your router.** A router answering slowly, unevenly or not at all is now counted only when the internet servers behind it show the same trouble (and "slow" only when no internet server answers faster than the router). Routers answer pings to themselves last, and a repeater's or mesh unit's Wi-Fi link on the way can make the replies swing; when the traffic through the router stays steady, neither reaches your games. A healthy wired PC behind a mesh repeater whose router swung by 4 ms was told "worth keeping an eye on"; now it is good to play. When the router really is the problem, Lagwise now says that a repeater or mesh unit and its Wi-Fi link count as part of your home network, and suggests moving it closer or wiring it. The Game Monitor's router tile uses the same judgement instead of a single reading.
+
+**Clearer at the usual window size**
+- Every page fits in the sidebar without scrolling, also in Advanced (Settings and Help share the last row).
+- The History list shows each verdict in a few words ("Steady", "Wi-Fi or router", "Beyond your router"; the full sentence on hover), marks interrupted recordings under their name and fits without cutting columns off. Probe counts are an Advanced column.
+- Shorter labels where they were cut off; the router tile shows a cable or Wi-Fi symbol to match the connection.
+
+**The .NET runtime inside Lagwise is current again**
+- Lagwise carries its own .NET runtime, which Windows Update does not patch. Up to 0.16.0 it carried .NET 10.0.3, which nine later security updates fixed. This release carries .NET 10.0.13 (October 2026).
+- The build now asks Microsoft's release feed for the latest .NET 10 patch, bundles it, and refuses to finish if the exe reports another runtime. The runtime is recorded in build-info.json. Use the newest Lagwise: an old copy keeps its old runtime.
 
 **Hostile answers from the network**
 - **Text from outside** (reverse-DNS names of route hops, certificate names, status pages, redirect addresses, server messages) has control and invisible characters removed and is shortened before it is shown or put in a report. Direction overrides (U+202E) can make "gpj.exe" read as "exe.jpg". A reverse-DNS name that is not a valid host name is dropped.
 - **CSV exports** quote every text field, and a field starting with = + - @ gets an apostrophe, so Excel or another spreadsheet never runs it as a formula.
-- **Site icons** are never fetched from an address on this PC or the home network, whatever a page or a redirect names, so a website cannot use NetPulse to send requests to your router.
+- **Site icons** are never fetched from an address on this PC or the home network, whatever a page or a redirect names, so a website cannot use Lagwise to send requests to your router.
 - **DNS probes** count an answer only from the server asked and with the question's number, so another device cannot fake one.
 - **Size and time limits:** status and DNS-over-HTTPS answers are limited to 1 MB, and reading a page for its icon has a time limit, so a page built to be slow cannot stall it.
 - **A status page of another shape** (for example "status" as text) is now read as "no answer" instead of raising an error.
 
 **Checked, nothing to fix**
-- A running NetPulse has no open TCP port and no lasting UDP socket, and creates no firewall rule.
+- A running Lagwise has no open TCP port and no lasting UDP socket, and creates no firewall rule.
 - Everything it keeps is in a folder only you (and administrators) can read. No administrator rights; per-user installer; Windows tools started by full path.
 
 **Verified automatically, without a real game**
 - A stand-in game (a small program with a UDP socket and an internet connection, like an online game) is added the way a user adds one. The GUI check of the published exe starts it, then checks that:
-  - NetPulse records by itself, and lag is marked by button and by the system-wide shortcut;
+  - Lagwise records by itself, and lag is marked by button and by the system-wide shortcut;
   - the live verdict appears;
-  - closing the game saves the recording, which shows its verdict on the Game Monitor and in History.
+  - closing the game saves the recording, which shows its verdict on the Game Monitor and in History;
+  - a second start hands over instead of running twice, the jump list's Mark lag and History reach the running Lagwise, and being asked to exit (as the installer does) saves and closes it.
 - The published exe's self-test does the same with real Windows process and socket APIs, and reads Windows' game list.
-- New automated tests cover the game library, exact-path detection, watching all games and the verdict in every situation.
+- New automated tests cover the game library, exact-path detection, watching all games and the verdict in every situation, and the Windows side: the request channel, sleep and wake, the startup entry and Task Manager's switch for it, reading Wi-Fi from the WLAN API, choosing the adapter and recognising VPNs.
 
 **Also**
-- `NetPulse.exe --screenshot "GameMonitor=gm.png"` renders pages to image files without a screen, for documentation.
+- `Lagwise.exe --screenshot "GameMonitor=gm.png"` renders pages to image files without a screen, for documentation (`--screenshot-window` renders the whole window).
 - Stat tiles colour their rating by level on their own; the Help page and glossary describe the verdict and how games are found.
 
 ## 0.16.0
