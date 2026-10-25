@@ -86,7 +86,7 @@ public partial class MainWindow : Window
             UpdateTrayTooltip(vm);
 
             // started by the "start with Windows" entry: begin in the tray / taskbar rather than in front of the user
-            if (Environment.GetCommandLineArgs().Contains("--minimized", StringComparer.OrdinalIgnoreCase))
+            if (Environment.GetCommandLineArgs().Contains("--minimized", StringComparer.OrdinalIgnoreCase) || StartupTaskBackend.StartedAtSignIn())
                 WindowState = WindowState.Minimized;
 
             // documentation and look checks: render pages to PNG files, then close

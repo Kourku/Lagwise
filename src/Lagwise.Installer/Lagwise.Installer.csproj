@@ -20,6 +20,6 @@
   <ItemGroup>
     <Compile Include="..\Lagwise.Core\AppInstance.cs" Link="Shared\AppInstance.cs" />
     <Compile Include="..\Lagwise.Core\Services\WindowsIntegrationService.cs" Link="Shared\WindowsIntegrationService.cs" />
-  </ItemGroup>
+    <Compile Include="..\Lagwise.Core\Services\IStartupTaskBackend.cs" Link="Shared\IStartupTaskBackend.cs" />  </ItemGroup>
 
 </Project>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Filled in by scripts/Build-Msix.ps1: the values between at-signs come from installer/store/identity.json (Store) or the local test identity. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap5 desktop rescap">
+
+  <Identity Name="@IDENTITY_NAME@" Publisher="@PUBLISHER@" Version="@VERSION@" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Lagwise</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Lagwise" Executable="Lagwise.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Lagwise"
+        Description="Find out whether lag comes from your PC, your Wi-Fi or router, or beyond. Free, private, no account."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\Square71x71Logo.png" Square310x310Logo="Assets\Square310x310Logo.png" ShortName="Lagwise" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- "Start with Windows": a packaged app cannot use the Run registry key. The TaskId is also in src/Lagwise.App/StartupTaskBackend.cs. -->
+        <uap5:Extension Category="windows.startupTask" Executable="Lagwise.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="LagwiseStartup" Enabled="false" DisplayName="Lagwise" />
+        </uap5:Extension>
+        <!-- jump-list tasks and a second start of Lagwise from the command line reach the app through this alias -->
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="Lagwise.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="Lagwise.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

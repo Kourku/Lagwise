@@ -1,0 +1,6 @@
+{
+  "_note": "Fill these three in from Partner Center > your app > Product management > Product identity, exactly as shown there. Leave them empty to build a local test package instead.",
+  "PackageIdentityName": "",
+  "Publisher": "",
+  "PublisherDisplayName": ""
+}

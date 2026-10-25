@@ -23,7 +23,7 @@ internal static class TaskbarTasks
     /// <summary>Tasks that start <c>Lagwise.exe --command ...</c>; a running Lagwise receives them (see <see cref="AppInstance"/>).</summary>
     public static void ApplyJumpList(Application app)
     {
-        string? exe = Environment.ProcessPath;
+        string? exe = PackageContext.LaunchPath();
         if (string.IsNullOrEmpty(exe)) return;
 
         var list = new JumpList { ShowFrequentCategory = false, ShowRecentCategory = false };

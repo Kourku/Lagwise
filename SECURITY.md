@@ -29,8 +29,8 @@ This section is about Lagwise itself: what someone could do to you through it, a
 
 - It never asks for administrator rights. It runs as you, and Windows limits it to what you can do yourself.
 - It never captures or reads your traffic. It sees which programs have connections open (as Task Manager does), not what they send.
-- It has no telemetry, no analytics, no account and no automatic updates. Nothing is uploaded, ever: not settings, not recordings, not reports.
-- It never changes a setting of Windows, your firewall or your router. The Security check only reads. The one entry Lagwise writes outside its own folder is its startup entry (`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, value `Lagwise`), when you switch "Start Lagwise when I sign in to Windows" on or off; switching it on there also lifts an "off" you set for Lagwise in Task Manager. A portable copy that was moved points its own existing entry at its new place. Uninstalling removes the entry.
+- It has no telemetry, no analytics, no account and no updater of its own (the Microsoft Store edition is updated by the Store, as every Store app is). Nothing is uploaded, ever: not settings, not recordings, not reports.
+- It never changes a setting of Windows, your firewall or your router. The Security check only reads. The one entry Lagwise writes outside its own folder is its startup entry (`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, value `Lagwise`), when you switch "Start Lagwise when I sign in to Windows" on or off; switching it on there also lifts an "off" you set for Lagwise in Task Manager. A portable copy that was moved points its own existing entry at its new place. Uninstalling removes the entry. The Microsoft Store edition writes no registry entry: its startup switch is the package's startup task, which Windows lists under Settings > Apps > Startup.
 - It never solves a CAPTCHA or bot check, and never uses an API that requires an account or key.
 
 ## What Lagwise sends, and when

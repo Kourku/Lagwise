@@ -65,6 +65,8 @@ public partial class App : System.Windows.Application
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         // NetPulse's startup entry becomes Lagwise's, and a moved portable copy keeps starting with Windows
         // (only the everyday copy, never a test run with its own data folder)
+        // the Store edition starts at sign-in through its manifest's startup task, not through the Run key
+        if (PackageContext.IsPackaged) Host.WindowsIntegration?.UseStartupTask(new StartupTaskBackend());
         if (ownData)
         {
             Host.WindowsIntegration?.MigrateStartupEntry(LegacyNetPulse.OldName);

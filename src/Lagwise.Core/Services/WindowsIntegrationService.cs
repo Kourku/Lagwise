@@ -22,6 +22,7 @@ public class WindowsIntegrationService
     private readonly string _runKey;
     private readonly string _approvedKey;
     private readonly Func<string?> _exePath;
+    private IStartupTaskBackend? _startupTask;
 
     /// <param name="runKey">Override for tests (a scratch key under HKEY_CURRENT_USER).</param>
     /// <param name="approvedKey">Override for tests.</param>
@@ -33,12 +34,23 @@ public class WindowsIntegrationService
         _exePath = exePath ?? (() => Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName);
     }
 
+    /// <summary>
+    /// The Microsoft Store edition starts at sign-in through a startup task declared in its manifest, not through the Run key.
+    /// Once a backend is set, it answers every question about starting with Windows.
+    /// </summary>
+    public void UseStartupTask(IStartupTaskBackend backend) => _startupTask = backend;
+
+    /// <summary>True when "start with Windows" is a packaged app's startup task (so only the user can switch it back on after turning it off).</summary>
+    public bool UsesStartupTask => _startupTask != null;
+
     /// <summary>True only when Windows will actually start Lagwise at sign-in.</summary>
-    public bool IsStartWithWindowsEnabled() => RegisteredCommand() != null && !IsTurnedOffInWindows();
+    public bool IsStartWithWindowsEnabled() =>
+        _startupTask != null ? _startupTask.GetState() == StartupTaskState.Enabled : RegisteredCommand() != null && !IsTurnedOffInWindows();
 
     /// <summary>The entry exists, but the user turned it off in Task Manager or Settings.</summary>
     public bool IsTurnedOffInWindows()
     {
+        if (_startupTask != null) return _startupTask.GetState() is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(_approvedKey, false);
@@ -53,6 +65,11 @@ public class WindowsIntegrationService
 
     public bool SetStartWithWindows(bool enable)
     {
+        if (_startupTask != null)
+        {
+            if (!enable) { _startupTask.Disable(); return true; }
+            return _startupTask.Enable() == StartupTaskState.Enabled;
+        }
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(_runKey, true);
@@ -101,6 +118,7 @@ public class WindowsIntegrationService
     /// </summary>
     public bool RepairStartupEntry()
     {
+        if (_startupTask != null) return false; // Windows moves a packaged app's startup task along with the app
         string? command = RegisteredCommand();
         string? exePath = _exePath();
         if (command == null || string.IsNullOrEmpty(exePath) || !File.Exists(exePath)) return false;
@@ -125,6 +143,7 @@ public class WindowsIntegrationService
     /// </summary>
     public bool MigrateStartupEntry(string legacyName)
     {
+        if (_startupTask != null) return false; // the Store edition never had a NetPulse Run entry to take over
         try
         {
             using var run = Registry.CurrentUser.OpenSubKey(_runKey, true);

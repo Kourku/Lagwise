@@ -72,9 +72,10 @@ public sealed class SettingsViewModel : ViewModelBase
     public string StartupNote { get => _startupNote; private set { if (SetProperty(ref _startupNote, value)) OnPropertyChanged(nameof(HasStartupNote)); } }
     public bool HasStartupNote => StartupNote.Length > 0;
 
-    private void RefreshStartupNote() => StartupNote = _host.WindowsIntegration?.IsTurnedOffInWindows() == true
-        ? "Turned off in Windows' list of startup apps (Task Manager > Startup apps). Switch it on here and save to start Lagwise again."
-        : "";
+    private void RefreshStartupNote() => StartupNote = _host.WindowsIntegration?.IsTurnedOffInWindows() != true ? ""
+        : _host.WindowsIntegration.UsesStartupTask
+            ? "Turned off in Windows' list of startup apps. Windows only lets you switch it back on yourself: Settings > Apps > Startup, then Lagwise."
+            : "Turned off in Windows' list of startup apps (Task Manager > Startup apps). Switch it on here and save to start Lagwise again.";
 
     public SettingsViewModel(LagwiseHost host)
     {

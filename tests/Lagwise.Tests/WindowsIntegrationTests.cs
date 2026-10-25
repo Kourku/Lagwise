@@ -450,4 +450,91 @@ public class WindowsIntegrationTests
     [InlineData(null, "")]
     public void TheHistoryList_ShowsTheVerdictInAFewWords(string? headline, string label) =>
         Assert.Equal(label, SessionVerdict.ShortLabel(headline));
+
+    // ---- Microsoft Store edition
+
+    private sealed class FakeStartupTask : IStartupTaskBackend
+    {
+        public StartupTaskState State = StartupTaskState.Disabled;
+        public StartupTaskState GetState() => State;
+        public StartupTaskState Enable() { if (State == StartupTaskState.Disabled) State = StartupTaskState.Enabled; return State; }
+        public void Disable() { if (State == StartupTaskState.Enabled) State = StartupTaskState.Disabled; }
+    }
+
+    private static (WindowsIntegrationService Service, FakeStartupTask Task, string Run) PackagedService()
+    {
+        string run = @"Software\LagwiseTests\Run-" + Guid.NewGuid().ToString("N");
+        var task = new FakeStartupTask();
+        var service = new WindowsIntegrationService(run, run + "-approved", () => null);
+        service.UseStartupTask(task);
+        return (service, task, run);
+    }
+
+    [Fact]
+    public void Packaged_StartWithWindows_UsesTheStartupTask_NotTheRunKey()
+    {
+        var (service, task, run) = PackagedService();
+        try
+        {
+            Assert.False(service.IsStartWithWindowsEnabled());
+            Assert.True(service.SetStartWithWindows(true));
+            Assert.Equal(StartupTaskState.Enabled, task.State);
+            Assert.True(service.IsStartWithWindowsEnabled());
+            Assert.Null(Registry.CurrentUser.OpenSubKey(run));   // nothing written to the registry
+            Assert.True(service.SetStartWithWindows(false));
+            Assert.False(service.IsStartWithWindowsEnabled());
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(run, false); }
+    }
+
+    [Theory]
+    [InlineData(StartupTaskState.DisabledByUser)]
+    [InlineData(StartupTaskState.DisabledByPolicy)]
+    public void Packaged_ASwitchOffByTheUserOrPolicy_IsReportedAndCannotBeOverridden(StartupTaskState state)
+    {
+        var (service, task, run) = PackagedService();
+        try
+        {
+            task.State = state;
+            Assert.True(service.IsTurnedOffInWindows());
+            Assert.False(service.IsStartWithWindowsEnabled());
+            Assert.False(service.SetStartWithWindows(true));     // only the user can switch it back on
+            Assert.Equal(state, task.State);
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(run, false); }
+    }
+
+    [Fact]
+    public void Packaged_NeverTouchesRunEntriesOfOtherEditions()
+    {
+        var (service, _, run) = PackagedService();
+        try
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(run)) key.SetValue("NetPulse", @"""C:\old\NetPulse.exe"" --minimized");
+            Assert.False(service.MigrateStartupEntry("NetPulse"));
+            Assert.False(service.RepairStartupEntry());
+            using var after = Registry.CurrentUser.OpenSubKey(run);
+            Assert.NotNull(after!.GetValue("NetPulse"));
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(run, false); }
+    }
+
+    [Fact]
+    public void LaunchPath_IsTheRunningProgram_UnlessPackaged_ThenTheAlias()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "lagwise-alias-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            Assert.Equal(@"C:\App\Lagwise.exe", PackageContext.LaunchPath(@"C:\App\Lagwise.exe", packaged: false, aliasFolder: folder));
+            // packaged, but the alias is not there yet: fall back to the running program rather than a path that does not exist
+            Assert.Equal(@"C:\Pkg\Lagwise.exe", PackageContext.LaunchPath(@"C:\Pkg\Lagwise.exe", packaged: true, aliasFolder: folder));
+            File.WriteAllText(Path.Combine(folder, "Lagwise.exe"), "");
+            Assert.Equal(Path.Combine(folder, "Lagwise.exe"), PackageContext.LaunchPath(@"C:\Pkg\Lagwise.exe", packaged: true, aliasFolder: folder));
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void ATestRun_IsNotPackaged() => Assert.False(PackageContext.IsPackaged);
 }
