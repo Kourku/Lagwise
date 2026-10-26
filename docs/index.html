@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lagwise · Was it my connection?</title>
+  <meta name="description" content="Lagwise records your internet while you play any game and tells you whether lag came from your Wi-Fi or router, your provider, this PC or further away. Free for Windows. No account, no tracking.">
+  <meta name="theme-color" content="#0A0D13">
+  <meta property="og:title" content="Lagwise · Was it my connection?">
+  <meta property="og:description" content="Find out whether lag comes from your Wi-Fi or router, your provider, this PC or beyond. Free for Windows, private by design.">
+  <meta property="og:image" content="https://kourku.github.io/Lagwise/assets/shots/verdict.webp">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/site.css?v=2">
+  <!-- the visitor's own theme choice, applied before the page draws so it never flashes -->
+  <script>try{var t=localStorage.getItem('lagwise-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/logo.png" alt="" width="30" height="30">Lagwise</a>
+    <nav class="nav" aria-label="Main">
+      <a class="hide-sm" href="#how">How it works</a>
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#privacy">Privacy</a>
+      <a class="hide-sm" href="https://github.com/Kourku/Lagwise">GitHub</a>
+      <button class="theme-toggle" type="button" aria-label="Switch theme">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <a class="btn btn-primary btn-sm" href="https://github.com/Kourku/Lagwise/releases/latest">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- hero -->
+  <section class="hero">
+    <svg class="pulse-bg" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="pulseGrad" x1="0" x2="1"><stop offset="0" stop-color="#5B7CFA" stop-opacity="0"/><stop offset=".35" stop-color="#5B7CFA"/><stop offset=".7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/></linearGradient></defs>
+      <path d="M0 120 H420 L450 120 L470 60 L500 190 L530 30 L560 160 L585 120 H760 L785 120 L800 95 L815 140 L830 120 H1440"/>
+    </svg>
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>Free for Windows 10 &amp; 11</span>
+        <h1>Was it <span class="grad">my connection?</span></h1>
+        <p class="lead">Lagwise watches every step between your PC and the internet while you play, then tells you in plain words where the lag came from: your Wi-Fi or router, your provider, this PC, or further away.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/Kourku/Lagwise/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+        <div class="fine"><span>No account</span><span>No tracking</span><span>No admin rights</span><span>Open source</span></div>
+      </div>
+      <div class="window" data-tilt>
+        <div class="window-bar"><i></i><i></i><i></i><b>Lagwise · Recording verdict</b></div>
+        <img src="assets/shots/verdict.webp" width="1600" height="900" alt="A Lagwise recording verdict: lag came from beyond your router, with cards for Wi-Fi and router, provider and internet, and this PC">
+      </div>
+    </div>
+  </section>
+
+  <!-- how it works -->
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head" data-reveal>
+        <span class="kicker">How it works</span>
+        <h2>One ping number can't tell you where lag starts</h2>
+        <p>Lagwise measures the whole chain at once, every second, and compares each step with what's normal for your connection.</p>
+      </div>
+      <div class="chain">
+        <div class="link" data-step="pc">
+          <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+          <h3>This PC</h3>
+          <p>Processor load and its own downloads while you play.</p>
+        </div>
+        <div class="link" data-step="router">
+          <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13a10 10 0 0 1 14 0"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 9.5a15 15 0 0 1 20 0"/><circle cx="12" cy="20" r="1"/></svg></div>
+          <h3>Wi-Fi &amp; router</h3>
+          <p>How fast and steady your router answers, Wi-Fi signal, repeaters.</p>
+        </div>
+        <div class="link" data-step="provider">
+          <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2"/></svg></div>
+          <h3>Your provider</h3>
+          <p>Several independent internet servers, checked side by side.</p>
+        </div>
+        <div class="link" data-step="internet">
+          <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+          <h3>The internet</h3>
+          <p>Name lookups, routes and the wider path beyond your provider.</p>
+        </div>
+      </div>
+      <div class="card demo" id="demo" data-reveal>
+        <div class="demo-head">
+          <div class="demo-legend"><span><i style="background:var(--green)"></i>Your router</span><span><i style="background:var(--accent)"></i>Internet servers</span></div>
+          <span class="demo-tag">Demo · simulated</span>
+        </div>
+        <svg class="chart" viewBox="0 0 600 160" role="img" aria-label="Simulated ping of the router and of internet servers over the last minute">
+          <g class="grid"><line x1="0" y1="152" x2="600" y2="152"/><line x1="0" y1="102" x2="600" y2="102"/><line x1="0" y1="52" x2="600" y2="52"/><text x="4" y="98">100 ms</text><text x="4" y="48">200 ms</text></g>
+          <path class="l-net"/><path class="l-router"/>
+        </svg>
+        <div class="demo-foot">
+          <span class="demo-verdict pill g" aria-live="polite"><i></i>Your connection was steady</span>
+          <span class="demo-cpu">Processor <b>18%</b></span>
+        </div>
+      </div>
+      <div class="verdicts" aria-label="Pick a verdict to see it in the demo">
+        <button type="button" class="pill g" data-scn="steady"><i></i>Your connection was steady</button>
+        <button type="button" class="pill a" data-scn="wifi"><i></i>Lag came from your Wi-Fi or router</button>
+        <button type="button" class="pill a" data-scn="beyond"><i></i>Lag came from beyond your router</button>
+        <button type="button" class="pill b" data-scn="pc"><i></i>This PC was busy</button>
+        <button type="button" class="pill r" data-scn="drop"><i></i>The connection dropped</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- features -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head" data-reveal>
+        <span class="kicker">Features</span>
+        <h2>Everything you need to settle the lag argument</h2>
+        <p>Simple answers in Beginner mode, every measurement in Advanced mode.</p>
+      </div>
+      <div class="features">
+        <div class="card" data-reveal data-reveal-delay="1">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="12" rx="4"/><path d="M7 11v4M5 13h4"/><circle cx="16" cy="12" r="1"/><circle cx="18" cy="14" r="1"/></svg></div>
+          <h3>Works with any game</h3>
+          <p>Finds the games Windows already knows about, records while one runs and saves when it closes. Press Ctrl+Shift+F9 when it lags.</p>
+        </div>
+        <div class="card" data-reveal data-reveal-delay="2">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+          <h3>A verdict, not a graph to decode</h3>
+          <p>After each game: where the trouble was, what happened at every moment you marked, and what to try next.</p>
+        </div>
+        <div class="card" data-reveal data-reveal-delay="3">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></div>
+          <h3>Speed &amp; lag under load</h3>
+          <p>A speed test plus a bufferbloat test that shows whether downloads at home make your game lag, graded A+ to F.</p>
+        </div>
+        <div class="card" data-reveal data-reveal-delay="1">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/></svg></div>
+          <h3>Route trace</h3>
+          <p>Follow your traffic hop by hop to see where delay starts, with the network behind each hop.</p>
+        </div>
+        <div class="card" data-reveal data-reveal-delay="2">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Site &amp; security checks</h3>
+          <p>Is a site down or blocked on the way? Is your DNS honest, your Wi-Fi protected, your firewall on? Read-only.</p>
+        </div>
+        <div class="card" data-reveal data-reveal-delay="3">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+          <h3>Made for Windows</h3>
+          <p>Mini overlay over your game, taskbar jump list and status badge, tray icon, sleep and wake handled, sharp on every screen.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- showcase -->
+  <section>
+    <div class="wrap">
+      <div class="showcase" data-reveal>
+        <div class="shot window">
+          <div class="window-bar"><i></i><i></i><i></i><b>Overview</b></div>
+          <img src="assets/shots/overview.webp" width="1650" height="1075" loading="lazy" alt="The Lagwise Overview: connection healthy and steady, reference ping, variation, loss and router tiles, and a Ready to play checklist">
+        </div>
+        <div>
+          <span class="kicker">Before you play</span>
+          <h3>Ready to play?</h3>
+          <p>A glance tells you whether anything on your side looks wrong right now, judged against your own normal rather than fixed limits.</p>
+          <ul>
+            <li>Router, loss, stability and name lookups, each with a reason</li>
+            <li>Copy a short summary to paste into a chat or support ticket</li>
+            <li>Desktop alerts when the connection drops and comes back</li>
+          </ul>
+        </div>
+      </div>
+      <div class="showcase flip" data-reveal>
+        <div class="shot window">
+          <div class="window-bar"><i></i><i></i><i></i><b>History &amp; reports</b></div>
+          <img src="assets/shots/graph.webp" width="1600" height="900" loading="lazy" alt="A recording's advice and latency graph, with the moments marked as laggy shown as yellow markers">
+        </div>
+        <div>
+          <span class="kicker">After you play</span>
+          <h3>Proof you can show your provider</h3>
+          <p>Every recording keeps its graph, the moments you marked and a verdict. Export it as a report when you need to call your provider.</p>
+          <ul>
+            <li>See which hours of the day your connection is worst</li>
+            <li>Speed and bufferbloat results kept over time</li>
+            <li>Reports hide your home addresses unless you choose otherwise</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Microsoft Store edition: prepared, hidden until the Store release. To show it, remove the "hidden" attribute.
+       Keep the wording "same app, supports development": every feature is in both editions. -->
+  <section id="store" hidden>
+    <div class="wrap">
+      <div class="section-head" data-reveal>
+        <span class="kicker">Two ways to get it</span>
+        <h2>The same Lagwise, wherever you get it</h2>
+        <p>Every feature is in both. The Microsoft Store edition adds convenience, and buying it supports Lagwise's development.</p>
+      </div>
+      <div class="store-grid">
+        <div class="card" data-reveal data-reveal-delay="1">
+          <h3>Free download <span class="price">Free</span></h3>
+          <p>The portable app from GitHub, open source.</p>
+          <ul><li>Unzip and run, no install</li><li>Update by downloading the new version</li><li>Not code-signed: Windows shows a warning the first time</li></ul>
+          <a class="btn btn-ghost" href="https://github.com/Kourku/Lagwise/releases/latest">Download from GitHub</a>
+        </div>
+        <div class="card" data-reveal data-reveal-delay="2">
+          <h3>Microsoft Store <span class="price">Supports development</span></h3>
+          <p>The very same app, installed and kept up to date by Windows.</p>
+          <ul><li>Automatic updates</li><li>Signed by Microsoft: no warning</li><li>One-click install and uninstall</li></ul>
+          <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NXVB7ZTMR9Z">Get it from Microsoft Store</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- privacy -->
+  <section id="privacy" class="band">
+    <div class="wrap">
+      <div class="section-head" data-reveal>
+        <span class="kicker">Private by design</span>
+        <h2>Nothing you measure ever leaves your PC</h2>
+        <p>Lagwise has no account and no servers of its own. It talks only to your router and the public test servers you can see in Settings.</p>
+      </div>
+      <div class="privacy-grid">
+        <div class="card stat" data-reveal data-reveal-delay="1"><strong data-count-from="100" data-count-to="0">0</strong><span>bytes of telemetry or analytics</span></div>
+        <div class="card stat" data-reveal data-reveal-delay="2"><strong data-count-from="9" data-count-to="0">0</strong><span>accounts, sign-ins or ads</span></div>
+        <div class="card stat" data-reveal data-reveal-delay="3"><strong data-count-from="0" data-count-to="100" data-suffix="%">100%</strong><span>of your recordings stay on this PC</span></div>
+        <div class="card stat" data-reveal data-reveal-delay="4"><strong>MIT</strong><span>open source: read every line</span></div>
+      </div>
+      <p style="text-align:center;margin:32px 0 0"><a href="PRIVACY">Read the privacy policy</a> · <a href="https://github.com/Kourku/Lagwise/blob/main/SECURITY.md">What Lagwise sends, and to whom</a></p>
+    </div>
+  </section>
+
+  <!-- honesty -->
+  <section>
+    <div class="wrap">
+      <div class="note" data-reveal>
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <div>
+          <p><strong>What Lagwise doesn't claim:</strong> it doesn't measure your game's own server.</p>
+          <p>Windows doesn't show where a game sends its match traffic without administrator rights, so Lagwise measures your connection to the internet and says so, instead of showing a made-up "server ping".</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head" data-reveal>
+        <span class="kicker">Questions</span>
+        <h2>Good to know</h2>
+      </div>
+      <div class="faq" data-reveal>
+        <details>
+          <summary>Is Lagwise free?</summary>
+          <p>Yes. The download on GitHub is free and open source under the MIT licence.</p>
+        </details>
+        <details>
+          <summary>Do I need to install anything?</summary>
+          <p>No. Unzip and run Lagwise.exe on Windows 10 or 11 (64-bit). It carries everything it needs, never asks for administrator rights and keeps its data in your own Windows profile.</p>
+        </details>
+        <details>
+          <summary>Windows says "Windows protected your PC". Is it safe?</summary>
+          <p>That warning appears for programs that aren't code-signed yet. Choose More info, then Run anyway. You can check the download against the SHA-256 checksum on the release page, and the full source code is public.</p>
+        </details>
+        <details>
+          <summary>Does it work on Wi-Fi, with repeaters or a mesh?</summary>
+          <p>Yes. Lagwise reads your Wi-Fi details from Windows and judges the router step with stricter or looser limits for cable and Wi-Fi. A repeater or mesh unit counts as part of "Wi-Fi and router".</p>
+        </details>
+        <details>
+          <summary>Does it work with a VPN?</summary>
+          <p>Yes. Lagwise notices when your traffic goes through a VPN or tunnel and names it in the verdict, so "beyond your router" also includes the VPN.</p>
+        </details>
+        <details>
+          <summary>Does it slow down my game?</summary>
+          <p>No. Its test messages are tiny, about one a second to each server. Only the speed and bufferbloat tests use real bandwidth, and only when you start them.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- final CTA -->
+  <section class="final">
+    <div class="wrap">
+      <div class="box" data-reveal>
+        <h2>Next time it lags, you'll know why</h2>
+        <p>Free for Windows 10 and 11. Your data stays yours.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/Kourku/Lagwise/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download Lagwise
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/Kourku/Lagwise">View the source</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>© 2026 Fraxis · Lagwise (formerly NetPulse) · MIT licence</span>
+    <nav aria-label="Footer">
+      <a href="PRIVACY">Privacy</a>
+      <a href="https://github.com/Kourku/Lagwise/blob/main/SECURITY.md">Security</a>
+      <a href="METHODOLOGY">How it measures</a>
+      <a href="GAME_MONITOR">Game Monitor</a>
+      <a href="https://github.com/Kourku/Lagwise/issues">Support</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="assets/site.js?v=2" defer></script>
+</body>
+</html>
