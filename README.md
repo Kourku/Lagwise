@@ -14,6 +14,8 @@
 
 **[Download the latest portable build from the Releases page](../../releases/latest)**: extract and run, no install or admin rights needed.
 
+🌐 **Website: [kourku.github.io/Lagwise](https://kourku.github.io/Lagwise/)** · [Privacy policy](https://kourku.github.io/Lagwise/PRIVACY)
+
 ---
 
 ## 📖 Table of Contents
@@ -194,6 +196,7 @@ dotnet test tests/Lagwise.Tests/Lagwise.Tests.csproj
 
 ## 📚 Documentation Links
 
+- [Website](https://kourku.github.io/Lagwise/) and [privacy policy](https://kourku.github.io/Lagwise/PRIVACY)
 - [Game Monitor: what it does and how it is verified](docs/GAME_MONITOR.md)
 - [How every build is verified](docs/VERIFICATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
