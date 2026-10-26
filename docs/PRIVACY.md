@@ -1,6 +1,6 @@
 # Lagwise privacy policy
 
-*Applies to Lagwise 1.0 and later, in every edition (portable download, installer, Microsoft Store). Last updated 25 October 2026.*
+*Applies to Lagwise 1.0 and later, in every edition (downloaded, installed from the app, or from the Microsoft Store). Last updated 27 October 2026.*
 
 **Short version: Lagwise does not collect any information about you. Nothing it measures, records or saves leaves your PC.**
 

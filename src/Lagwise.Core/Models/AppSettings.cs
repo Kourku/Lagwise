@@ -48,6 +48,8 @@ public class AppSettings
     public bool IsBeginnerMode { get; set; } = true;
     /// <summary>False until the user has answered the "how much detail?" welcome card once.</summary>
     public bool ModeChosen { get; set; } = false;
+    /// <summary>The one-time "Install Lagwise?" offer on the Overview was answered (installed or "Not now").</summary>
+    public bool InstallOfferDismissed { get; set; } = false;
     /// <summary>What the Game Monitor watches: "*" (all games, also when unset) or one game's id.</summary>
     public string? LastGameId { get; set; }
 

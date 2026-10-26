@@ -339,6 +339,32 @@ public class MainViewModel : ViewModelBase
         _host.Settings.ModeChosen = true;
         if (IsBeginnerMode == !advanced) { _host.SaveSettings(out _); OnPropertyChanged(nameof(ShowModeChooser)); }
         else IsBeginnerMode = !advanced;
+        OnPropertyChanged(nameof(ShowInstallOffer));
+    });
+
+    /// <summary>
+    /// The one-time "Install Lagwise?" card on the Overview, for a downloaded copy when no Lagwise is installed (and not
+    /// on top of the welcome card). Settings > Installation offers the same at any time.
+    /// </summary>
+    public bool ShowInstallOffer => _host.Settings.ModeChosen && !_host.Settings.InstallOfferDismissed && Installation.Describe().Kind == Installation.Kind.Portable;
+    public string InstallOfferText =>
+        "This copy runs from " + (Path.GetDirectoryName(Environment.ProcessPath) ?? "its download folder") + ". Installing adds Lagwise to the Start menu and to Settings > Apps, for you only, without administrator rights. Your settings and recordings stay as they are.";
+    private string _installOfferError = "";
+    public string InstallOfferError { get => _installOfferError; private set { if (SetProperty(ref _installOfferError, value)) OnPropertyChanged(nameof(HasInstallOfferError)); } }
+    public bool HasInstallOfferError => InstallOfferError.Length > 0;
+    private RelayCommand? _installNow, _installLater;
+    public RelayCommand InstallNowCommand => _installNow ??= new RelayCommand(() =>
+    {
+        _host.Settings.InstallOfferDismissed = true;
+        _host.SaveSettings(out _);
+        InstallOfferError = Installation.InstallFromWindow(desktopShortcut: false) ?? "";
+        OnPropertyChanged(nameof(ShowInstallOffer));
+    });
+    public RelayCommand InstallLaterCommand => _installLater ??= new RelayCommand(() =>
+    {
+        _host.Settings.InstallOfferDismissed = true;
+        _host.SaveSettings(out _);
+        OnPropertyChanged(nameof(ShowInstallOffer));
     });
 
     public bool IsComparingPaths

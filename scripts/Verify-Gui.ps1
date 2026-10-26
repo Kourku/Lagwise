@@ -306,10 +306,10 @@ try {
     Check 'Settings were written to the data folder' ((Test-Path $settingsFile) -and ((Get-Content $settingsFile -Raw) -match 'StandInGame\.exe' -and (Get-Content $settingsFile -Raw) -match '"MonitoringIntervalMs": 2000')) $settingsFile
     Check 'Application still responsive at the end' ((Get-Process -Id $proc.Id).Responding) ''
 
-    # the installer closes a running Lagwise this way: it saves and exits, rather than being killed
+    # an uninstall closes a running Lagwise this way: it saves and exits, rather than being killed
     $bye = Start-Process -FilePath $Exe -ArgumentList '--command', 'exit' -PassThru
     $null = $bye.WaitForExit(10000)
-    Check 'Asked to exit by a second start (as the installer does), Lagwise saves and closes' ($proc.WaitForExit(20000) -and $proc.ExitCode -eq 0) ''
+    Check 'Asked to exit by a second start (as an uninstall does), Lagwise saves and closes' ($proc.WaitForExit(20000) -and $proc.ExitCode -eq 0) ''
 }
 catch {
     Check 'Verification completed without an unexpected error' $false $_.Exception.Message

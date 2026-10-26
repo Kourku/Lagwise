@@ -77,7 +77,7 @@ public partial class MainWindow : Window
             vm.GameMonitor.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(GameMonitorViewModel.IsMonitoring)) UpdateStatusMarks(vm); };
             UpdateStatusMarks(vm);
 
-            // requests from a second start, the taskbar jump list or the installer, including any that came in while starting up
+            // requests from a second start, the taskbar jump list or an uninstall, including any that came in while starting up
             App.CommandReceived += HandleCommand;
             foreach (var command in App.TakePendingCommands()) HandleCommand(command);
 

@@ -1,7 +1,7 @@
 # How every Lagwise build is verified
 
 `build.ps1` promotes a build to `dist/` only when every step below passes. Its results are written to
-`dist/releases/<version>/build-info.json` (test counts, self-test, GUI check, installer check, bundled .NET runtime,
+`dist/releases/<version>/build-info.json` (test counts, self-test, GUI check, install check, bundled .NET runtime,
 checksums).
 
 1. **Release build, warnings as errors.**
@@ -43,9 +43,13 @@ checksums).
    - every page opened once without an interface error;
    - a changed setting is applied and written;
    - a second start hands over to the running Lagwise, the jump list's History task switches its page, and being asked
-     to exit (as the installer does) saves and closes it.
-6. **Installer** (with `-VerifyInstaller`): installed into a temporary folder and uninstalled again through UI
-   Automation (7 checks).
+     to exit (as an uninstall does) saves and closes it.
+6. **Install check** (`scripts/Verify-Install.ps1`, headless, skip with `-SkipInstallCheck`): the published Lagwise.exe
+   installs itself with `--install --install-dir <temporary folder> --no-shortcuts`, so the real Start menu and
+   installation folder are never touched; the Settings > Apps entry is checked (version, uninstall command); the
+   installed copy runs its self-test; `--uninstall --quiet` removes the entry, the program and its folder, and the
+   downloaded copy is left as it was (9 checks). It skips itself when a real Lagwise installation is registered on
+   the build PC, since it would replace it.
 
 Nothing here needs a real game, a real match or a person at the PC. It does need an interactive desktop for the GUI
 check, so the mouse and keyboard should be left alone while it runs.

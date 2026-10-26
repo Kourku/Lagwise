@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)]()
 [![Runtime](https://img.shields.io/badge/.NET-10.0%20(Self--Contained)-512BD4.svg)]()
-[![Tests](https://img.shields.io/badge/tests-538%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-559%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Privacy](https://img.shields.io/badge/telemetry-0%25%20(100%25%20Local)-success.svg)]()
 
@@ -151,24 +151,15 @@ Bufferbloat is high latency caused by excessive buffering in consumer home route
 
 The application is completely self-contained. **No .NET SDK or runtime installation is required.**
 
-### 1. Portable Version (Zero Install)
 1. Download `Lagwise-<version>-Portable-win-x64.zip` from the [latest release](../../releases/latest). Each release lists its SHA-256 checksum.
-2. Extract the archive anywhere on your machine.
-3. Launch `Lagwise.exe`.
+2. Extract it anywhere and run `Lagwise.exe`. That's it: it runs as is, without installing, and needs no administrator rights.
+3. **Want it installed?** Lagwise offers it once on the Overview, and any time in **Settings > Installation**. It copies itself to `%LocalAppData%\Programs\Lagwise` (for you only, no administrator rights), adds a Start menu entry (and a desktop shortcut if you want) and appears in Windows **Settings > Apps**, where **Uninstall** removes it again. Your settings and recordings are the same either way and are kept when you uninstall.
 
-Building it yourself: run `build.ps1`, then use `dist/Lagwise-<version>-Portable-win-x64.zip` (the verified portable build is also unpacked in `dist/portable/`; every verified build is kept under `dist/releases/<version>/` with its release notes and `build-info.json`).
+A newer downloaded copy updates the installed one from the same place. From a command line: `Lagwise.exe --install [--desktop-shortcut]` and `Lagwise.exe --uninstall`.
 
-### 2. Standalone Windows Installer (`Lagwise-Setup.exe`)
-1. Build it with `build.ps1` (the installer is not attached to the GitHub releases), then run `dist/releases/<version>/installer/Lagwise-Setup.exe`.
-2. Click **Install**.
-3. Lagwise installs to `%LocalAppData%\Programs\Lagwise` without requiring administrator privileges, creates Desktop and Start Menu shortcuts, and registers with Windows Add/Remove Programs.
-4. To uninstall, run `Lagwise-Setup.exe --uninstall` or use Windows **Installed Apps**.
+Windows may say "Windows protected your PC" the first time, because Lagwise is not code-signed yet: choose *More info*, then *Run anyway*.
 
-### 3. PowerShell One-Click Setup
-Right-click `installer/Setup-Lagwise.ps1` and select **Run with PowerShell**, or execute:
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\installer\Setup-Lagwise.ps1 -Launch
-```
+Building it yourself: run `build.ps1`, then use `dist/Lagwise-<version>-Portable-win-x64.zip` (the verified build is also unpacked in `dist/portable/`; every verified build is kept under `dist/releases/<version>/` with its release notes and `build-info.json`).
 
 ---
 

@@ -23,7 +23,7 @@ public partial class App : System.Windows.Application
     /// <summary>Set while Windows signs out, restarts or shuts down: the window then closes for real instead of hiding in the tray.</summary>
     public static bool IsSessionEnding { get; private set; }
 
-    /// <summary>Raised on the UI thread for each request a later start (a second double-click, the taskbar jump list, the installer) handed over.</summary>
+    /// <summary>Raised on the UI thread for each request a later start (a second double-click, the taskbar jump list, an uninstall) handed over.</summary>
     public static event Action<string>? CommandReceived;
 
     /// <summary>Requests that arrived before the main window was ready to act on them.</summary>
@@ -45,6 +45,20 @@ public partial class App : System.Windows.Application
             Environment.Exit(RunSelfTest(e.Args));
             return;
         }
+
+        // Settings > Apps' Uninstall, and a headless install (used by the build's verification); no window either way
+        if (e.Args.Contains("--uninstall", StringComparer.OrdinalIgnoreCase))
+        {
+            Environment.Exit(Installation.RunUninstall(e.Args));
+            return;
+        }
+        if (e.Args.Contains("--install", StringComparer.OrdinalIgnoreCase))
+        {
+            Environment.Exit(Installation.RunInstall(e.Args));
+            return;
+        }
+        // just installed by a portable copy that is now closing: wait for it rather than hand this start back to it
+        Installation.WaitForInstallingCopy(e.Args);
 
         // a second start hands its request to the copy already running for this data folder, then closes
         if (!ClaimInstance(SettingsService.DefaultDirectory(), e.Args))

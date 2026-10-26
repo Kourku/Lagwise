@@ -90,6 +90,13 @@ public sealed class SettingsViewModel : ViewModelBase
         RemoveTargetCommand = new RelayCommand(p => RemoveTarget(p as TargetEditRow));
         ResetTargetsCommand = new RelayCommand(ResetTargets);
         OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
+        InstallCommand = new RelayCommand(() => { InstallMessage = Installation.InstallFromWindow(InstallDesktopShortcut) ?? ""; RefreshInstallation(); });
+        OpenAppsSettingsCommand = new RelayCommand(() =>
+        {
+            try { SafeOpen.AppsSettings(); }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { InstallMessage = "Settings could not be opened: " + ex.Message; }
+        });
+        RefreshInstallation();
 
         Load(_draft);
     }
@@ -131,6 +138,39 @@ public sealed class SettingsViewModel : ViewModelBase
     public RelayCommand RemoveTargetCommand { get; }
     public RelayCommand ResetTargetsCommand { get; }
     public RelayCommand OpenDataFolderCommand { get; }
+
+    // ---- Installation (Settings > Installation): a downloaded copy installs itself for this user ----
+    public RelayCommand InstallCommand { get; }
+    public RelayCommand OpenAppsSettingsCommand { get; }
+    private bool _showInstallCard, _showInstallButton, _showAppsButton, _installDesktopShortcut;
+    private string _installText = "", _installButtonText = "Install Lagwise", _installMessage = "";
+    public bool ShowInstallCard { get => _showInstallCard; private set => SetProperty(ref _showInstallCard, value); }
+    public bool ShowInstallButton { get => _showInstallButton; private set => SetProperty(ref _showInstallButton, value); }
+    public bool ShowAppsButton { get => _showAppsButton; private set => SetProperty(ref _showAppsButton, value); }
+    public string InstallText { get => _installText; private set => SetProperty(ref _installText, value); }
+    public string InstallButtonText { get => _installButtonText; private set => SetProperty(ref _installButtonText, value); }
+    /// <summary>Also put a shortcut on the desktop (the Start menu entry is always made).</summary>
+    public bool InstallDesktopShortcut { get => _installDesktopShortcut; set => SetProperty(ref _installDesktopShortcut, value); }
+    public string InstallMessage { get => _installMessage; private set { if (SetProperty(ref _installMessage, value)) OnPropertyChanged(nameof(HasInstallMessage)); } }
+    public bool HasInstallMessage => InstallMessage.Length > 0;
+
+    private void RefreshInstallation()
+    {
+        var (kind, dir, version) = Installation.Describe();
+        string here = Path.GetDirectoryName(Environment.ProcessPath) ?? "";
+        string installed = version != null ? "Lagwise " + version.ToString(3) : "Lagwise";
+        ShowInstallCard = kind != Installation.Kind.NotOffered;
+        ShowInstallButton = kind is Installation.Kind.Portable or Installation.Kind.PortableNewer;
+        ShowAppsButton = kind is Installation.Kind.Installed or Installation.Kind.PortableBesideInstalled;
+        InstallButtonText = kind == Installation.Kind.PortableNewer ? "Update the installed Lagwise" : "Install Lagwise";
+        InstallText = kind switch
+        {
+            Installation.Kind.Installed => "Installed for you in " + dir + ". It is in the Start menu and in Settings > Apps, where you can uninstall it; uninstalling keeps your settings and recordings.",
+            Installation.Kind.PortableNewer => installed + " is installed in " + dir + ", and this downloaded copy is newer. Update it: the installed Lagwise is replaced by this version and opens in its place.",
+            Installation.Kind.PortableBesideInstalled => installed + " is installed in " + dir + " (the one in the Start menu). This is a separate downloaded copy, running from " + here + "; you can delete it.",
+            _ => "This copy runs from " + here + " without being installed. Install it for you only: Lagwise is copied to " + SelfInstaller.DefaultInstallDirectory() + ", added to the Start menu and listed in Settings > Apps. No administrator rights; your settings and recordings stay as they are."
+        };
+    }
 
     public string DataFolder => _host.DataDirectory;
     public string SettingsFile => _host.SettingsService.FilePath;

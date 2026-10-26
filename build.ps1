@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds, verifies and packages Lagwise. Only a build that passes every check is promoted to dist/.
 .DESCRIPTION
@@ -8,16 +8,16 @@
        latest .NET 10 runtime patch named by Microsoft's release feed (a bundled runtime is not patched by Windows Update).
     4. Smoke-tests the PUBLISHED exe: headless self-test, then (unless -SkipGuiCheck) the Game Monitor workflow through UI Automation.
        Both run against an isolated data folder, never the user's real %LOCALAPPDATA%\Lagwise.
-    5. Only then: writes dist/releases/<version>/ (zip, release notes, build-info.json, installer) and swaps dist/portable.
+    5. Checks the built-in install: the published exe installs itself into a temporary folder, runs, and uninstalls.
+    6. Only then: writes dist/releases/<version>/ (zip, release notes, build-info.json) and swaps dist/portable.
     If anything fails, dist/portable and dist/releases are left exactly as they were (the last known-good build).
 
     User data (settings, recordings) always lives in %LOCALAPPDATA%\Lagwise, never in dist/ or beside the exe.
 .PARAMETER SkipGuiCheck
     Skip the UI Automation check (needed on machines without an interactive desktop). The headless self-test still runs.
-.PARAMETER SkipInstaller
-    Do not build the Lagwise-Setup.exe installer.
-.PARAMETER VerifyInstaller
-    Additionally install and uninstall the built installer into a temporary folder (UI Automation; no shortcuts are created).
+.PARAMETER SkipInstallCheck
+    Skip the install/uninstall check (it is headless and never touches the real Start menu or installation folder,
+    but it is skipped by itself when a real Lagwise installation is registered on this PC).
 .PARAMETER RuntimeVersion
     The .NET runtime patch to bundle (for example 10.0.13) when Microsoft's release feed cannot be reached. Without it
     the build asks the feed and fails if it cannot, rather than ship an outdated runtime silently.
@@ -25,8 +25,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipGuiCheck,
-    [switch]$SkipInstaller,
-    [switch]$VerifyInstaller,
+    [switch]$SkipInstallCheck,
     [string]$RuntimeVersion
 )
 
@@ -66,7 +65,6 @@ $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $Dist = Join-Path $Root 'dist'
 $Work = Join-Path $Dist "_build\$Version-$Stamp"
 $Portable = Join-Path $Work 'portable'
-$Installer = Join-Path $Work 'installer'
 # scratch output of earlier failed builds is disposable; releases and dist/portable are never touched here
 if (Test-Path (Join-Path $Dist '_build')) { Remove-Item (Join-Path $Dist '_build') -Recurse -Force -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Force -Path $Work, $Portable | Out-Null
@@ -149,31 +147,19 @@ $after = Get-ChildItem $Portable -Recurse | ForEach-Object { "$($_.FullName)|$($
 if (Compare-Object $before $after) { Fail 'running the published exe wrote files next to it (user data must live in %LOCALAPPDATA%\Lagwise)' }
 Ok 'Nothing was written next to the executable'
 
-# ---- 5. installer ----------------------------------------------------------------------------------------------
-$InstallerResult = 'not built'
-if (-not $SkipInstaller) {
-    Step '5/6 Installer (Lagwise-Setup.exe)'
-    New-Item -ItemType Directory -Force -Path "$Installer\payload" | Out-Null
-    Run-Native 'dotnet publish (installer)' {
-        dotnet publish "$Root\src\Lagwise.Installer\Lagwise.Installer.csproj" -c Release -r win-x64 --self-contained `
-            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:LagwiseRuntimeVersion=$RuntimeVersion -nologo -v:q -o $Installer
-    }
-    Copy-Item $exe "$Installer\payload\Lagwise.exe" -Force
-    Copy-Item "$Portable\app.ico" "$Installer\payload\app.ico" -Force
-    Copy-Item "$Root\installer\Setup-Lagwise.ps1" "$Installer\Setup-Lagwise.ps1" -Force
-    if (-not (Test-Path "$Installer\Lagwise-Setup.exe")) { Fail 'Lagwise-Setup.exe was not produced' }
-    $InstallerResult = 'built (not install-tested)'
-    Ok 'Lagwise-Setup.exe built'
-
-    if ($VerifyInstaller) {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Installer.ps1" -Setup "$Installer\Lagwise-Setup.exe" -WorkDir (Join-Path $Work 'installer-test')
-        if ($LASTEXITCODE -ne 0) { Fail 'installer verification failed' }
-        $InstallerResult = 'built; install and uninstall verified'
-        Ok 'Installer install/uninstall verified'
+# ---- 5. built-in install ---------------------------------------------------------------------------------------
+$InstallResult = 'not checked'
+if (-not $SkipInstallCheck) {
+    Step '5/6 Install check (the published exe installs itself, runs, and uninstalls)'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\Verify-Install.ps1" -Exe $exe -WorkDir (Join-Path $Work 'install-test')
+    switch ($LASTEXITCODE) {
+        0 { $InstallResult = 'install, installed self-test and uninstall verified'; Ok 'Install and uninstall verified' }
+        2 { $InstallResult = 'skipped (a real Lagwise installation is registered on the build PC)'; Write-Host '   skipped: a real installation is registered' -ForegroundColor Yellow }
+        default { Fail 'install check failed' }
     }
 }
 else {
-    Step '5/6 Installer skipped (-SkipInstaller)'
+    Step '5/6 Install check skipped (-SkipInstallCheck)'
 }
 
 # ---- 6. promote ------------------------------------------------------------------------------------------------
@@ -194,7 +180,6 @@ $zipName = "Lagwise-$releaseName-Portable-win-x64.zip"
 try {
     New-Item -ItemType Directory -Force -Path $Pending | Out-Null
     New-Zip $Portable (Join-Path $Pending $zipName)
-    if (Test-Path "$Installer\Lagwise-Setup.exe") { Copy-Item $Installer (Join-Path $Pending 'installer') -Recurse -Force }
 
     "# Lagwise $Version`n`nBuilt $((Get-Date).ToString('u')) from commit $commit$(if ($dirty) { ' (with uncommitted changes)' }).`n`n$($section.Groups[1].Value.Trim())`n" |
         Set-Content (Join-Path $Pending 'RELEASE_NOTES.md') -Encoding UTF8
@@ -209,7 +194,7 @@ try {
         tests          = $Tests
         publishedSelfTest = "passed ($($self.Checks.Count) checks)"
         publishedGuiCheck = $GuiResult
-        installer      = $InstallerResult
+        installCheck   = $InstallResult
         exeSha256      = Get-Sha256 $exe
         zipSha256      = Get-Sha256 (Join-Path $Pending $zipName)
         dataLocation   = '%LOCALAPPDATA%\Lagwise (settings, sessions); nothing is stored beside the executable'
@@ -245,7 +230,7 @@ Write-Host "=====================================================" -ForegroundCo
 Write-Host " Portable exe : $(Join-Path $Dist 'portable\Lagwise.exe')"
 Write-Host " Portable zip : $(Join-Path $Dist "Lagwise-$Version-Portable-win-x64.zip")"
 Write-Host " Release      : $Release"
-Write-Host " Installer    : $InstallerResult"
+Write-Host " Install      : $InstallResult"
 Write-Host " Tests        : $($Tests.passed)/$($Tests.total)   Published self-test: passed   GUI check: $GuiResult"
 Write-Host " .NET runtime : $RuntimeVersion (bundled)"
 exit 0

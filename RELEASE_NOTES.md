@@ -4,6 +4,16 @@ Lagwise was called **NetPulse** up to and including 0.16; the notes for those ve
 
 Newest first. Versions 0.1 to 0.16 were published as repositories named NetPulse-ver0.1, -ver0.3, ... -ver0.16; 0.10 follows 0.9, and 0.17 was folded into 1.0 without a release of its own; builds made before 0.3.0 were numbered 1.0.0-1.2.0. `build.ps1` copies the section matching the version in `Directory.Build.props` into every verified release.
 
+## 1.0.1
+
+**Install Lagwise from the app itself.** The downloaded Lagwise.exe now offers to install itself for you: once on the Overview, and at any time in **Settings > Installation**. It copies itself to `%LOCALAPPDATA%\Programs\Lagwise`, adds a Start menu entry (and a desktop shortcut if you want one) and appears in **Settings > Apps**, whose Uninstall removes it again. No administrator rights and nothing to download twice; your settings and recordings stay where they are. A newer downloaded copy updates the installed one the same way.
+
+- **The separate setup program is gone.** `Lagwise-Setup.exe` (never attached to a release) carried a second copy of .NET and needed a folder of its own files; the app does the same job now. Installing over a 1.0.0 setup installation tidies away its leftover files, and an installed NetPulse is still removed so only Lagwise is left.
+- **Uninstalling** (Settings > Apps, or `Lagwise.exe --uninstall`) asks first, closes a running Lagwise so it saves what it is recording, removes the Start menu entry, the Apps entry and the startup entry, and deletes only the program it installed (and its folder when that leaves it empty). Your settings and recordings are kept.
+- **"Start with Windows" moves along:** if it was on for the downloaded copy, it starts the installed one afterwards.
+- **Microsoft Store edition prepared** (not released yet): the app knows when Windows installed it, starts at sign-in through the package's startup task, and reaches the taskbar jump list through its app alias.
+- **Verified:** every build now installs the published Lagwise.exe into a temporary folder, runs the installed copy's self-test and uninstalls it again, without touching the real Start menu.
+
 ## 1.0.0
 
 **NetPulse is now Lagwise.** Same app, new name. On its first start Lagwise copies your NetPulse settings, recordings, diary and test results from `%LOCALAPPDATA%\NetPulse` to `%LOCALAPPDATA%\Lagwise` (the old folder is left as it was; delete it when you like), and "Start with Windows" carries over. The installer removes an installed NetPulse (its shortcuts, Apps entry and program files) so only Lagwise is left.

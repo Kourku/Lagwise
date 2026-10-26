@@ -21,6 +21,10 @@ public static class SafeOpen
     public static void LocationSettings() =>
         Process.Start(new ProcessStartInfo("ms-settings:privacy-location") { UseShellExecute = true });
 
+    /// <summary>Opens Windows' Settings > Apps > Installed apps.</summary>
+    public static void AppsSettings() =>
+        Process.Start(new ProcessStartInfo("ms-settings:appsfeatures") { UseShellExecute = true });
+
     public static void Folder(string path)
     {
         if (!Directory.Exists(path)) throw new DirectoryNotFoundException($"The folder {path} does not exist.");

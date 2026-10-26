@@ -10,7 +10,6 @@ its own .NET runtime. It has no third-party libraries, no server and no account;
 |---|---|
 | `src/Lagwise.Core` | Everything that measures, decides and stores. No UI types, so it is tested directly. |
 | `src/Lagwise.App` | The WPF application: windows, view models, custom drawn controls (charts, gauges, status marks), tray, overlay, global shortcut, taskbar (jump list, badge, preview buttons). |
-| `src/Lagwise.Installer` | `Lagwise-Setup.exe`, a per-user installer (no administrator rights). It shares `AppInstance` and `WindowsIntegrationService` with the app (linked source files). |
 | `tests/Lagwise.Tests` | xUnit tests for Core, including tests against the real Windows APIs (process list, socket tables, game list). |
 | `tests/Lagwise.FakeGame` | `StandInGame.exe`, a stand-in "online game" for the GUI check. Never shipped. |
 
@@ -61,11 +60,20 @@ share one measurement engine, one event log, one settings object and one session
 - **One copy per data folder.** `App` holds a named mutex derived from the data folder. A later start sends its request
   (`show`, `mark-lag`, `record`, `overlay`, `speedtest`, `bufferbloat`, `history`, `exit`) over a named pipe created with
   `PipeOptions.CurrentUserOnly` and exits; anything but those words is dropped. The taskbar jump list starts
-  `Lagwise.exe --command ...`, and the installer sends `exit`. A test copy with its own `LAGWISE_DATA_DIR` runs alongside.
+  `Lagwise.exe --command ...`, and an uninstall sends `exit`. A test copy with its own `LAGWISE_DATA_DIR` runs alongside.
 - **Sleep and wake.** `SystemEvents.PowerModeChanged` calls `LagwiseHost.OnSystemSuspending` (checkpoint the recording,
   save the diary) and `OnSystemResumed`. Until an internet server answers again, or 45 s have passed, cycles without an
   internet answer are not ingested, so a recording shows a gap rather than a drop. The measuring loop also notices a
   pause it did not take (more than 15 s) in case the notice is missed.
+- **Installing itself.** There is no separate setup program: `SelfInstaller` (Core) copies the running Lagwise.exe to
+  `%LOCALAPPDATA%\Programs\Lagwise` (through a `.partial` file, so a failure never leaves half a program), adds the
+  Start menu entry (and a desktop shortcut if asked), registers `HKCU\...\Uninstall\Lagwise` with
+  `UninstallString = "Lagwise.exe" --uninstall`, moves the Run entry along when it started the downloaded copy, and
+  removes an installed NetPulse. `Installation` (App) offers it (Overview card once, Settings > Installation), then
+  starts the installed copy with `--after-install <pid>`, which waits for the downloaded copy to exit before claiming
+  the single-instance mutex. `--uninstall` closes a running copy (pipe `exit`), removes the shortcuts that start this
+  copy, the Apps and startup entries, and deletes Lagwise.exe and its folder with a delayed `cmd.exe` (from the Windows
+  folder) once the process has exited. Not offered in the Store edition or in a test run with its own data folder.
 - **Sign-out and shutdown.** `App.OnSessionEnding` lets the window close for real; `OnExit` disposes the host, which
   saves a recording in progress.
 - **Taskbar and tray.** `TaskbarTasks` builds the jump list and the images for the badge (`TaskbarItemInfo.Overlay`) and
@@ -101,7 +109,8 @@ and kept.
 2. Tests.
 3. Self-contained single-file publish with the latest .NET 10 runtime patch (read from Microsoft's release feed).
 4. The published exe's self-test, then the GUI check (`scripts/Verify-Gui.ps1`, UI Automation, with the stand-in game).
-5. Optionally the installer and its install/uninstall check.
+5. The install check (`scripts/Verify-Install.ps1`): the published exe installs itself into a temporary folder, the
+   installed copy runs its self-test, and it uninstalls itself again.
 6. Only a build that passes everything is promoted to `dist/`.
 
 See [VERIFICATION.md](VERIFICATION.md).

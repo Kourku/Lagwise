@@ -2,7 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/Lagwise.App/Lagwise.App.csproj" />
     <Project Path="src/Lagwise.Core/Lagwise.Core.csproj" />
-    <Project Path="src/Lagwise.Installer/Lagwise.Installer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Lagwise.FakeGame/Lagwise.FakeGame.csproj" />

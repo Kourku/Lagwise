@@ -63,7 +63,11 @@ public class WindowsIntegrationService
         }
     }
 
-    public bool SetStartWithWindows(bool enable)
+    /// <summary>The program the Run entry starts, or null (no entry, or the Store edition's startup task).</summary>
+    public string? StartupProgram() => _startupTask == null && RegisteredCommand() is { } command ? ProgramIn(command) : null;
+
+    /// <param name="exePathOverride">The program the entry should start, when not this one (the copy just installed).</param>
+    public bool SetStartWithWindows(bool enable, string? exePathOverride = null)
     {
         if (_startupTask != null)
         {
@@ -77,7 +81,7 @@ public class WindowsIntegrationService
 
             if (enable)
             {
-                string? exePath = _exePath();
+                string? exePath = exePathOverride ?? _exePath();
                 if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath)) return false;
                 key.SetValue(AppName, CommandFor(exePath));
                 // asked for in Lagwise: lift an earlier "off" from Task Manager, which would otherwise still win
@@ -98,7 +102,7 @@ public class WindowsIntegrationService
     }
 
     /// <summary>
-    /// For the uninstaller: removes the startup entry when it starts the Lagwise in <paramref name="installFolder"/>,
+    /// For uninstalling: removes the startup entry when it starts the Lagwise in <paramref name="installFolder"/>,
     /// so Windows does not try to start a deleted program at every sign-in. Another copy's entry is left alone.
     /// </summary>
     public bool RemoveStartupEntryFor(string installFolder)

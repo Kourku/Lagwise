@@ -13,7 +13,7 @@ namespace Lagwise.Core;
 
 /// <summary>
 /// Keeps Lagwise to one running copy per data folder. A second start hands its request (show the window, mark lag,
-/// a taskbar jump-list task, or "exit" from the installer) to the running copy and closes, so two copies never
+/// a taskbar jump-list task, or "exit" from an uninstall) to the running copy and closes, so two copies never
 /// measure twice or write the same files. Requests travel over a named pipe that only this Windows user can open, only
 /// from this PC, and only the fixed words in <see cref="Commands"/> are accepted.
 /// </summary>
@@ -30,7 +30,7 @@ public static class AppInstance
     /// <summary>Started by Windows at sign-in: when Lagwise already runs, there is nothing to do.</summary>
     public const string None = "none";
 
-    /// <summary>Every request a second start (or the installer) can hand over. Anything else is ignored.</summary>
+    /// <summary>Every request a second start (or an uninstall) can hand over. Anything else is ignored.</summary>
     public static readonly IReadOnlyCollection<string> Commands = new HashSet<string>(StringComparer.Ordinal)
         { Show, MarkLag, Record, Overlay, SpeedTest, Bufferbloat, History, Exit, None };
 

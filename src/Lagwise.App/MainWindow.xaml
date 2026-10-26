@@ -468,6 +468,25 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- One-time offer for a downloaded copy: install it for this user -->
+                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" BorderBrush="{DynamicResource AccentBlueBrush}" BorderThickness="1.5"
+                                Visibility="{Binding ShowInstallOffer, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Install Lagwise offer">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="22" Foreground="{DynamicResource AccentBlueBrush}" VerticalAlignment="Top" Margin="0,2,16,0" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Install Lagwise?" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="{Binding InstallOfferText}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding InstallOfferError}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource AccentAmberBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Visibility="{Binding HasInstallOfferError, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                    <Button Content="Install" Command="{Binding InstallNowCommand}" AutomationProperties.Name="Install Lagwise now" />
+                                    <Button Content="Not now" Command="{Binding InstallLaterCommand}" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" AutomationProperties.Name="Not now" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
                         <!-- Status hero: tinted by the overall verdict -->
                         <Border CornerRadius="14" Padding="22,20" Margin="0,0,0,16" BorderThickness="1" Background="{Binding StatusSoftBrush}" BorderBrush="{Binding StatusEdgeBrush}">
                             <Grid>
@@ -2245,7 +2264,8 @@
                                     <Run FontWeight="SemiBold" Text="Right-click Lagwise on the taskbar or in Start" /><Run Text=" for Mark lag, Start or stop a game recording, the mini overlay, the speed and bufferbloat tests and History. They work while Lagwise runs in the tray." /><LineBreak />
                                     <Run FontWeight="SemiBold" Text="Hover over the taskbar button" /><Run Text=" for two buttons under the preview: Mark lag, and Record or Stop." /><LineBreak />
                                     <Run FontWeight="SemiBold" Text="A dot on the taskbar button and the tray icon" /><Run Text=" shows the connection at a glance: amber when something is worth a look, red for a problem. While recording, the taskbar button shows a record dot. The bar on the button fills while a speed or bufferbloat test runs." /><LineBreak />
-                                    <Run FontWeight="SemiBold" Text="Starting Lagwise again" /><Run Text=" brings the running Lagwise forward instead of opening a second one." />
+                                    <Run FontWeight="SemiBold" Text="Starting Lagwise again" /><Run Text=" brings the running Lagwise forward instead of opening a second one." /><LineBreak />
+                                    <Run FontWeight="SemiBold" Text="Installing" /><Run Text=": the downloaded Lagwise runs as is. Settings &gt; Installation installs it for you (no administrator rights): it gets a Start menu entry and appears in Windows Settings &gt; Apps, where Uninstall removes it and keeps your settings and recordings." />
                                 </TextBlock>
                             </StackPanel>
                         </Border>
@@ -3113,6 +3133,24 @@
                                     <TextBlock Text="{Binding StartupNote}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource AccentAmberBrush}" Margin="52,4,0,0"
                                                Visibility="{Binding HasStartupNote, Converter={StaticResource BoolToVis}}" />
                                     <TextBlock Text="Exit completely from the tray icon's menu. Recordings in progress are saved when Lagwise exits." Style="{StaticResource CaptionText}" Margin="52,6,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Installation: a downloaded copy installs itself for this user -->
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16" Visibility="{Binding ShowInstallCard, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <TextBlock Text="Installation" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="{Binding InstallText}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,12" />
+                                    <CheckBox Style="{StaticResource SwitchToggle}" IsChecked="{Binding InstallDesktopShortcut, Mode=TwoWay}" Content="Also put a shortcut on the desktop" Margin="0,0,0,12"
+                                              Visibility="{Binding ShowInstallButton, Converter={StaticResource BoolToVis}}" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{Binding InstallButtonText}" Command="{Binding InstallCommand}"
+                                                Visibility="{Binding ShowInstallButton, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Install Lagwise" />
+                                        <Button Content="Open Settings &gt; Apps" Command="{Binding OpenAppsSettingsCommand}" Style="{StaticResource OutlineButton}"
+                                                Visibility="{Binding ShowAppsButton, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding InstallMessage}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource AccentAmberBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Visibility="{Binding HasInstallMessage, Converter={StaticResource BoolToVis}}" />
                                 </StackPanel>
                             </Border>
 
