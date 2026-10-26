@@ -4,3 +4,4 @@ dist/
 .vs/
 *.user
 .shot-*.png
+.claude/
