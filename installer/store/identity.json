@@ -1,6 +1,6 @@
 {
-  "_note": "Fill these three in from Partner Center > your app > Product management > Product identity, exactly as shown there. Leave them empty to build a local test package instead.",
-  "PackageIdentityName": "",
-  "Publisher": "",
-  "PublisherDisplayName": ""
+  "_note": "From Partner Center > Lagwise > Product management > Product identity. Leave the three values empty to build a local test package instead.",
+  "PackageIdentityName": "Fraxis.LagWise",
+  "Publisher": "CN=4029D7E4-3B5B-45EF-8F0F-54EB9DA0FCA5",
+  "PublisherDisplayName": "Fraxis"
 }
