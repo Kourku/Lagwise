@@ -1,0 +1,26 @@
+Lagwise answers one question: was that lag my connection?
+
+Most ping tools show one number. Lagwise watches every step between your PC and the internet at once (your adapter, your router, your provider and the wider internet) and tells you which step is the problem, in plain words.
+
+RECORD A GAME, GET A VERDICT
+Start a recording (or let Lagwise notice a game starting), play, and press a hotkey when it lags. Afterwards Lagwise tells you whether those moments came from your Wi-Fi or router, from beyond your router, or from this PC itself, and what to try.
+
+WORKS WITH ANY GAME
+Lagwise picks up the games Windows already knows about. It measures your connection to the internet, not any one game's servers, and says so.
+
+EVERYTHING IN ONE PLACE
+- Live view of your connection, with a mini overlay for in front of your game
+- Speed test and a "lag under load" (bufferbloat) test
+- Hop-by-hop route trace to see where delay starts
+- Site check: is it just you, or is the site down?
+- Security check of your PC and connection (read-only)
+- Wi-Fi details: signal, channel, link rate, and whether a repeater or mesh may be the weak link
+- Readiness check, connection diary, and a history of your recordings, exportable as a report
+
+PRIVATE BY DESIGN
+No account. No telemetry. No ads. Your settings and recordings are saved on your PC and nowhere else. Lagwise only contacts your router and the public servers you can see in Settings, and the speed test service when you run a speed test.
+
+MADE FOR WINDOWS
+Taskbar jump list and badge, tray icon with a status dot, sleep and wake handled, crisp on every monitor, snap layouts, and an optional start with Windows.
+
+Lagwise is open source (MIT): https://github.com/Kourku/Lagwise

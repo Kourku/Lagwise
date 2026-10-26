@@ -1,0 +1,1 @@
+First Microsoft Store release of Lagwise 1.0 (formerly NetPulse): Windows integration, fewer false alarms about your router, and a clearer "was it my connection?" verdict.

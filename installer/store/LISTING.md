@@ -2,6 +2,8 @@
 
 Everything to paste into Partner Center, written to match what Lagwise really does (see [../../README.md](../../README.md) and [../../SECURITY.md](../../SECURITY.md)). Lagwise never claims game-server ping; the text does not either.
 
+**Copy-paste text:** every field below is also a plain-text file in `installer/store/listing/text/` (open one, select all, copy, paste). Use those files rather than this page, which has markdown symbols.
+
 ## Product identity (from Partner Center)
 
 Fill `installer/store/identity.json` with the three values from *Product management > Product identity*, then run:

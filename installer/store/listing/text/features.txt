@@ -1,0 +1,10 @@
+Records your connection while you play any game
+Tells you if lag came from your Wi-Fi or router, your provider, this PC or beyond
+Mark lag moments with a hotkey while you play
+Live mini overlay in front of your game
+Speed test and bufferbloat (lag under load) test
+Route trace to see where delay starts
+Site check: is it you or the site?
+Read-only security check of your PC and connection
+Wi-Fi details and repeater or mesh hints
+No account, no telemetry, no ads: everything stays on your PC

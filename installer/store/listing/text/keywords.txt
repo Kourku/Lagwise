@@ -1,0 +1,7 @@
+ping
+lag
+network
+wifi
+latency
+gaming
+internet speed

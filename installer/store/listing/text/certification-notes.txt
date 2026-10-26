@@ -1,0 +1,7 @@
+Lagwise is a full-trust desktop app (runFullTrust) because it needs raw network measurement (ICMP echo, TCP and DNS timing), Windows' Wi-Fi API and the list of running programs. It never asks for administrator rights.
+
+No sign-in is needed. Open the app and the Overview page starts measuring at once. To see a recording: Game Monitor > Record now, wait a minute, then stop. Speed test needs internet access (Cloudflare's public speed test).
+
+It makes no connections to the publisher. Every destination is listed in SECURITY.md in the repository: https://github.com/Kourku/Lagwise/blob/main/SECURITY.md
+
+"Start with Windows" in Settings uses the package's startup task and is off by default.
